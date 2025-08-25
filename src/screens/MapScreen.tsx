@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMainStore } from '@/stores/useMainStore';
 import { LocationService } from '@/services/location.service';
 import { SupabaseService } from '@/services/supabase.service';
+import { SearchService } from '@/services/search.service';
 import { CustomMarker } from '@/components/Map/CustomMarker';
 import { CategoryButtons } from '@/components/Map/CategoryButtons';
 import { MapControls } from '@/components/Map/MapControls';
@@ -19,7 +20,11 @@ import { BottomFilterPanel } from '@/components/FilterPanel/BottomFilterPanel';
 import { Colors } from '@/utils/constants';
 import { Region, Spot, CoinParking } from '@/types';
 
-export const MapScreen: React.FC = () => {
+interface MapScreenProps {
+  navigation: any;
+}
+
+export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const mapRef = useRef<MapView>(null);
   const [isMapReady, setIsMapReady] = useState(false);
   
@@ -118,6 +123,7 @@ export const MapScreen: React.FC = () => {
   
   const handleMarkerPress = (spot: Spot) => {
     selectSpot(spot);
+    navigation.navigate('SpotDetail');
   };
   
   const renderMarkers = () => {
@@ -173,7 +179,7 @@ export const MapScreen: React.FC = () => {
         )}
       </View>
       
-      <BottomFilterPanel />
+      <BottomFilterPanel navigation={navigation} />
     </SafeAreaView>
   );
 };

@@ -12,12 +12,27 @@ import { Colors, Spacing, Typography } from '@/utils/constants';
 import { useMainStore } from '@/stores/useMainStore';
 import { Spot, CoinParking } from '@/types';
 import { LocationService } from '@/services/location.service';
+import { ParkingFeeCalculator } from '@/services/parking-fee.service';
+import { ParkingTimeSelector } from './ParkingTimeSelector';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export const BottomFilterPanel: React.FC = () => {
+interface BottomFilterPanelProps {
+  navigation?: any;
+}
+
+export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { searchResults, userLocation, selectSpot, setShowingSpotDetail } = useMainStore();
+  const [showTimeSelector, setShowTimeSelector] = useState(false);
+  const [showingEntryTime, setShowingEntryTime] = useState(true); // true: 入庫時間, false: 出庫時間
+  const { 
+    searchResults, 
+    userLocation, 
+    selectSpot, 
+    setShowingSpotDetail,
+    searchFilter,
+    setSearchFilter
+  } = useMainStore();
   
   // Filter and sort parking spots
   const parkingSpots = searchResults
@@ -26,16 +41,50 @@ export const BottomFilterPanel: React.FC = () => {
   
   const handleSpotPress = (spot: Spot) => {
     selectSpot(spot);
-    setShowingSpotDetail(true);
+    if (navigation) {
+      navigation.navigate('SpotDetail');
+    } else {
+      setShowingSpotDetail(true);
+    }
   };
   
   const formatPrice = (spot: CoinParking): string => {
+    if (searchFilter.parkingTimeFilterEnabled) {
+      const fee = ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration);
+      return `¥${fee}`;
+    }
+    
     if (!spot.rates || spot.rates.length === 0) return '---';
     const baseRate = spot.rates.find(r => r.type === 'base');
     if (baseRate) {
       return `¥${baseRate.price}`;
     }
     return '¥0';
+  };
+  
+  const formatTimeButton = (): string => {
+    if (searchFilter.parkingTimeFilterEnabled) {
+      return searchFilter.parkingDuration.formattedDuration;
+    }
+    return '入庫時間';
+  };
+  
+  const formatEntryTime = (): string => {
+    const date = searchFilter.parkingDuration.startDate;
+    const day = date.getDate();
+    const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][date.getDay()];
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${day}日 (${dayOfWeek}) ${hours}:${minutes}`;
+  };
+  
+  const formatExitTime = (): string => {
+    const date = searchFilter.parkingDuration.endDate;
+    const day = date.getDate();
+    const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][date.getDay()];
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${day}日 (${dayOfWeek}) ${hours}:${minutes}`;
   };
   
   const formatDistance = (spot: Spot): string => {
@@ -46,52 +95,96 @@ export const BottomFilterPanel: React.FC = () => {
   
   return (
     <View style={[styles.container, isExpanded && styles.containerExpanded]}>
-      <TouchableOpacity
-        style={styles.header}
-        onPress={() => setIsExpanded(!isExpanded)}
-        activeOpacity={0.9}
-      >
+      <View style={styles.header}>
         <Text style={styles.headerTitle}>駐車料金ランキング</Text>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.timeButton}>
-            <Ionicons name="time-outline" size={16} color={Colors.primary} />
-            <Text style={styles.timeButtonText}>入庫時間</Text>
+        <TouchableOpacity
+          style={styles.toggleButton}
+          onPress={() => setIsExpanded(!isExpanded)}
+        >
+          <Text style={styles.toggleButtonText}>同期済み</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <View style={styles.timeSection}>
+        <View style={styles.timeRow}>
+          <TouchableOpacity 
+            style={styles.timeLabelButton}
+            onPress={() => setShowTimeSelector(true)}
+          >
+            <Ionicons name="car" size={16} color={Colors.success} />
+            <Text style={styles.timeLabelText}>入庫時間</Text>
           </TouchableOpacity>
-          <Ionicons
-            name={isExpanded ? 'chevron-down' : 'chevron-up'}
-            size={20}
-            color={Colors.textSecondary}
-          />
+          <View style={styles.timeValueContainer}>
+            <Text style={styles.timeValue}>{formatEntryTime()}</Text>
+          </View>
         </View>
-      </TouchableOpacity>
+        
+        <View style={styles.timeDurationRow}>
+          <TouchableOpacity 
+            style={styles.durationButton}
+            onPress={() => setShowTimeSelector(true)}
+          >
+            <Ionicons name="chevron-down" size={16} color={Colors.primary} />
+            <Text style={styles.durationText}>駐車時間</Text>
+            <Text style={styles.durationValue}>{searchFilter.parkingDuration.formattedDuration || '1時間0分'}</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.timeRow}>
+          <TouchableOpacity 
+            style={styles.timeLabelButton}
+            onPress={() => setShowTimeSelector(true)}
+          >
+            <Ionicons name="car" size={16} color={Colors.error} />
+            <Text style={styles.timeLabelText}>出庫時間</Text>
+          </TouchableOpacity>
+          <View style={styles.timeValueContainer}>
+            <Text style={styles.timeValue}>{formatExitTime()}</Text>
+          </View>
+        </View>
+      </View>
       
       <ScrollView
         style={styles.content}
         showsVerticalScrollIndicator={false}
         scrollEnabled={isExpanded}
       >
-        {parkingSpots.map((spot, index) => (
-          <TouchableOpacity
-            key={spot.id}
-            style={styles.spotItem}
-            onPress={() => handleSpotPress(spot)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.spotRank}>
-              <Text style={styles.spotRankText}>{index + 1}</Text>
-            </View>
-            <View style={styles.spotInfo}>
-              <Text style={styles.spotName} numberOfLines={1}>
-                {spot.name}
-              </Text>
-              <Text style={styles.spotDistance}>
-                {formatDistance(spot)}
-              </Text>
-            </View>
-            <Text style={styles.spotPrice}>{formatPrice(spot)}</Text>
-          </TouchableOpacity>
-        ))}
+        {parkingSpots.length > 0 ? (
+          parkingSpots.map((spot, index) => (
+            <TouchableOpacity
+              key={spot.id}
+              style={styles.spotItem}
+              onPress={() => handleSpotPress(spot)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.spotRankNumber}>{index + 1}</Text>
+              <View style={styles.spotInfo}>
+                <Text style={styles.spotName} numberOfLines={1}>
+                  {spot.name}
+                </Text>
+              </View>
+              <Text style={styles.spotPrice}>{formatPrice(spot)}</Text>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>地図上のエリアを検索してください</Text>
+          </View>
+        )}
       </ScrollView>
+      
+      <ParkingTimeSelector
+        duration={searchFilter.parkingDuration}
+        onDurationChange={(duration) => {
+          setSearchFilter({
+            ...searchFilter,
+            parkingDuration: duration,
+            parkingTimeFilterEnabled: true
+          });
+        }}
+        visible={showTimeSelector}
+        onClose={() => setShowTimeSelector(false)}
+      />
     </View>
   );
 };
@@ -105,7 +198,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: 120,
+    height: 280,
     shadowColor: Colors.black,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
@@ -113,39 +206,82 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   containerExpanded: {
-    height: SCREEN_HEIGHT * 0.4,
+    height: SCREEN_HEIGHT * 0.6,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.medium,
-    paddingVertical: Spacing.medium,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    paddingTop: Spacing.medium,
+    paddingBottom: Spacing.small,
   },
   headerTitle: {
-    fontSize: Typography.h6,
+    fontSize: Typography.bodySmall,
     fontWeight: '600',
     color: Colors.textPrimary,
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  timeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
+  toggleButton: {
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
     backgroundColor: Colors.background,
   },
-  timeButtonText: {
+  toggleButtonText: {
+    fontSize: Typography.caption,
+    color: Colors.textSecondary,
+  },
+  timeSection: {
+    paddingHorizontal: Spacing.medium,
+    paddingVertical: Spacing.small,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  timeDurationRow: {
+    paddingLeft: 24,
+    paddingVertical: 4,
+  },
+  timeLabelButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    width: 100,
+  },
+  timeLabelText: {
+    fontSize: Typography.bodySmall,
+    color: Colors.textPrimary,
+  },
+  timeValueContainer: {
+    flex: 1,
+  },
+  timeValue: {
+    fontSize: Typography.bodySmall,
+    color: Colors.textPrimary,
+    fontWeight: '500',
+  },
+  durationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    backgroundColor: Colors.background,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+  },
+  durationText: {
+    fontSize: Typography.caption,
+    color: Colors.textSecondary,
+  },
+  durationValue: {
     fontSize: Typography.caption,
     color: Colors.primary,
+    fontWeight: '600',
   },
   content: {
     flex: 1,
@@ -154,23 +290,18 @@ const styles = StyleSheet.create({
   spotItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing.small,
-    borderBottomWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderBottomWidth: 0.5,
     borderBottomColor: Colors.divider,
   },
-  spotRank: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+  spotRankNumber: {
+    width: 20,
+    fontSize: Typography.bodySmall,
+    color: Colors.primary,
+    fontWeight: '600',
+    textAlign: 'center',
     marginRight: Spacing.small,
-  },
-  spotRankText: {
-    color: Colors.white,
-    fontSize: Typography.caption,
-    fontWeight: 'bold',
   },
   spotInfo: {
     flex: 1,
@@ -179,15 +310,18 @@ const styles = StyleSheet.create({
   spotName: {
     fontSize: Typography.bodySmall,
     color: Colors.textPrimary,
-    marginBottom: 2,
-  },
-  spotDistance: {
-    fontSize: Typography.caption,
-    color: Colors.textSecondary,
   },
   spotPrice: {
-    fontSize: Typography.body,
+    fontSize: Typography.bodySmall,
     fontWeight: '600',
     color: Colors.primary,
+  },
+  emptyState: {
+    padding: Spacing.large,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: Typography.bodySmall,
+    color: Colors.textSecondary,
   },
 });

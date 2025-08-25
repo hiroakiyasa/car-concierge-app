@@ -70,7 +70,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 140,
+    bottom: 300,
     left: 20,
     right: 20,
     flexDirection: 'row',
