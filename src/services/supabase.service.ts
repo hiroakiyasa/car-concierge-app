@@ -12,6 +12,13 @@ export class SupabaseService {
     const minLng = longitude - (longitudeDelta / 2);
     const maxLng = longitude + (longitudeDelta / 2);
     
+    console.log('Supabase検索範囲:', {
+      最小緯度: minLat.toFixed(6),
+      最大緯度: maxLat.toFixed(6),
+      最小経度: minLng.toFixed(6),
+      最大経度: maxLng.toFixed(6),
+    });
+    
     const { data, error } = await supabase
       .from('parking_spots')
       .select('*')

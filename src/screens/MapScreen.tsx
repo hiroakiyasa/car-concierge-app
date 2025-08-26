@@ -48,6 +48,17 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
     initializeLocation();
   }, []);
   
+  // 地図がレンダリングされて初期位置が設定されたら自動検索
+  useEffect(() => {
+    if (isMapReady && mapRegion.latitude !== 0 && mapRegion.longitude !== 0) {
+      // 初回のみ自動検索を実行
+      const timer = setTimeout(() => {
+        handleSearch();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isMapReady]);
+  
   const initializeLocation = async () => {
     const location = await LocationService.getCurrentLocation();
     if (location) {
@@ -64,42 +75,58 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const handleSearch = async () => {
     setIsLoading(true);
     try {
-      // MapViewのrefから現在の表示範囲を直接取得
+      // 最新のmapRegionを使用（onRegionChangeCompleteで更新済み）
       let currentRegion = mapRegion;
       
-      // mapRefが利用可能なら、最新の表示範囲を取得
-      if (mapRef.current) {
+      // mapRefが利用可能なら、getMapBoundariesで再確認
+      if (mapRef.current && mapRef.current.getMapBoundaries) {
         try {
           const mapBoundaries = await mapRef.current.getMapBoundaries();
-          if (mapBoundaries) {
-            // 境界から中心とdeltaを計算
-            const centerLat = (mapBoundaries.northEast.latitude + mapBoundaries.southWest.latitude) / 2;
-            const centerLng = (mapBoundaries.northEast.longitude + mapBoundaries.southWest.longitude) / 2;
-            const latDelta = mapBoundaries.northEast.latitude - mapBoundaries.southWest.latitude;
-            const lngDelta = mapBoundaries.northEast.longitude - mapBoundaries.southWest.longitude;
+          if (mapBoundaries && mapBoundaries.northEast && mapBoundaries.southWest) {
+            // 境界から正確な範囲を計算
+            const north = mapBoundaries.northEast.latitude;
+            const south = mapBoundaries.southWest.latitude;
+            const east = mapBoundaries.northEast.longitude;
+            const west = mapBoundaries.southWest.longitude;
             
+            // 中心とdeltaを計算
             currentRegion = {
-              latitude: centerLat,
-              longitude: centerLng,
-              latitudeDelta: latDelta,
-              longitudeDelta: lngDelta,
+              latitude: (north + south) / 2,
+              longitude: (east + west) / 2,
+              latitudeDelta: Math.abs(north - south),
+              longitudeDelta: Math.abs(east - west),
             };
+            
+            console.log('地図境界取得成功:', {
+              北: north,
+              南: south,
+              東: east,
+              西: west
+            });
           }
         } catch (err) {
-          console.log('地図境界取得エラー、stateのregionを使用');
+          console.log('地図境界取得失敗、onRegionChangeCompleteのregionを使用', err);
         }
       }
       
-      // 現在の地図表示範囲をログ出力
+      // 実際の検索範囲を計算
+      const searchBounds = {
+        北端: currentRegion.latitude + (currentRegion.latitudeDelta / 2),
+        南端: currentRegion.latitude - (currentRegion.latitudeDelta / 2),
+        東端: currentRegion.longitude + (currentRegion.longitudeDelta / 2),
+        西端: currentRegion.longitude - (currentRegion.longitudeDelta / 2),
+      };
+      
+      // 検索範囲をログ出力
       console.log('検索範囲:', {
-        中心緯度: currentRegion.latitude,
-        中心経度: currentRegion.longitude,
-        緯度幅: currentRegion.latitudeDelta,
-        経度幅: currentRegion.longitudeDelta,
-        北端: currentRegion.latitude + currentRegion.latitudeDelta / 2,
-        南端: currentRegion.latitude - currentRegion.latitudeDelta / 2,
-        東端: currentRegion.longitude + currentRegion.longitudeDelta / 2,
-        西端: currentRegion.longitude - currentRegion.longitudeDelta / 2,
+        中心緯度: currentRegion.latitude.toFixed(6),
+        中心経度: currentRegion.longitude.toFixed(6),
+        緯度幅: currentRegion.latitudeDelta.toFixed(6),
+        経度幅: currentRegion.longitudeDelta.toFixed(6),
+        北端: searchBounds.北端.toFixed(6),
+        南端: searchBounds.南端.toFixed(6),
+        東端: searchBounds.東端.toFixed(6),
+        西端: searchBounds.西端.toFixed(6),
       });
       
       // コインパーキングのみを検索
@@ -126,10 +153,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration)
       }));
       
-      console.log(`検索結果: ${spots.length}件中上位20件を表示`);
-      console.log('上位3件の料金:', top20ParkingSpots.slice(0, 3).map(s => 
-        `${s.rank}. ${s.name}: ¥${s.calculatedFee}`
-      ));
+      console.log(`検索結果: ${spots.length}件から上位20件を表示`);
+      if (top20ParkingSpots.length > 0) {
+        console.log('最安値TOP3:', top20ParkingSpots.slice(0, 3).map(s => 
+          `${s.rank}位: ${s.name} ¥${s.calculatedFee}`
+        ));
+      }
       
       setSearchResults(top20ParkingSpots);
     } catch (error) {
@@ -158,7 +187,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   };
   
   const handleRegionChangeComplete = (region: Region) => {
+    // 地図の移動が完了したら最新のregionを保存
     setMapRegion(region);
+    console.log('地図移動完了:', {
+      中心緯度: region.latitude.toFixed(6),
+      中心経度: region.longitude.toFixed(6),
+      緯度幅: region.latitudeDelta.toFixed(6),
+      経度幅: region.longitudeDelta.toFixed(6),
+    });
   };
   
   const handleMarkerPress = (spot: Spot) => {
