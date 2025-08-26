@@ -6,10 +6,11 @@ export class SupabaseService {
   static async fetchParkingSpots(region: Region): Promise<CoinParking[]> {
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
     
-    const minLat = latitude - latitudeDelta;
-    const maxLat = latitude + latitudeDelta;
-    const minLng = longitude - longitudeDelta;
-    const maxLng = longitude + longitudeDelta;
+    // latitudeDelta と longitudeDelta は表示範囲全体の幅なので、半分にして中心から加減算
+    const minLat = latitude - (latitudeDelta / 2);
+    const maxLat = latitude + (latitudeDelta / 2);
+    const minLng = longitude - (longitudeDelta / 2);
+    const maxLng = longitude + (longitudeDelta / 2);
     
     const { data, error } = await supabase
       .from('parking_spots')
@@ -36,10 +37,10 @@ export class SupabaseService {
   static async fetchConvenienceStores(region: Region): Promise<ConvenienceStore[]> {
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
     
-    const minLat = latitude - latitudeDelta;
-    const maxLat = latitude + latitudeDelta;
-    const minLng = longitude - longitudeDelta;
-    const maxLng = longitude + longitudeDelta;
+    const minLat = latitude - (latitudeDelta / 2);
+    const maxLat = latitude + (latitudeDelta / 2);
+    const minLng = longitude - (longitudeDelta / 2);
+    const maxLng = longitude + (longitudeDelta / 2);
     
     const { data, error } = await supabase
       .from('convenience_stores')
@@ -66,10 +67,10 @@ export class SupabaseService {
   static async fetchHotSprings(region: Region): Promise<HotSpring[]> {
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
     
-    const minLat = latitude - latitudeDelta;
-    const maxLat = latitude + latitudeDelta;
-    const minLng = longitude - longitudeDelta;
-    const maxLng = longitude + longitudeDelta;
+    const minLat = latitude - (latitudeDelta / 2);
+    const maxLat = latitude + (latitudeDelta / 2);
+    const minLng = longitude - (longitudeDelta / 2);
+    const maxLng = longitude + (longitudeDelta / 2);
     
     const { data, error } = await supabase
       .from('hot_springs')
@@ -95,10 +96,10 @@ export class SupabaseService {
   static async fetchGasStations(region: Region): Promise<GasStation[]> {
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
     
-    const minLat = latitude - latitudeDelta;
-    const maxLat = latitude + latitudeDelta;
-    const minLng = longitude - longitudeDelta;
-    const maxLng = longitude + longitudeDelta;
+    const minLat = latitude - (latitudeDelta / 2);
+    const maxLat = latitude + (latitudeDelta / 2);
+    const minLng = longitude - (longitudeDelta / 2);
+    const maxLng = longitude + (longitudeDelta / 2);
     
     const { data, error } = await supabase
       .from('gas_stations')
@@ -124,10 +125,10 @@ export class SupabaseService {
   static async fetchFestivals(region: Region): Promise<Festival[]> {
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
     
-    const minLat = latitude - latitudeDelta;
-    const maxLat = latitude + latitudeDelta;
-    const minLng = longitude - longitudeDelta;
-    const maxLng = longitude + longitudeDelta;
+    const minLat = latitude - (latitudeDelta / 2);
+    const maxLat = latitude + (latitudeDelta / 2);
+    const minLng = longitude - (longitudeDelta / 2);
+    const maxLng = longitude + (longitudeDelta / 2);
     
     const { data, error } = await supabase
       .from('festivals')

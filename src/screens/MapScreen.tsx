@@ -63,35 +63,43 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const handleSearch = async () => {
     setIsLoading(true);
     try {
+      // 現在の地図表示範囲をログ出力（デバッグ用）
+      console.log('検索範囲:', {
+        中心緯度: mapRegion.latitude,
+        中心経度: mapRegion.longitude,
+        緯度幅: mapRegion.latitudeDelta,
+        経度幅: mapRegion.longitudeDelta,
+        北端: mapRegion.latitude + mapRegion.latitudeDelta / 2,
+        南端: mapRegion.latitude - mapRegion.latitudeDelta / 2,
+        東端: mapRegion.longitude + mapRegion.longitudeDelta / 2,
+        西端: mapRegion.longitude - mapRegion.longitudeDelta / 2,
+      });
+      
       const spots = await SupabaseService.fetchSpotsByCategories(
         mapRegion,
         searchFilter.selectedCategories
       );
       
-      // Sort parking spots by calculated fee or base rate
-      const sortedSpots = spots.sort((a, b) => {
-        if (a.category === 'コインパーキング' && b.category === 'コインパーキング') {
-          const parkingA = a as CoinParking;
-          const parkingB = b as CoinParking;
-          
-          const priceA = parkingA.rates?.[0]?.price || 0;
-          const priceB = parkingB.rates?.[0]?.price || 0;
-          
-          return priceA - priceB;
-        }
-        return 0;
-      });
+      // Apply filters and sort using SearchService
+      const filteredSpots = SearchService.filterSpots(spots, searchFilter, userLocation);
+      const sortedSpots = SearchService.sortSpots(filteredSpots, searchFilter, userLocation);
       
-      // Add rank to parking spots
-      let parkingRank = 1;
-      const rankedSpots = sortedSpots.map(spot => {
-        if (spot.category === 'コインパーキング' && parkingRank <= 20) {
-          return { ...spot, rank: parkingRank++ };
-        }
-        return spot;
-      });
+      // 駐車場を料金順にソートしてランキング付与
+      const parkingSpots = sortedSpots.filter(spot => spot.category === 'コインパーキング');
+      const otherSpots = sortedSpots.filter(spot => spot.category !== 'コインパーキング');
       
-      setSearchResults(rankedSpots.slice(0, 100)); // Limit to 100 markers
+      // 駐車場にランキングを付与
+      const rankedParkingSpots = parkingSpots.map((spot, index) => ({
+        ...spot,
+        rank: index + 1
+      }));
+      
+      // 結果を結合
+      const allSpots = [...rankedParkingSpots, ...otherSpots];
+      
+      console.log(`検索結果: 駐車場${rankedParkingSpots.length}件, その他${otherSpots.length}件`);
+      
+      setSearchResults(allSpots.slice(0, 100)); // Limit to 100 markers
     } catch (error) {
       console.error('Search error:', error);
       Alert.alert('エラー', '検索中にエラーが発生しました');
@@ -127,7 +135,22 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   };
   
   const renderMarkers = () => {
-    return searchResults.slice(0, 100).map((spot) => (
+    // 駐車場とその他のスポットを分けてレンダリング
+    const parkingSpots = searchResults.filter(spot => spot.category === 'コインパーキング');
+    const otherSpots = searchResults.filter(spot => spot.category !== 'コインパーキング');
+    
+    // その他のスポットを先にレンダリング（背景に表示）
+    const otherMarkers = otherSpots.map((spot) => (
+      <CustomMarker
+        key={spot.id}
+        spot={spot}
+        rank={null}
+        onPress={() => handleMarkerPress(spot)}
+      />
+    ));
+    
+    // 駐車場マーカーを上に表示（ランキング付き）
+    const parkingMarkers = parkingSpots.map((spot) => (
       <CustomMarker
         key={spot.id}
         spot={spot}
@@ -135,6 +158,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         onPress={() => handleMarkerPress(spot)}
       />
     ));
+    
+    return [...otherMarkers, ...parkingMarkers];
   };
   
   return (

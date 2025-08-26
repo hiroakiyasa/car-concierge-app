@@ -34,9 +34,10 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
     setSearchFilter
   } = useMainStore();
   
-  // Filter and sort parking spots
+  // Filter parking spots that already have ranking
   const parkingSpots = searchResults
-    .filter(spot => spot.category === 'コインパーキング')
+    .filter(spot => spot.category === 'コインパーキング' && spot.rank)
+    .sort((a, b) => (a.rank || 0) - (b.rank || 0))
     .slice(0, 20) as CoinParking[];
   
   const handleSpotPress = (spot: Spot) => {
@@ -157,7 +158,7 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
               onPress={() => handleSpotPress(spot)}
               activeOpacity={0.7}
             >
-              <Text style={styles.spotRankNumber}>{index + 1}</Text>
+              <Text style={styles.spotRankNumber}>{spot.rank || index + 1}</Text>
               <View style={styles.spotInfo}>
                 <Text style={styles.spotName} numberOfLines={1}>
                   {spot.name}
