@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   ScrollView,
   StyleSheet,
   Dimensions,
+  PanResponder,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography } from '@/utils/constants';
@@ -17,14 +19,23 @@ import { ParkingTimeSelector } from './ParkingTimeSelector';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// パネルの高さの状態
+const PANEL_MIN_HEIGHT = 280;
+const PANEL_MAX_HEIGHT = SCREEN_HEIGHT * 0.65;
+const PANEL_COLLAPSED_HEIGHT = 160;
+
 interface BottomFilterPanelProps {
   navigation?: any;
+  onHeightChange?: (height: number) => void;
+  onSearch?: () => void;
 }
 
-export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation, onHeightChange, onSearch }) => {
+  const [panelHeight, setPanelHeight] = useState(PANEL_MIN_HEIGHT);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
   const [showingEntryTime, setShowingEntryTime] = useState(true); // true: 入庫時間, false: 出庫時間
+  const panY = useRef(new Animated.Value(0)).current;
   const { 
     searchResults, 
     userLocation, 
@@ -34,10 +45,23 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
     setSearchFilter
   } = useMainStore();
   
-  // 既にランキングが付与された上位20件の駐車場を表示
+  // searchResultsに既に含まれている料金でソート（MapScreenで計算済み）
   const parkingSpots = searchResults
-    .filter(spot => spot.category === 'コインパーキング' && spot.rank)
-    .sort((a, b) => (a.rank || 0) - (b.rank || 0)) as CoinParking[];
+    .filter(spot => spot.category === 'コインパーキング')
+    .map(spot => {
+      // MapScreenで計算された料金を使用
+      const fee = (spot as any).calculatedFee || 0;
+      return {
+        ...spot,
+        currentFee: fee
+      };
+    })
+    .sort((a, b) => a.currentFee - b.currentFee)
+    .slice(0, 20)
+    .map((spot, index) => ({
+      ...spot,
+      displayRank: index + 1
+    })) as (CoinParking & { currentFee: number; displayRank: number })[];
   
   const handleSpotPress = (spot: Spot) => {
     selectSpot(spot);
@@ -48,16 +72,9 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
     }
   };
   
-  const formatPrice = (spot: CoinParking): string => {
-    if (searchFilter.parkingTimeFilterEnabled) {
-      const fee = ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration);
-      return `¥${fee}`;
-    }
-    
-    if (!spot.rates || spot.rates.length === 0) return '---';
-    const baseRate = spot.rates.find(r => r.type === 'base');
-    if (baseRate) {
-      return `¥${baseRate.price}`;
+  const formatPrice = (spot: CoinParking & { currentFee?: number }): string => {
+    if (spot.currentFee !== undefined) {
+      return `¥${spot.currentFee}`;
     }
     return '¥0';
   };
@@ -93,18 +110,106 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
     return LocationService.formatDistance(distance);
   };
   
+  // ドラッグハンドラーの設定
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, gestureState) => {
+        const newHeight = panelHeight - gestureState.dy;
+        if (newHeight >= PANEL_COLLAPSED_HEIGHT && newHeight <= PANEL_MAX_HEIGHT) {
+          setPanelHeight(newHeight);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const newHeight = panelHeight - gestureState.dy;
+        let finalHeight = panelHeight;
+        
+        if (gestureState.vy > 0.5) {
+          // 下向きに速いスワイプ
+          if (panelHeight > PANEL_MIN_HEIGHT) {
+            finalHeight = PANEL_MIN_HEIGHT;
+          } else {
+            finalHeight = PANEL_COLLAPSED_HEIGHT;
+            setIsCollapsed(true);
+          }
+        } else if (gestureState.vy < -0.5) {
+          // 上向きに速いスワイプ
+          finalHeight = PANEL_MAX_HEIGHT;
+          setIsCollapsed(false);
+        } else {
+          // スナップポイントに合わせる
+          if (newHeight < PANEL_COLLAPSED_HEIGHT + 50) {
+            finalHeight = PANEL_COLLAPSED_HEIGHT;
+            setIsCollapsed(true);
+          } else if (newHeight < PANEL_MIN_HEIGHT + 50) {
+            finalHeight = PANEL_MIN_HEIGHT;
+            setIsCollapsed(false);
+          } else {
+            finalHeight = PANEL_MAX_HEIGHT;
+            setIsCollapsed(false);
+          }
+        }
+        
+        setPanelHeight(finalHeight);
+        if (onHeightChange) {
+          onHeightChange(finalHeight);
+        }
+        
+        // パネルの高さが変わったら再検索
+        if (onSearch) {
+          setTimeout(() => onSearch(), 300);
+        }
+      },
+    })
+  ).current;
+  
   return (
-    <View style={[styles.container, isExpanded && styles.containerExpanded]}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>駐車料金ランキング</Text>
-        <TouchableOpacity
-          style={styles.toggleButton}
-          onPress={() => setIsExpanded(!isExpanded)}
-        >
-          <Text style={styles.toggleButtonText}>同期済み</Text>
-        </TouchableOpacity>
+    <View style={[styles.container, { height: panelHeight }]}>
+      <View style={styles.dragHandle} {...panResponder.panHandlers}>
+        <View style={styles.dragIndicator} />
       </View>
       
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>駐車料金ランキング</Text>
+        <View style={styles.headerButtons}>
+          {onSearch && (
+            <TouchableOpacity
+              style={styles.searchButton}
+              onPress={onSearch}
+            >
+              <Ionicons name="search" size={16} color={Colors.white} />
+              <Text style={styles.searchButtonText}>この範囲を検索</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.toggleButton}
+            onPress={() => {
+              let newHeight = panelHeight;
+              if (isCollapsed) {
+                newHeight = PANEL_MIN_HEIGHT;
+                setIsCollapsed(false);
+              } else if (panelHeight === PANEL_MIN_HEIGHT) {
+                newHeight = PANEL_MAX_HEIGHT;
+              } else {
+                newHeight = PANEL_MIN_HEIGHT;
+              }
+              setPanelHeight(newHeight);
+              if (onHeightChange) {
+                onHeightChange(newHeight);
+              }
+            }}
+          >
+            <Ionicons 
+              name={panelHeight > PANEL_MIN_HEIGHT ? 'chevron-down' : 'chevron-up'} 
+              size={20} 
+              color={Colors.textSecondary} 
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+      
+      {!isCollapsed && (
       <View style={styles.timeSection}>
         <View style={styles.timeRow}>
           <TouchableOpacity 
@@ -143,11 +248,14 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
           </View>
         </View>
       </View>
+      )}
       
+      {!isCollapsed && (
       <ScrollView
         style={styles.content}
-        showsVerticalScrollIndicator={false}
-        scrollEnabled={isExpanded}
+        showsVerticalScrollIndicator={true}
+        scrollEnabled={true}
+        nestedScrollEnabled={true}
       >
         {parkingSpots.length > 0 ? (
           parkingSpots.map((spot, index) => (
@@ -157,7 +265,7 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
               onPress={() => handleSpotPress(spot)}
               activeOpacity={0.7}
             >
-              <Text style={styles.spotRankNumber}>{spot.rank || index + 1}</Text>
+              <Text style={styles.spotRankNumber}>{spot.displayRank}</Text>
               <View style={styles.spotInfo}>
                 <Text style={styles.spotName} numberOfLines={1}>
                   {spot.name}
@@ -172,6 +280,7 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
           </View>
         )}
       </ScrollView>
+      )}
       
       <ParkingTimeSelector
         duration={searchFilter.parkingDuration}
@@ -198,23 +307,52 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: 280,
     shadowColor: Colors.black,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 8,
   },
-  containerExpanded: {
-    height: SCREEN_HEIGHT * 0.6,
+  dragHandle: {
+    width: '100%',
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  dragIndicator: {
+    width: 40,
+    height: 4,
+    backgroundColor: Colors.divider,
+    borderRadius: 2,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.medium,
-    paddingTop: Spacing.medium,
+    paddingTop: Spacing.small,
     paddingBottom: Spacing.small,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
+  },
+  searchButtonText: {
+    fontSize: Typography.caption,
+    color: Colors.white,
+    fontWeight: '500',
   },
   headerTitle: {
     fontSize: Typography.bodySmall,
@@ -226,10 +364,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     backgroundColor: Colors.background,
-  },
-  toggleButtonText: {
-    fontSize: Typography.caption,
-    color: Colors.textSecondary,
   },
   timeSection: {
     paddingHorizontal: Spacing.medium,
@@ -286,6 +420,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: Spacing.medium,
+    paddingBottom: Spacing.small,
   },
   spotItem: {
     flexDirection: 'row',

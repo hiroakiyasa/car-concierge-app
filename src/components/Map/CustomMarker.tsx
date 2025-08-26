@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { Marker } from 'react-native-maps';
-import { Spot } from '@/types';
+import { Spot, ConvenienceStore, GasStation } from '@/types';
+import { getConvenienceStoreLogo, getGasStationLogo } from '@/utils/brandLogos';
 
 interface CustomMarkerProps {
   spot: Spot;
@@ -32,6 +33,43 @@ const getMarkerIcon = (category: string): string => {
 };
 
 export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress }) => {
+  // コンビニとガソリンスタンドのロゴを取得
+  const getLogoForSpot = () => {
+    if (spot.category === 'コンビニ') {
+      const store = spot as ConvenienceStore;
+      if (store.brand || store.name) {
+        return getConvenienceStoreLogo(store.brand || store.name);
+      }
+    } else if (spot.category === 'ガソリンスタンド') {
+      const station = spot as GasStation;
+      if (station.brand || station.name) {
+        return getGasStationLogo(station.brand || station.name);
+      }
+    }
+    return null;
+  };
+  
+  const logo = getLogoForSpot();
+  
+  // コンビニやガソリンスタンドでロゴがある場合
+  if (logo) {
+    return (
+      <Marker
+        coordinate={{
+          latitude: spot.lat,
+          longitude: spot.lng,
+        }}
+        onPress={onPress}
+        tracksViewChanges={false}
+        anchor={{ x: 0.5, y: 0.5 }}
+      >
+        <View style={styles.logoMarker}>
+          <Image source={logo} style={styles.logoImage} resizeMode="contain" />
+        </View>
+      </Marker>
+    );
+  }
+  
   // For parking spots with ranking, show custom blue marker with number
   if (spot.category === 'コインパーキング' && rank && rank <= 20) {
     return (
@@ -106,5 +144,23 @@ const styles = StyleSheet.create({
   },
   categoryMarkerIcon: {
     fontSize: 18,
+  },
+  logoMarker: {
+    width: 40,
+    height: 40,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoImage: {
+    width: 32,
+    height: 32,
   },
 });

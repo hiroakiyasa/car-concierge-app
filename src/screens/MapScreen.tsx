@@ -17,7 +17,7 @@ import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { CustomMarker } from '@/components/Map/CustomMarker';
 import { CategoryButtons } from '@/components/Map/CategoryButtons';
 import { MapControls } from '@/components/Map/MapControls';
-import { BottomFilterPanel } from '@/components/FilterPanel/BottomFilterPanel';
+import { CompactBottomPanel } from '@/components/FilterPanel/CompactBottomPanel';
 import { Colors } from '@/utils/constants';
 import { Region, Spot, CoinParking } from '@/types';
 
@@ -28,6 +28,9 @@ interface MapScreenProps {
 export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const mapRef = useRef<MapView>(null);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(100);
+  const [isPanelExpanded, setIsPanelExpanded] = useState(false);
+  const [hasInitialized, setHasInitialized] = useState(false);
   
   const {
     mapRegion,
@@ -50,117 +53,168 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   
   // 地図がレンダリングされて初期位置が設定されたら自動検索
   useEffect(() => {
-    if (isMapReady && mapRegion.latitude !== 0 && mapRegion.longitude !== 0) {
+    if (isMapReady && mapRegion.latitude && mapRegion.longitude && 
+        mapRegion.latitude !== 0 && mapRegion.longitude !== 0 &&
+        !isNaN(mapRegion.latitude) && !isNaN(mapRegion.longitude) &&
+        !hasInitialized) {
       // 初回のみ自動検索を実行
+      setHasInitialized(true);
       const timer = setTimeout(() => {
+        console.log('🚀 初回自動検索実行');
+        // デフォルトでコインパーキングのみ選択されているか確認
+        console.log('選択されているカテゴリー:', Array.from(searchFilter.selectedCategories));
         handleSearch();
-      }, 1000);
+      }, 2000); // 少し待ってから実行
       return () => clearTimeout(timer);
     }
-  }, [isMapReady]);
+  }, [isMapReady, mapRegion.latitude, mapRegion.longitude, hasInitialized]);
   
   const initializeLocation = async () => {
     const location = await LocationService.getCurrentLocation();
     if (location) {
       setUserLocation(location);
-      setMapRegion({
+      const newRegion = {
         latitude: location.latitude,
         longitude: location.longitude,
         latitudeDelta: 0.02,
         longitudeDelta: 0.02,
-      });
+      };
+      console.log('📍 初期位置設定:', newRegion);
+      setMapRegion(newRegion);
+    } else {
+      // デフォルト位置（東京駅）を設定
+      const defaultRegion = {
+        latitude: 35.6812,
+        longitude: 139.7671,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      };
+      console.log('📍 デフォルト位置設定:', defaultRegion);
+      setMapRegion(defaultRegion);
     }
   };
   
-  const handleSearch = async () => {
+  const handleSearch = async (isExpanded?: boolean) => {
     setIsLoading(true);
     try {
-      // 最新のmapRegionを使用（onRegionChangeCompleteで更新済み）
-      let currentRegion = mapRegion;
+      // onRegionChangeCompleteで保存された最新のregionを使用
+      const fullScreenRegion = { ...mapRegion };
       
-      // mapRefが利用可能なら、getMapBoundariesで再確認
-      if (mapRef.current && mapRef.current.getMapBoundaries) {
-        try {
-          const mapBoundaries = await mapRef.current.getMapBoundaries();
-          if (mapBoundaries && mapBoundaries.northEast && mapBoundaries.southWest) {
-            // 境界から正確な範囲を計算
-            const north = mapBoundaries.northEast.latitude;
-            const south = mapBoundaries.southWest.latitude;
-            const east = mapBoundaries.northEast.longitude;
-            const west = mapBoundaries.southWest.longitude;
-            
-            // 中心とdeltaを計算
-            currentRegion = {
-              latitude: (north + south) / 2,
-              longitude: (east + west) / 2,
-              latitudeDelta: Math.abs(north - south),
-              longitudeDelta: Math.abs(east - west),
-            };
-            
-            console.log('地図境界取得成功:', {
-              北: north,
-              南: south,
-              東: east,
-              西: west
-            });
-          }
-        } catch (err) {
-          console.log('地図境界取得失敗、onRegionChangeCompleteのregionを使用', err);
-        }
+      // mapRegionが正しく設定されているか確認
+      if (!fullScreenRegion.latitude || !fullScreenRegion.longitude || 
+          !fullScreenRegion.latitudeDelta || !fullScreenRegion.longitudeDelta ||
+          isNaN(fullScreenRegion.latitude) || isNaN(fullScreenRegion.longitude) ||
+          isNaN(fullScreenRegion.latitudeDelta) || isNaN(fullScreenRegion.longitudeDelta)) {
+        console.error('無効なmapRegion:', fullScreenRegion);
+        Alert.alert('エラー', '地図の位置情報が取得できませんでした');
+        setIsLoading(false);
+        return;
       }
       
-      // 実際の検索範囲を計算
-      const searchBounds = {
-        北端: currentRegion.latitude + (currentRegion.latitudeDelta / 2),
-        南端: currentRegion.latitude - (currentRegion.latitudeDelta / 2),
-        東端: currentRegion.longitude + (currentRegion.longitudeDelta / 2),
-        西端: currentRegion.longitude - (currentRegion.longitudeDelta / 2),
-      };
+      // パネルの状態に応じて検索範囲を計算
+      let searchRegion = { ...fullScreenRegion };
       
-      // 検索範囲をログ出力
-      console.log('検索範囲:', {
-        中心緯度: currentRegion.latitude.toFixed(6),
-        中心経度: currentRegion.longitude.toFixed(6),
-        緯度幅: currentRegion.latitudeDelta.toFixed(6),
-        経度幅: currentRegion.longitudeDelta.toFixed(6),
-        北端: searchBounds.北端.toFixed(6),
-        南端: searchBounds.南端.toFixed(6),
-        東端: searchBounds.東端.toFixed(6),
-        西端: searchBounds.西端.toFixed(6),
+      // パネルが展開されている場合、表示範囲を調整
+      if (isExpanded) {
+        // 画面の50%がパネルで隠れている
+        const visibleRatio = 0.5;
+        // 南端を調整（北側にシフト）
+        const adjustedLatitudeDelta = fullScreenRegion.latitudeDelta * visibleRatio;
+        const centerShift = (fullScreenRegion.latitudeDelta - adjustedLatitudeDelta) / 2;
+        
+        searchRegion = {
+          latitude: fullScreenRegion.latitude + centerShift,
+          longitude: fullScreenRegion.longitude,
+          latitudeDelta: adjustedLatitudeDelta,
+          longitudeDelta: fullScreenRegion.longitudeDelta,
+        };
+        
+        console.log('📦 パネル展開時の検索範囲調整');
+      } else {
+        console.log('📦 パネル最小時の検索範囲（全体）');
+      }
+      
+      console.log('🎯 検索にSupabaseに送るregion:', {
+        中心緯度: searchRegion.latitude.toFixed(6),
+        中心経度: searchRegion.longitude.toFixed(6),
+        緯度幅: searchRegion.latitudeDelta.toFixed(6),
+        経度幅: searchRegion.longitudeDelta.toFixed(6),
       });
       
-      // コインパーキングのみを検索
-      const selectedCategoriesSet = new Set(['コインパーキング']);
+      // 選択されたカテゴリーを検索
+      const selectedCategories = searchFilter.selectedCategories;
+      console.log('🔍 選択されたカテゴリー:', Array.from(selectedCategories));
+      
       const spots = await SupabaseService.fetchSpotsByCategories(
-        currentRegion,
-        selectedCategoriesSet
+        searchRegion,
+        selectedCategories
       );
       
-      // 駐車場のみをフィルタリング
-      const parkingSpots = spots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
+      // カテゴリー別に処理
+      let displaySpots: Spot[] = [];
       
-      // 料金でソート（駐車時間を考慮）
-      const sortedParkingSpots = parkingSpots.sort((a, b) => {
-        const feeA = ParkingFeeCalculator.calculateFee(a, searchFilter.parkingDuration);
-        const feeB = ParkingFeeCalculator.calculateFee(b, searchFilter.parkingDuration);
-        return feeA - feeB;
-      });
-      
-      // 上位20件にランキングを付与
-      const top20ParkingSpots = sortedParkingSpots.slice(0, 20).map((spot, index) => ({
-        ...spot,
-        rank: index + 1,
-        calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration)
-      }));
-      
-      console.log(`検索結果: ${spots.length}件から上位20件を表示`);
-      if (top20ParkingSpots.length > 0) {
-        console.log('最安値TOP3:', top20ParkingSpots.slice(0, 3).map(s => 
-          `${s.rank}位: ${s.name} ¥${s.calculatedFee}`
-        ));
+      if (selectedCategories.has('コインパーキング')) {
+        // 駐車場のみをフィルタリング
+        const parkingSpots = spots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
+        
+        console.log(`🅿️ 検索された駐車場: ${parkingSpots.length}件`);
+        
+        // 300件を超える場合は警告を表示
+        if (parkingSpots.length >= 300) {
+          Alert.alert(
+            '検索範囲が広すぎます',
+            '地図を拡大してください。',
+            [{ text: 'OK', style: 'default' }]
+          );
+        }
+        
+        // 全ての駐車場に対して料金を計算
+        const parkingSpotsWithFee = parkingSpots.map(spot => ({
+          ...spot,
+          calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration)
+        }));
+        
+        // 料金でソート（安い順）
+        const sortedParkingSpots = parkingSpotsWithFee.sort((a, b) => a.calculatedFee - b.calculatedFee);
+        
+        // 上位20件にランキングを付与
+        const top20ParkingSpots = sortedParkingSpots.slice(0, 20).map((spot, index) => ({
+          ...spot,
+          rank: index + 1
+        }));
+        
+        displaySpots.push(...top20ParkingSpots);
+        
+        console.log(`🏆 上位20件の駐車場を地図に表示`);
       }
       
-      setSearchResults(top20ParkingSpots);
+      // その他のカテゴリーのスポットを全て表示
+      if (selectedCategories.has('コンビニ')) {
+        const convenienceStores = spots.filter(spot => spot.category === 'コンビニ');
+        displaySpots.push(...convenienceStores);
+        console.log(`🏂 コンビニ: ${convenienceStores.length}件`);
+      }
+      
+      if (selectedCategories.has('ガソリンスタンド')) {
+        const gasStations = spots.filter(spot => spot.category === 'ガソリンスタンド');
+        displaySpots.push(...gasStations);
+        console.log(`⛽ ガソリンスタンド: ${gasStations.length}件`);
+      }
+      
+      if (selectedCategories.has('温泉')) {
+        const hotSprings = spots.filter(spot => spot.category === '温泉');
+        displaySpots.push(...hotSprings);
+        console.log(`♨️ 温泉: ${hotSprings.length}件`);
+      }
+      
+      if (selectedCategories.has('お祭り・花火大会')) {
+        const festivals = spots.filter(spot => spot.category === 'お祭り・花火大会');
+        displaySpots.push(...festivals);
+        console.log(`🎆 お祭り・花火大会: ${festivals.length}件`);
+      }
+      
+      console.log(`🗺️ 合計${displaySpots.length}件を地図に表示`);
+      setSearchResults(displaySpots);
     } catch (error) {
       console.error('Search error:', error);
       Alert.alert('エラー', '検索中にエラーが発生しました');
@@ -189,11 +243,13 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const handleRegionChangeComplete = (region: Region) => {
     // 地図の移動が完了したら最新のregionを保存
     setMapRegion(region);
-    console.log('地図移動完了:', {
+    console.log('📱 地図移動完了 (この値を検索に使用):', {
       中心緯度: region.latitude.toFixed(6),
       中心経度: region.longitude.toFixed(6),
       緯度幅: region.latitudeDelta.toFixed(6),
       経度幅: region.longitudeDelta.toFixed(6),
+      計算北端: (region.latitude + region.latitudeDelta/2).toFixed(6),
+      計算南端: (region.latitude - region.latitudeDelta/2).toFixed(6),
     });
   };
   
@@ -221,7 +277,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           ref={mapRef}
           style={styles.map}
           provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
-          region={mapRegion}
+          initialRegion={{
+            latitude: 35.6812,
+            longitude: 139.7671,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+          }}
           onRegionChangeComplete={handleRegionChangeComplete}
           onMapReady={() => setIsMapReady(true)}
           showsUserLocation={true}
@@ -254,7 +315,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         )}
       </View>
       
-      <BottomFilterPanel navigation={navigation} />
+      <CompactBottomPanel 
+        navigation={navigation} 
+        onHeightChange={(height, isExpanded) => {
+          setBottomPanelHeight(height);
+          setIsPanelExpanded(isExpanded);
+        }}
+        onSearch={(isExpanded) => handleSearch(isExpanded)}
+      />
     </SafeAreaView>
   );
 };

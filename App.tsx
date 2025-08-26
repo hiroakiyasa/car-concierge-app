@@ -6,6 +6,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MapScreen } from '@/screens/MapScreen';
 import { SpotDetailScreen } from '@/screens/SpotDetailScreen';
+import { TestMapBounds } from '@/screens/TestMapBounds';
+import { TestDataFetch } from '@/screens/TestDataFetch';
+import { DebugSupabase } from '@/screens/DebugSupabase';
 
 const Stack = createStackNavigator();
 const queryClient = new QueryClient({
@@ -28,6 +31,9 @@ export default function App() {
             }}
           >
             <Stack.Screen name="Map" component={MapScreen} />
+            <Stack.Screen name="TestMap" component={TestMapBounds} />
+            <Stack.Screen name="TestData" component={TestDataFetch} />
+            <Stack.Screen name="DebugSupabase" component={DebugSupabase} />
             <Stack.Screen 
               name="SpotDetail" 
               component={SpotDetailScreen}

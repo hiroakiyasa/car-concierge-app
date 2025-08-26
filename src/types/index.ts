@@ -74,6 +74,7 @@ export interface HotSpring extends Spot {
 
 export interface ConvenienceStore extends Spot {
   idString: string;
+  brand?: string;
   subType?: string;
   phoneNumber?: string;
   operatingHours?: string;
