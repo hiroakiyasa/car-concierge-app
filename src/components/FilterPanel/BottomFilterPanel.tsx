@@ -34,11 +34,10 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
     setSearchFilter
   } = useMainStore();
   
-  // Filter parking spots that already have ranking
+  // 既にランキングが付与された上位20件の駐車場を表示
   const parkingSpots = searchResults
     .filter(spot => spot.category === 'コインパーキング' && spot.rank)
-    .sort((a, b) => (a.rank || 0) - (b.rank || 0))
-    .slice(0, 20) as CoinParking[];
+    .sort((a, b) => (a.rank || 0) - (b.rank || 0)) as CoinParking[];
   
   const handleSpotPress = (spot: Spot) => {
     selectSpot(spot);

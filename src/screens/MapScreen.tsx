@@ -13,6 +13,7 @@ import { useMainStore } from '@/stores/useMainStore';
 import { LocationService } from '@/services/location.service';
 import { SupabaseService } from '@/services/supabase.service';
 import { SearchService } from '@/services/search.service';
+import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { CustomMarker } from '@/components/Map/CustomMarker';
 import { CategoryButtons } from '@/components/Map/CategoryButtons';
 import { MapControls } from '@/components/Map/MapControls';
@@ -63,43 +64,74 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const handleSearch = async () => {
     setIsLoading(true);
     try {
-      // 現在の地図表示範囲をログ出力（デバッグ用）
+      // MapViewのrefから現在の表示範囲を直接取得
+      let currentRegion = mapRegion;
+      
+      // mapRefが利用可能なら、最新の表示範囲を取得
+      if (mapRef.current) {
+        try {
+          const mapBoundaries = await mapRef.current.getMapBoundaries();
+          if (mapBoundaries) {
+            // 境界から中心とdeltaを計算
+            const centerLat = (mapBoundaries.northEast.latitude + mapBoundaries.southWest.latitude) / 2;
+            const centerLng = (mapBoundaries.northEast.longitude + mapBoundaries.southWest.longitude) / 2;
+            const latDelta = mapBoundaries.northEast.latitude - mapBoundaries.southWest.latitude;
+            const lngDelta = mapBoundaries.northEast.longitude - mapBoundaries.southWest.longitude;
+            
+            currentRegion = {
+              latitude: centerLat,
+              longitude: centerLng,
+              latitudeDelta: latDelta,
+              longitudeDelta: lngDelta,
+            };
+          }
+        } catch (err) {
+          console.log('地図境界取得エラー、stateのregionを使用');
+        }
+      }
+      
+      // 現在の地図表示範囲をログ出力
       console.log('検索範囲:', {
-        中心緯度: mapRegion.latitude,
-        中心経度: mapRegion.longitude,
-        緯度幅: mapRegion.latitudeDelta,
-        経度幅: mapRegion.longitudeDelta,
-        北端: mapRegion.latitude + mapRegion.latitudeDelta / 2,
-        南端: mapRegion.latitude - mapRegion.latitudeDelta / 2,
-        東端: mapRegion.longitude + mapRegion.longitudeDelta / 2,
-        西端: mapRegion.longitude - mapRegion.longitudeDelta / 2,
+        中心緯度: currentRegion.latitude,
+        中心経度: currentRegion.longitude,
+        緯度幅: currentRegion.latitudeDelta,
+        経度幅: currentRegion.longitudeDelta,
+        北端: currentRegion.latitude + currentRegion.latitudeDelta / 2,
+        南端: currentRegion.latitude - currentRegion.latitudeDelta / 2,
+        東端: currentRegion.longitude + currentRegion.longitudeDelta / 2,
+        西端: currentRegion.longitude - currentRegion.longitudeDelta / 2,
       });
       
+      // コインパーキングのみを検索
+      const selectedCategoriesSet = new Set(['コインパーキング']);
       const spots = await SupabaseService.fetchSpotsByCategories(
-        mapRegion,
-        searchFilter.selectedCategories
+        currentRegion,
+        selectedCategoriesSet
       );
       
-      // Apply filters and sort using SearchService
-      const filteredSpots = SearchService.filterSpots(spots, searchFilter, userLocation);
-      const sortedSpots = SearchService.sortSpots(filteredSpots, searchFilter, userLocation);
+      // 駐車場のみをフィルタリング
+      const parkingSpots = spots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
       
-      // 駐車場を料金順にソートしてランキング付与
-      const parkingSpots = sortedSpots.filter(spot => spot.category === 'コインパーキング');
-      const otherSpots = sortedSpots.filter(spot => spot.category !== 'コインパーキング');
+      // 料金でソート（駐車時間を考慮）
+      const sortedParkingSpots = parkingSpots.sort((a, b) => {
+        const feeA = ParkingFeeCalculator.calculateFee(a, searchFilter.parkingDuration);
+        const feeB = ParkingFeeCalculator.calculateFee(b, searchFilter.parkingDuration);
+        return feeA - feeB;
+      });
       
-      // 駐車場にランキングを付与
-      const rankedParkingSpots = parkingSpots.map((spot, index) => ({
+      // 上位20件にランキングを付与
+      const top20ParkingSpots = sortedParkingSpots.slice(0, 20).map((spot, index) => ({
         ...spot,
-        rank: index + 1
+        rank: index + 1,
+        calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration)
       }));
       
-      // 結果を結合
-      const allSpots = [...rankedParkingSpots, ...otherSpots];
+      console.log(`検索結果: ${spots.length}件中上位20件を表示`);
+      console.log('上位3件の料金:', top20ParkingSpots.slice(0, 3).map(s => 
+        `${s.rank}. ${s.name}: ¥${s.calculatedFee}`
+      ));
       
-      console.log(`検索結果: 駐車場${rankedParkingSpots.length}件, その他${otherSpots.length}件`);
-      
-      setSearchResults(allSpots.slice(0, 100)); // Limit to 100 markers
+      setSearchResults(top20ParkingSpots);
     } catch (error) {
       console.error('Search error:', error);
       Alert.alert('エラー', '検索中にエラーが発生しました');
@@ -135,22 +167,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   };
   
   const renderMarkers = () => {
-    // 駐車場とその他のスポットを分けてレンダリング
-    const parkingSpots = searchResults.filter(spot => spot.category === 'コインパーキング');
-    const otherSpots = searchResults.filter(spot => spot.category !== 'コインパーキング');
-    
-    // その他のスポットを先にレンダリング（背景に表示）
-    const otherMarkers = otherSpots.map((spot) => (
-      <CustomMarker
-        key={spot.id}
-        spot={spot}
-        rank={null}
-        onPress={() => handleMarkerPress(spot)}
-      />
-    ));
-    
-    // 駐車場マーカーを上に表示（ランキング付き）
-    const parkingMarkers = parkingSpots.map((spot) => (
+    // 上位20件の駐車場のみを表示
+    return searchResults.map((spot) => (
       <CustomMarker
         key={spot.id}
         spot={spot}
@@ -158,8 +176,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         onPress={() => handleMarkerPress(spot)}
       />
     ));
-    
-    return [...otherMarkers, ...parkingMarkers];
   };
   
   return (
@@ -187,12 +203,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           isLoading={isLoading}
         />
         
-        {searchResults.length > 100 && (
-          <View style={styles.warningContainer}>
-            <Text style={styles.warningTitle}>スポットが多すぎます</Text>
-            <Text style={styles.warningText}>地図を拡大してください</Text>
-            <Text style={styles.warningCount}>
-              ({searchResults.length}件中100件表示)
+        {searchResults.length > 0 && (
+          <View style={styles.resultContainer}>
+            <Text style={styles.resultText}>
+              上位{searchResults.length}件を表示中
             </Text>
           </View>
         )}
@@ -221,37 +235,24 @@ const styles = StyleSheet.create({
   map: {
     ...StyleSheet.absoluteFillObject,
   },
-  warningContainer: {
+  resultContainer: {
     position: 'absolute',
-    top: '60%',
+    top: 60,
     alignSelf: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     shadowColor: Colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 4,
   },
-  warningTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: Colors.warning,
-    textAlign: 'center',
-  },
-  warningText: {
+  resultText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: Colors.textPrimary,
     textAlign: 'center',
-    marginTop: 4,
-  },
-  warningCount: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 2,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
