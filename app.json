@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1976d2"
     },
     "ios": {
       "supportsTablet": true,
@@ -30,13 +30,27 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "plugins": [
       [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
         }
-      ]
+      ],
+      [
+        "expo-asset",
+        {
+          "assets": [
+            "./assets/flush_movie.mp4",
+            "./assets/flush_movie.MOV"
+          ]
+        }
+      ],
+      "expo-video",
+      "react-native-video"
     ]
   }
 }

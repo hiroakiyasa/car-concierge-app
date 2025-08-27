@@ -35,11 +35,25 @@ export class SupabaseService {
       return [];
     }
     
-    const results = (data || []).map(spot => ({
-      ...spot,
-      category: 'コインパーキング',
-      rates: spot.rates || [],
-    })) as CoinParking[];
+    const results = (data || []).map(spot => {
+      // HoursフィールドをJSONパース
+      let hoursData = null;
+      if (spot.Hours) {
+        try {
+          hoursData = typeof spot.Hours === 'string' ? JSON.parse(spot.Hours) : spot.Hours;
+        } catch (error) {
+          console.log('Hours JSON parse error:', error);
+        }
+      }
+      
+      return {
+        ...spot,
+        category: 'コインパーキング',
+        rates: spot.rates || [],
+        hours: hoursData,
+        operatingHours: spot.operating_hours || spot.operatingHours,
+      };
+    }) as CoinParking[];
     
     console.log(`🔎 Supabaseから${results.length}件の駐車場を取得`);
     return results;
@@ -87,7 +101,8 @@ export class SupabaseService {
       ...store,
       idString: store.id,
       category: 'コンビニ',
-      brand: store.brand || store.name, // brandフィールドがない場合はnameを使用
+      brand: store.brand || store.name,
+      operatingHours: store.Hours || store.operating_hours || store.operatingHours,
     })) as ConvenienceStore[];
   }
   
@@ -132,6 +147,7 @@ export class SupabaseService {
     return (data || []).map(spring => ({
       ...spring,
       category: '温泉',
+      operatingHours: spring.Hours || spring.operating_hours || spring.operatingHours,
     })) as HotSpring[];
   }
   
@@ -176,7 +192,8 @@ export class SupabaseService {
     return (data || []).map(station => ({
       ...station,
       category: 'ガソリンスタンド',
-      brand: station.brand || station.name, // brandフィールドがない場合はnameを使用
+      brand: station.brand || station.name,
+      operatingHours: station.Hours || station.operating_hours || station.operatingHours,
     })) as GasStation[];
   }
   
@@ -221,6 +238,7 @@ export class SupabaseService {
     return (data || []).map(festival => ({
       ...festival,
       category: 'お祭り・花火大会',
+      operatingHours: festival.Hours || festival.operating_hours || festival.operatingHours,
     })) as Festival[];
   }
   

@@ -6,6 +6,7 @@ import {
   Platform,
   ActivityIndicator,
   Text,
+  TouchableOpacity,
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, PROVIDER_DEFAULT, Marker } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,7 +17,7 @@ import { SearchService } from '@/services/search.service';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { CustomMarker } from '@/components/Map/CustomMarker';
 import { CategoryButtons } from '@/components/Map/CategoryButtons';
-import { MapControls } from '@/components/Map/MapControls';
+import { SimpleMapControls } from '@/components/Map/SimpleMapControls';
 import { CompactBottomPanel } from '@/components/FilterPanel/CompactBottomPanel';
 import { Colors } from '@/utils/constants';
 import { Region, Spot, CoinParking } from '@/types';
@@ -116,8 +117,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       
       // パネルが展開されている場合、表示範囲を調整
       if (isExpanded) {
-        // 画面の50%がパネルで隠れている
-        const visibleRatio = 0.5;
+        // 画面の1/3がパネルで隠れている
+        const visibleRatio = 0.67; // 2/3が見える
         // 南端を調整（北側にシフト）
         const adjustedLatitudeDelta = fullScreenRegion.latitudeDelta * visibleRatio;
         const centerShift = (fullScreenRegion.latitudeDelta - adjustedLatitudeDelta) / 2;
@@ -129,7 +130,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           longitudeDelta: fullScreenRegion.longitudeDelta,
         };
         
-        console.log('📦 パネル展開時の検索範囲調整');
+        console.log('📦 パネル展開時の検索範囲調整（画面の2/3）');
       } else {
         console.log('📦 パネル最小時の検索範囲（全体）');
       }
@@ -294,10 +295,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         
         <CategoryButtons />
         
-        <MapControls
-          onSearch={handleSearch}
+        <SimpleMapControls
           onLocationPress={handleLocationPress}
-          isLoading={isLoading}
         />
         
         {searchResults.length > 0 && (

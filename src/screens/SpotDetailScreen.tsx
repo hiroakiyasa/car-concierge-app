@@ -6,6 +6,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   Dimensions,
+  Linking,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
@@ -32,6 +34,14 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
   
   const isParking = selectedSpot.category === 'コインパーキング';
   const parkingSpot = selectedSpot as CoinParking;
+  
+  // デバッグ: 駐車場データの確認
+  if (isParking) {
+    console.log('🚗 駐車場データ:', parkingSpot);
+    console.log('🚗 hours フィールド:', parkingSpot.hours);
+    console.log('🚗 operatingHours フィールド:', parkingSpot.operatingHours);
+    console.log('🚗 is24h フィールド:', parkingSpot.is24h);
+  }
   
   const formatDistance = (): string => {
     if (!userLocation) return '---';
@@ -67,10 +77,11 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
   };
   
   const calculateParkingFee = (): string => {
-    if (!isParking || !searchFilter.parkingTimeFilterEnabled) {
+    if (!isParking) {
       return null;
     }
     
+    // 常に料金計算を表示（parkingTimeFilterEnabledに関係なく）
     const fee = ParkingFeeCalculator.calculateFee(parkingSpot, searchFilter.parkingDuration);
     const duration = searchFilter.parkingDuration.formattedDuration;
     
@@ -79,6 +90,25 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
   
   const formatOperatingHours = (): string => {
     if (selectedSpot.category === 'コインパーキング') {
+      // Hoursオブジェクトから営業時間情報を取得
+      if (parkingSpot.hours) {
+        const hours = parkingSpot.hours;
+        if (hours.is_24h || hours.access_24h) {
+          return '24時間営業';
+        }
+        if (hours.original_hours) {
+          return hours.original_hours;
+        }
+        if (hours.hours) {
+          return hours.hours;
+        }
+        if (hours.schedules && hours.schedules.length > 0) {
+          return hours.schedules
+            .map(schedule => `${schedule.days?.join('・') || ''}: ${schedule.time || ''}`)
+            .join('\n');
+        }
+      }
+      // 旧形式のフィールドにフォールバック
       return parkingSpot.is24h ? '24時間営業' : parkingSpot.operatingHours || '---';
     } else if ('operatingHours' in selectedSpot) {
       return (selectedSpot as any).operatingHours || '---';
@@ -134,11 +164,36 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
           </TouchableOpacity>
           
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => {
+                const query = encodeURIComponent(selectedSpot.name);
+                const url = `https://www.google.com/search?q=${query}`;
+                Linking.openURL(url).catch(() => {
+                  Alert.alert('エラー', 'ブラウザを開けませんでした');
+                });
+              }}
+            >
               <Ionicons name="search" size={16} color={Colors.primary} />
               <Text style={styles.actionButtonText}>検索</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => {
+                const lat = selectedSpot.lat;
+                const lng = selectedSpot.lng;
+                const label = encodeURIComponent(selectedSpot.name);
+                const url = Platform.OS === 'ios'
+                  ? `maps:0,0?q=${label}@${lat},${lng}`
+                  : `geo:0,0?q=${lat},${lng}(${label})`;
+                
+                Linking.openURL(url).catch(() => {
+                  // フォールバックとしてGoogle MapsのWeb版を開く
+                  const webUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}&query_place_id=${label}`;
+                  Linking.openURL(webUrl);
+                });
+              }}
+            >
               <Ionicons name="map" size={16} color={Colors.primary} />
               <Text style={styles.actionButtonText}>地図</Text>
             </TouchableOpacity>
@@ -173,35 +228,17 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionIcon}>¥</Text>
-              <Text style={styles.sectionTitle}>料金・標高</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>標高</Text>
-              <Text style={styles.infoValue}>
-                {selectedSpot.elevation ? `${selectedSpot.elevation}m` : '---'}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>駐車場タイプ</Text>
-              <Text style={styles.infoValue}>
-                {parkingSpot.type || '---'}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>収容台数</Text>
-              <Text style={styles.infoValue}>
-                {parkingSpot.capacity ? `${parkingSpot.capacity}台` : '---'}
-              </Text>
+              <Text style={styles.sectionTitle}>料金体系</Text>
             </View>
             <View style={styles.pricingBox}>
-              <Text style={styles.pricingTitle}>料金体系</Text>
               <Text style={styles.pricingText}>{formatPrice()}</Text>
-              {calculateParkingFee() && (
-                <View style={styles.calculatedFeeBox}>
-                  <Text style={styles.calculatedFeeText}>{calculateParkingFee()}</Text>
-                </View>
-              )}
             </View>
+            {calculateParkingFee() && (
+              <View style={styles.calculatedFeeBox}>
+                <Text style={styles.calculatedFeeLabel}>駐車料金（計算結果）</Text>
+                <Text style={styles.calculatedFeeText}>{calculateParkingFee()}</Text>
+              </View>
+            )}
           </View>
         )}
         
@@ -225,12 +262,22 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
               <Text style={styles.infoValue}>{selectedSpot.elevation}m</Text>
             </View>
           )}
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>座標</Text>
-            <Text style={styles.infoValue}>
-              {selectedSpot.lat.toFixed(6)}, {selectedSpot.lng.toFixed(6)}
-            </Text>
-          </View>
+          {isParking && (
+            <>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>駐車場タイプ</Text>
+                <Text style={styles.infoValue}>
+                  {parkingSpot.type || '---'}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>収容台数</Text>
+                <Text style={styles.infoValue}>
+                  {parkingSpot.capacity ? `${parkingSpot.capacity}台` : '---'}
+                </Text>
+              </View>
+            </>
+          )}
         </View>
         
         {/* Nearby Facilities (for parking) */}
@@ -494,15 +541,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   calculatedFeeBox: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: Colors.divider,
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: Colors.warningLight,
+    borderRadius: 8,
+  },
+  calculatedFeeLabel: {
+    fontSize: Typography.caption,
+    color: Colors.textSecondary,
+    marginBottom: 4,
   },
   calculatedFeeText: {
-    fontSize: Typography.body,
+    fontSize: Typography.h6,
     color: Colors.warning,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   descriptionBox: {
     marginTop: Spacing.medium,

@@ -18,7 +18,7 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // パネルの高さの状態（2パターンのみ）
 const PANEL_COLLAPSED_HEIGHT = 100; // 最小時: 入出庫時間のみ
-const PANEL_EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.5; // 展開時: 画面の50%
+const PANEL_EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.33; // 展開時: 画面の1/3
 
 interface CompactBottomPanelProps {
   navigation?: any;

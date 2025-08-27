@@ -27,10 +27,15 @@ export interface ParkingRate {
 }
 
 export interface HoursInfo {
-  originalHours?: string;
-  is24h?: boolean;
+  hours?: string;
+  is_24h?: boolean;
+  holidays?: string[];
   schedules?: Schedule[];
-  access24h?: boolean;
+  access_24h?: boolean;
+  closed_days?: string[];
+  restrictions?: string[];
+  operating_days?: string[];
+  original_hours?: string;
 }
 
 export interface Schedule {

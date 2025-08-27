@@ -18,6 +18,7 @@ export const Colors = {
   error: '#f44336',
   success: '#4caf50',
   warning: '#ff9800',
+  warningLight: '#fff3e0',
   info: '#2196f3',
   
   // Text Colors
