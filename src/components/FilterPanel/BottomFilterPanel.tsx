@@ -34,7 +34,7 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
   const [panelHeight, setPanelHeight] = useState(PANEL_MIN_HEIGHT);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
-  const [showingEntryTime, setShowingEntryTime] = useState(true); // true: 入庫時間, false: 出庫時間
+  const [timeSelectorMode, setTimeSelectorMode] = useState<'entry' | 'duration' | 'exit'>('entry');
   const panY = useRef(new Animated.Value(0)).current;
   const { 
     searchResults, 
@@ -88,20 +88,29 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
   
   const formatEntryTime = (): string => {
     const date = searchFilter.parkingDuration.startDate;
+    const month = date.getMonth() + 1;
     const day = date.getDate();
-    const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][date.getDay()];
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${day}日 (${dayOfWeek}) ${hours}:${minutes}`;
+    return `${month}/${day} ${hours}:${minutes}`;
   };
   
   const formatExitTime = (): string => {
     const date = searchFilter.parkingDuration.endDate;
+    const month = date.getMonth() + 1;
     const day = date.getDate();
-    const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][date.getDay()];
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${day}日 (${dayOfWeek}) ${hours}:${minutes}`;
+    return `${month}/${day} ${hours}:${minutes}`;
+  };
+  
+  const formatDuration = (): string => {
+    return searchFilter.parkingDuration.formattedDuration || '1時間';
+  };
+  
+  const handleTimeSelectorOpen = (mode: 'entry' | 'duration' | 'exit') => {
+    setTimeSelectorMode(mode);
+    setShowTimeSelector(true);
   };
   
   const formatDistance = (spot: Spot): string => {
@@ -211,41 +220,49 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
       
       {!isCollapsed && (
       <View style={styles.timeSection}>
-        <View style={styles.timeRow}>
-          <TouchableOpacity 
-            style={styles.timeLabelButton}
-            onPress={() => setShowTimeSelector(true)}
+        <View style={styles.timeSectionRow}>
+          <TouchableOpacity
+            style={styles.entryTimeButton}
+            onPress={() => handleTimeSelectorOpen('entry')}
           >
             <Ionicons name="car" size={16} color={Colors.success} />
-            <Text style={styles.timeLabelText}>入庫時間</Text>
+            <Text style={styles.timeLabel}>入庫</Text>
           </TouchableOpacity>
-          <View style={styles.timeValueContainer}>
-            <Text style={styles.timeValue}>{formatEntryTime()}</Text>
-          </View>
-        </View>
-        
-        <View style={styles.timeDurationRow}>
-          <TouchableOpacity 
+          
+          <TouchableOpacity
             style={styles.durationButton}
-            onPress={() => setShowTimeSelector(true)}
+            onPress={() => handleTimeSelectorOpen('duration')}
           >
-            <Ionicons name="chevron-down" size={16} color={Colors.primary} />
-            <Text style={styles.durationText}>駐車時間</Text>
-            <Text style={styles.durationValue}>{searchFilter.parkingDuration.formattedDuration || '1時間0分'}</Text>
+            <Ionicons name="time" size={16} color={Colors.primary} />
+            <Text style={styles.durationValue}>{formatDuration()}</Text>
+            <Text style={styles.timeLabel}>駐車時間</Text>
           </TouchableOpacity>
-        </View>
-        
-        <View style={styles.timeRow}>
-          <TouchableOpacity 
-            style={styles.timeLabelButton}
-            onPress={() => setShowTimeSelector(true)}
+          
+          <TouchableOpacity
+            style={styles.exitTimeButton}
+            onPress={() => handleTimeSelectorOpen('exit')}
           >
             <Ionicons name="car" size={16} color={Colors.error} />
-            <Text style={styles.timeLabelText}>出庫時間</Text>
+            <Text style={styles.timeLabel}>出庫</Text>
           </TouchableOpacity>
-          <View style={styles.timeValueContainer}>
-            <Text style={styles.timeValue}>{formatExitTime()}</Text>
-          </View>
+        </View>
+        
+        <View style={styles.timeSectionRow}>
+          <TouchableOpacity
+            style={styles.entryDateTime}
+            onPress={() => handleTimeSelectorOpen('entry')}
+          >
+            <Text style={styles.dateTimeText}>{formatEntryTime()}</Text>
+          </TouchableOpacity>
+          
+          <View style={styles.durationSpacer} />
+          
+          <TouchableOpacity
+            style={styles.exitDateTime}
+            onPress={() => handleTimeSelectorOpen('exit')}
+          >
+            <Text style={styles.dateTimeText}>{formatExitTime()}</Text>
+          </TouchableOpacity>
         </View>
       </View>
       )}
@@ -284,12 +301,16 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
       
       <ParkingTimeSelector
         duration={searchFilter.parkingDuration}
+        mode={timeSelectorMode}
         onDurationChange={(duration) => {
           setSearchFilter({
             ...searchFilter,
             parkingDuration: duration,
             parkingTimeFilterEnabled: true
           });
+          if (onSearch) {
+            setTimeout(() => onSearch(), 300);
+          }
         }}
         visible={showTimeSelector}
         onClose={() => setShowTimeSelector(false)}
@@ -343,16 +364,16 @@ const styles = StyleSheet.create({
   searchButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 18,
     backgroundColor: Colors.primary,
   },
   searchButtonText: {
-    fontSize: Typography.caption,
+    fontSize: Typography.bodySmall,
     color: Colors.white,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   headerTitle: {
     fontSize: Typography.bodySmall,
@@ -367,55 +388,62 @@ const styles = StyleSheet.create({
   },
   timeSection: {
     paddingHorizontal: Spacing.medium,
-    paddingVertical: Spacing.small,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.divider,
   },
-  timeRow: {
+  timeSectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    justifyContent: 'space-between',
+    marginVertical: 4,
   },
-  timeDurationRow: {
-    paddingLeft: 24,
-    paddingVertical: 4,
-  },
-  timeLabelButton: {
+  entryTimeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    width: 100,
-  },
-  timeLabelText: {
-    fontSize: Typography.bodySmall,
-    color: Colors.textPrimary,
-  },
-  timeValueContainer: {
-    flex: 1,
-  },
-  timeValue: {
-    fontSize: Typography.bodySmall,
-    color: Colors.textPrimary,
-    fontWeight: '500',
+    gap: 4,
+    minWidth: 65,
   },
   durationButton: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: 6,
+    gap: 2,
+    paddingHorizontal: 16,
     paddingVertical: 4,
-    paddingHorizontal: 12,
     backgroundColor: Colors.background,
     borderRadius: 16,
-    alignSelf: 'flex-start',
   },
-  durationText: {
+  exitTimeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 65,
+    justifyContent: 'flex-end',
+  },
+  timeLabel: {
     fontSize: Typography.caption,
     color: Colors.textSecondary,
+    fontWeight: '500',
   },
   durationValue: {
-    fontSize: Typography.caption,
+    fontSize: Typography.h5,
     color: Colors.primary,
+    fontWeight: '700',
+  },
+  entryDateTime: {
+    minWidth: 100,
+  },
+  exitDateTime: {
+    minWidth: 100,
+    alignItems: 'flex-end',
+  },
+  dateTimeText: {
+    fontSize: Typography.h6,
+    color: Colors.textPrimary,
     fontWeight: '600',
+  },
+  durationSpacer: {
+    flex: 1,
   },
   content: {
     flex: 1,

@@ -64,33 +64,38 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
   if (showVideo && !videoError) {
     return (
       <View style={styles.container}>
-        <Video
-          ref={videoRef}
-          // MP4ファイルを使用（全プラットフォーム対応）
-          source={require('../../assets/flush_movie.mp4')}
-          style={styles.video}
-          resizeMode={ResizeMode.COVER}
-          shouldPlay
-          isLooping={false}
-          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-          onError={handleError}
-          volume={1.0}
-          isMuted={false}
-          useNativeControls={false}
-          onLoad={(status) => {
-            console.log('動画ロード成功');
-          }}
-          onLoadStart={() => {
-            console.log('動画ロード開始');
-          }}
-        />
-        
-        {/* オーバーレイテキスト */}
-        <View style={styles.overlay}>
-          <View style={styles.overlayContainer}>
-            <Text style={styles.overlayTitle}>Car Concierge</Text>
-            <Text style={styles.overlaySubtitle}>駐車場検索アプリ</Text>
+        {/* 動画の影を演出 */}
+        <View style={styles.videoShadow}>
+          <View style={styles.videoWrapper}>
+            <Video
+              ref={videoRef}
+              // MP4ファイルを使用（全プラットフォーム対応）
+              source={require('../../assets/flush_movie.mp4')}
+              style={styles.videoSquare}
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay
+              isLooping={false}
+              onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+              onError={handleError}
+              volume={1.0}
+              isMuted={false}
+              useNativeControls={false}
+              onLoad={(status) => {
+                console.log('動画ロード成功');
+              }}
+              onLoadStart={() => {
+                console.log('動画ロード開始');
+              }}
+            />
           </View>
+        </View>
+        
+        {/* ブランドテキスト */}
+        <View style={styles.brandContainer}>
+          <Text style={styles.brandTitle}>CAR</Text>
+          <Text style={styles.brandSubtitle}>CONCIERGE</Text>
+          <View style={styles.brandDivider} />
+          <Text style={styles.brandTagline}>Premium Parking Service</Text>
         </View>
       </View>
     );
@@ -98,12 +103,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
 
   // フォールバック: アニメーション付きスプラッシュ
   return (
-    <LinearGradient
-      colors={[Colors.primaryDark, Colors.primary, Colors.primaryLight]}
-      style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
+    <View style={[styles.container, styles.fallbackContainer]}>
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <View style={styles.logoBackground}>
@@ -116,22 +116,13 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
         </View>
 
         <View style={styles.textContainer}>
-          <Text style={styles.title}>Car Concierge</Text>
-          <Text style={styles.subtitle}>駐車場検索アプリ</Text>
-          
-          <View style={styles.loadingContainer}>
-            <View style={styles.loadingDot} />
-            <View style={[styles.loadingDot, styles.loadingDotCenter]} />
-            <View style={styles.loadingDot} />
-          </View>
+          <Text style={styles.fallbackTitle}>CAR</Text>
+          <Text style={styles.fallbackTitle}>CONCIERGE</Text>
+          <View style={styles.brandDivider} />
+          <Text style={styles.fallbackTagline}>Premium Parking Service</Text>
         </View>
       </View>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>最寄りの駐車場を簡単検索</Text>
-        <Text style={styles.copyrightText}>Powered by AI</Text>
-      </View>
-    </LinearGradient>
+    </View>
   );
 };
 
@@ -140,8 +131,111 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.black,
+    backgroundColor: '#FFFFFF', // 真っ白な背景
   },
+  fallbackContainer: {
+    backgroundColor: '#F8F8F8',
+  },
+  videoShadow: {
+    shadowColor: '#000000',
+    shadowOffset: {
+      width: 0,
+      height: 15,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 30,
+    elevation: 20,
+  },
+  videoWrapper: {
+    width: SCREEN_WIDTH * 0.8,  // 画面横幅の80%
+    height: SCREEN_WIDTH * 0.8, // 正方形にする
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+    borderRadius: 20, // 角を少し丸める
+    overflow: 'hidden',
+  },
+  videoSquare: {
+    width: '100%',
+    height: '100%',
+  },
+  brandContainer: {
+    position: 'absolute',
+    bottom: 100,
+    alignItems: 'center',
+  },
+  brandTitle: {
+    fontSize: 42,
+    fontWeight: '900',
+    color: '#1A1A1A',
+    letterSpacing: 8,
+    marginBottom: -5,
+  },
+  brandSubtitle: {
+    fontSize: 32,
+    fontWeight: '300',
+    color: '#2A2A2A',
+    letterSpacing: 6,
+    marginBottom: 15,
+  },
+  brandDivider: {
+    width: 60,
+    height: 2,
+    backgroundColor: '#1A1A1A',
+    marginVertical: 15,
+  },
+  brandTagline: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#4A4A4A',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  content: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoContainer: {
+    marginBottom: 40,
+  },
+  logoBackground: {
+    width: 180,
+    height: 180,
+    borderRadius: 30,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 15,
+  },
+  logo: {
+    width: 140,
+    height: 140,
+  },
+  textContainer: {
+    alignItems: 'center',
+  },
+  fallbackTitle: {
+    fontSize: 38,
+    fontWeight: '900',
+    color: '#1A1A1A',
+    letterSpacing: 6,
+    marginBottom: 2,
+  },
+  fallbackTagline: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#4A4A4A',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  // 削除された未使用のスタイル
   video: {
     position: 'absolute',
     top: 0,
@@ -179,36 +273,6 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  content: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoContainer: {
-    marginBottom: 30,
-  },
-  logoBackground: {
-    width: 180,
-    height: 180,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: Colors.black,
-    shadowOffset: {
-      width: 0,
-      height: 20,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 30,
-    elevation: 20,
-  },
-  logo: {
-    width: 140,
-    height: 140,
-  },
-  textContainer: {
-    alignItems: 'center',
   },
   title: {
     color: Colors.white,

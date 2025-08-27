@@ -14,6 +14,7 @@ import { ParkingDuration } from '@/types';
 
 interface ParkingTimeSelectorProps {
   duration: ParkingDuration;
+  mode?: 'entry' | 'duration' | 'exit';
   onDurationChange: (duration: ParkingDuration) => void;
   visible: boolean;
   onClose: () => void;
@@ -21,15 +22,18 @@ interface ParkingTimeSelectorProps {
 
 export const ParkingTimeSelector: React.FC<ParkingTimeSelectorProps> = ({
   duration,
+  mode = 'entry',
   onDurationChange,
   visible,
   onClose,
 }) => {
   const [startDate, setStartDate] = useState(duration.startDate);
+  const [endDate, setEndDate] = useState(duration.endDate);
   const [parkingHours, setParkingHours] = useState(Math.floor(duration.duration / 3600));
   const [parkingMinutes, setParkingMinutes] = useState((duration.duration % 3600) / 60);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [activeMode, setActiveMode] = useState(mode);
 
   const quickTimeOptions = [
     { label: '30分', hours: 0, minutes: 30 },
@@ -42,15 +46,13 @@ export const ParkingTimeSelector: React.FC<ParkingTimeSelectorProps> = ({
   ];
 
   const handleQuickTimeSelect = (hours: number, minutes: number) => {
-    setParkingHours(hours);
-    setParkingMinutes(minutes);
-    updateDuration(startDate, hours, minutes);
+    updateFromDuration(hours, minutes);
   };
 
-  const updateDuration = (date: Date, hours: number, minutes: number) => {
+  const updateFromEntry = (newStartDate: Date, hours: number, minutes: number) => {
     const totalSeconds = (hours * 3600) + (minutes * 60);
     const newDuration: ParkingDuration = {
-      startDate: date,
+      startDate: newStartDate,
       duration: totalSeconds,
       get endDate() {
         return new Date(this.startDate.getTime() + this.duration * 1000);
@@ -67,25 +69,100 @@ export const ParkingTimeSelector: React.FC<ParkingTimeSelectorProps> = ({
         return `${m}分`;
       },
     };
+    setStartDate(newStartDate);
+    setEndDate(new Date(newStartDate.getTime() + totalSeconds * 1000));
+    onDurationChange(newDuration);
+  };
+
+  const updateFromExit = (newEndDate: Date) => {
+    const diffMs = newEndDate.getTime() - startDate.getTime();
+    const totalSeconds = Math.max(0, Math.floor(diffMs / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    
+    const newDuration: ParkingDuration = {
+      startDate: startDate,
+      duration: totalSeconds,
+      get endDate() {
+        return new Date(this.startDate.getTime() + this.duration * 1000);
+      },
+      get durationInMinutes() {
+        return Math.round(this.duration / 60);
+      },
+      get formattedDuration() {
+        const h = Math.floor(this.duration / 3600);
+        const m = Math.floor((this.duration % 3600) / 60);
+        if (h > 0) {
+          return `${h}時間${m > 0 ? `${m}分` : ''}`;
+        }
+        return `${m}分`;
+      },
+    };
+    
+    setEndDate(newEndDate);
+    setParkingHours(hours);
+    setParkingMinutes(minutes);
+    onDurationChange(newDuration);
+  };
+
+  const updateFromDuration = (hours: number, minutes: number) => {
+    const totalSeconds = (hours * 3600) + (minutes * 60);
+    const newEndDate = new Date(startDate.getTime() + totalSeconds * 1000);
+    
+    const newDuration: ParkingDuration = {
+      startDate: startDate,
+      duration: totalSeconds,
+      get endDate() {
+        return new Date(this.startDate.getTime() + this.duration * 1000);
+      },
+      get durationInMinutes() {
+        return Math.round(this.duration / 60);
+      },
+      get formattedDuration() {
+        const h = Math.floor(this.duration / 3600);
+        const m = Math.floor((this.duration % 3600) / 60);
+        if (h > 0) {
+          return `${h}時間${m > 0 ? `${m}分` : ''}`;
+        }
+        return `${m}分`;
+      },
+    };
+    
+    setParkingHours(hours);
+    setParkingMinutes(minutes);
+    setEndDate(newEndDate);
     onDurationChange(newDuration);
   };
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
     if (selectedDate) {
-      setStartDate(selectedDate);
-      updateDuration(selectedDate, parkingHours, parkingMinutes);
+      if (activeMode === 'entry') {
+        updateFromEntry(selectedDate, parkingHours, parkingMinutes);
+      } else if (activeMode === 'exit') {
+        const newEndDate = new Date(endDate);
+        newEndDate.setFullYear(selectedDate.getFullYear());
+        newEndDate.setMonth(selectedDate.getMonth());
+        newEndDate.setDate(selectedDate.getDate());
+        updateFromExit(newEndDate);
+      }
     }
   };
 
   const handleTimeChange = (event: any, selectedTime?: Date) => {
     setShowTimePicker(false);
     if (selectedTime) {
-      const newStartDate = new Date(startDate);
-      newStartDate.setHours(selectedTime.getHours());
-      newStartDate.setMinutes(selectedTime.getMinutes());
-      setStartDate(newStartDate);
-      updateDuration(newStartDate, parkingHours, parkingMinutes);
+      if (activeMode === 'entry') {
+        const newStartDate = new Date(startDate);
+        newStartDate.setHours(selectedTime.getHours());
+        newStartDate.setMinutes(selectedTime.getMinutes());
+        updateFromEntry(newStartDate, parkingHours, parkingMinutes);
+      } else if (activeMode === 'exit') {
+        const newEndDate = new Date(endDate);
+        newEndDate.setHours(selectedTime.getHours());
+        newEndDate.setMinutes(selectedTime.getMinutes());
+        updateFromExit(newEndDate);
+      }
     }
   };
 
@@ -110,72 +187,127 @@ export const ParkingTimeSelector: React.FC<ParkingTimeSelectorProps> = ({
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.header}>
-            <Text style={styles.title}>駐車時間設定</Text>
+            <Text style={styles.title}>
+              {mode === 'entry' ? '入庫時間設定' : 
+               mode === 'duration' ? '駐車時間設定' : 
+               '出庫時間設定'}
+            </Text>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color={Colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
-          {/* 入庫時間 */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>入庫時間</Text>
-            <View style={styles.dateTimeRow}>
-              <TouchableOpacity
-                style={styles.dateTimeButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
-                <Text style={styles.dateTimeText}>
-                  {startDate.toLocaleDateString('ja-JP')}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.dateTimeButton}
-                onPress={() => setShowTimePicker(true)}
-              >
-                <Ionicons name="time-outline" size={20} color={Colors.primary} />
-                <Text style={styles.dateTimeText}>
-                  {startDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          {mode === 'entry' && (
+            <>
+              {/* 入庫時間 */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>入庫時間</Text>
+                <View style={styles.dateTimeRow}>
+                  <TouchableOpacity
+                    style={styles.dateTimeButton}
+                    onPress={() => { setActiveMode('entry'); setShowDatePicker(true); }}
+                  >
+                    <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.dateTimeText}>
+                      {startDate.toLocaleDateString('ja-JP')}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.dateTimeButton}
+                    onPress={() => { setActiveMode('entry'); setShowTimePicker(true); }}
+                  >
+                    <Ionicons name="time-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.dateTimeText}>
+                      {startDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>現在の設定</Text>
+                <View style={styles.currentSettings}>
+                  <Text style={styles.currentText}>駐車時間: {duration.formattedDuration}</Text>
+                  <Text style={styles.currentText}>出庫予定: {formatDateTime(endDate)}</Text>
+                </View>
+              </View>
+            </>
+          )}
 
-          {/* 駐車時間 */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>駐車時間</Text>
-            <View style={styles.quickTimeGrid}>
-              {quickTimeOptions.map((option) => (
-                <TouchableOpacity
-                  key={option.label}
-                  style={[
-                    styles.quickTimeButton,
-                    (parkingHours === option.hours && parkingMinutes === option.minutes) &&
-                    styles.quickTimeButtonActive
-                  ]}
-                  onPress={() => handleQuickTimeSelect(option.hours, option.minutes)}
-                >
-                  <Text style={[
-                    styles.quickTimeText,
-                    (parkingHours === option.hours && parkingMinutes === option.minutes) &&
-                    styles.quickTimeTextActive
-                  ]}>
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+          {mode === 'duration' && (
+            <>
+              {/* 駐車時間 */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>駐車時間を選択</Text>
+                <View style={styles.quickTimeGrid}>
+                  {quickTimeOptions.map((option) => (
+                    <TouchableOpacity
+                      key={option.label}
+                      style={[
+                        styles.quickTimeButton,
+                        (parkingHours === option.hours && parkingMinutes === option.minutes) &&
+                        styles.quickTimeButtonActive
+                      ]}
+                      onPress={() => handleQuickTimeSelect(option.hours, option.minutes)}
+                    >
+                      <Text style={[
+                        styles.quickTimeText,
+                        (parkingHours === option.hours && parkingMinutes === option.minutes) &&
+                        styles.quickTimeTextActive
+                      ]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+              
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>現在の設定</Text>
+                <View style={styles.currentSettings}>
+                  <Text style={styles.currentText}>入庫時間: {formatDateTime(startDate)}</Text>
+                  <Text style={styles.currentText}>出庫予定: {formatDateTime(endDate)}</Text>
+                </View>
+              </View>
+            </>
+          )}
 
-          {/* 出庫予定時間 */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>出庫予定時間</Text>
-            <View style={styles.endTimeContainer}>
-              <Text style={styles.endTimeText}>
-                {formatDateTime(new Date(startDate.getTime() + (parkingHours * 3600 + parkingMinutes * 60) * 1000))}
-              </Text>
-            </View>
-          </View>
+          {mode === 'exit' && (
+            <>
+              {/* 出庫時間 */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>出庫時間</Text>
+                <View style={styles.dateTimeRow}>
+                  <TouchableOpacity
+                    style={styles.dateTimeButton}
+                    onPress={() => { setActiveMode('exit'); setShowDatePicker(true); }}
+                  >
+                    <Ionicons name="calendar-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.dateTimeText}>
+                      {endDate.toLocaleDateString('ja-JP')}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.dateTimeButton}
+                    onPress={() => { setActiveMode('exit'); setShowTimePicker(true); }}
+                  >
+                    <Ionicons name="time-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.dateTimeText}>
+                      {endDate.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>現在の設定</Text>
+                <View style={styles.currentSettings}>
+                  <Text style={styles.currentText}>入庫時間: {formatDateTime(startDate)}</Text>
+                  <Text style={styles.currentText}>駐車時間: {duration.formattedDuration}</Text>
+                </View>
+              </View>
+            </>
+          )}
 
           {/* 確定ボタン */}
           <TouchableOpacity style={styles.confirmButton} onPress={onClose}>
@@ -185,7 +317,7 @@ export const ParkingTimeSelector: React.FC<ParkingTimeSelectorProps> = ({
           {/* Date/Time Pickers */}
           {showDatePicker && (
             <DateTimePicker
-              value={startDate}
+              value={activeMode === 'exit' ? endDate : startDate}
               mode="date"
               display="default"
               onChange={handleDateChange}
@@ -193,7 +325,7 @@ export const ParkingTimeSelector: React.FC<ParkingTimeSelectorProps> = ({
           )}
           {showTimePicker && (
             <DateTimePicker
-              value={startDate}
+              value={activeMode === 'exit' ? endDate : startDate}
               mode="time"
               display="default"
               onChange={handleTimeChange}
@@ -306,5 +438,15 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: Typography.body,
     fontWeight: '600',
+  },
+  currentSettings: {
+    padding: Spacing.medium,
+    backgroundColor: Colors.background,
+    borderRadius: Spacing.cornerRadius,
+  },
+  currentText: {
+    fontSize: Typography.bodySmall,
+    color: Colors.textSecondary,
+    marginVertical: 2,
   },
 });
