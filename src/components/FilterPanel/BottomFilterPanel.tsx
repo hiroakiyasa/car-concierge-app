@@ -86,26 +86,45 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
     return '入庫時間';
   };
   
-  const formatEntryTime = (): string => {
+  const formatEntryDateTime = (): { date: string; time: string; dayOfWeek: string } => {
     const date = searchFilter.parkingDuration.startDate;
     const month = date.getMonth() + 1;
     const day = date.getDate();
+    const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][date.getDay()];
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${month}/${day} ${hours}:${minutes}`;
+    return {
+      date: `${month}月${day}日`,
+      dayOfWeek: `(${dayOfWeek})`,
+      time: `${hours}:${minutes}`
+    };
   };
   
-  const formatExitTime = (): string => {
+  const formatExitDateTime = (): { date: string; time: string; dayOfWeek: string } => {
     const date = searchFilter.parkingDuration.endDate;
     const month = date.getMonth() + 1;
     const day = date.getDate();
+    const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][date.getDay()];
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${month}/${day} ${hours}:${minutes}`;
+    return {
+      date: `${month}月${day}日`,
+      dayOfWeek: `(${dayOfWeek})`,
+      time: `${hours}:${minutes}`
+    };
   };
   
   const formatDuration = (): string => {
-    return searchFilter.parkingDuration.formattedDuration || '1時間';
+    const duration = searchFilter.parkingDuration.duration;
+    const hours = Math.floor(duration / 3600);
+    const minutes = Math.floor((duration % 3600) / 60);
+    if (hours > 0 && minutes > 0) {
+      return `${hours}時間${minutes}分`;
+    } else if (hours > 0) {
+      return `${hours}時間`;
+    } else {
+      return `${minutes}分`;
+    }
   };
   
   const handleTimeSelectorOpen = (mode: 'entry' | 'duration' | 'exit') => {
@@ -220,50 +239,53 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
       
       {!isCollapsed && (
       <View style={styles.timeSection}>
-        {/* First Row - Labels and Duration */}
+        {/* First Row - Labels with Duration */}
         <View style={styles.timeFirstRow}>
-          <TouchableOpacity
-            style={styles.entryTimeLabel}
-            onPress={() => handleTimeSelectorOpen('entry')}
-          >
-            <Ionicons name="car" size={18} color={Colors.success} />
+          <View style={styles.entryLabelSection}>
+            <Ionicons name="log-in" size={18} color={Colors.success} />
             <Text style={styles.timeLabelText}>入庫</Text>
-          </TouchableOpacity>
+          </View>
           
           <TouchableOpacity
-            style={styles.durationDisplay}
+            style={styles.centerDurationSection}
             onPress={() => handleTimeSelectorOpen('duration')}
           >
-            <Ionicons name="time-outline" size={20} color={Colors.primary} />
-            <Text style={styles.durationValueText}>{formatDuration()}</Text>
-            <Text style={styles.durationLabelText}>駐車時間</Text>
+            <Ionicons name="time-outline" size={18} color={Colors.primary} />
+            <Text style={styles.durationText}>{formatDuration()}</Text>
+            <Text style={styles.durationLabel}>駐車時間</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity
-            style={styles.exitTimeLabel}
-            onPress={() => handleTimeSelectorOpen('exit')}
-          >
-            <Ionicons name="car" size={18} color={Colors.error} />
+          <View style={styles.exitLabelSection}>
+            <Ionicons name="log-out" size={18} color={Colors.error} />
             <Text style={styles.timeLabelText}>出庫</Text>
-          </TouchableOpacity>
+          </View>
         </View>
         
-        {/* Second Row - Date Times */}
+        {/* Second Row - Date Times with Search Button */}
         <View style={styles.timeSecondRow}>
           <TouchableOpacity
-            style={styles.entryDateTimeButton}
+            style={styles.entryDateTimeArea}
             onPress={() => handleTimeSelectorOpen('entry')}
           >
-            <Text style={styles.dateTimeValue}>{formatEntryTime()}</Text>
+            <Text style={styles.dateText}>{formatEntryDateTime().date}</Text>
+            <Text style={styles.bigTimeText}>{formatEntryDateTime().time}</Text>
           </TouchableOpacity>
           
-          <View style={styles.centerSpacer} />
+          <View style={styles.spacer} />
           
           <TouchableOpacity
-            style={styles.exitDateTimeButton}
+            style={styles.exitDateTimeArea}
             onPress={() => handleTimeSelectorOpen('exit')}
           >
-            <Text style={styles.dateTimeValue}>{formatExitTime()}</Text>
+            <Text style={styles.dateText}>{formatExitDateTime().date}</Text>
+            <Text style={styles.bigTimeText}>{formatExitDateTime().time}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.searchButtonLarge}
+            onPress={onSearch}
+          >
+            <Ionicons name="search" size={26} color={Colors.white} />
           </TouchableOpacity>
         </View>
       </View>
@@ -390,8 +412,8 @@ const styles = StyleSheet.create({
   },
   timeSection: {
     paddingHorizontal: Spacing.medium,
-    paddingTop: 10,
-    paddingBottom: 12,
+    paddingTop: 12,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.divider,
     backgroundColor: Colors.white,
@@ -400,66 +422,83 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   timeSecondRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  entryTimeLabel: {
+  entryLabelSection: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    minWidth: 70,
+    flex: 1,
   },
-  exitTimeLabel: {
+  centerDurationSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+  },
+  exitLabelSection: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    minWidth: 70,
+    flex: 1,
     justifyContent: 'flex-end',
   },
   timeLabelText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  durationText: {
+    fontSize: 16,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  durationLabel: {
     fontSize: 12,
     color: Colors.textSecondary,
     fontWeight: '500',
   },
-  durationDisplay: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 20,
-    paddingVertical: 4,
-    backgroundColor: Colors.background,
-    borderRadius: 16,
+  entryDateTimeArea: {
+    flex: 1,
   },
-  durationValueText: {
-    fontSize: 18,
-    color: Colors.primary,
-    fontWeight: '700',
-  },
-  durationLabelText: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  entryDateTimeButton: {
-    padding: 4,
-    minWidth: 100,
-  },
-  exitDateTimeButton: {
-    padding: 4,
-    minWidth: 100,
+  exitDateTimeArea: {
+    flex: 1,
     alignItems: 'flex-end',
   },
-  dateTimeValue: {
-    fontSize: 16,
+  dateText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginBottom: 2,
+  },
+  bigTimeText: {
+    fontSize: 22,
     color: Colors.textPrimary,
     fontWeight: '600',
   },
-  centerSpacer: {
-    flex: 1,
+  spacer: {
+    width: 20,
+  },
+  searchButtonLarge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 16,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 4,
   },
   content: {
     flex: 1,

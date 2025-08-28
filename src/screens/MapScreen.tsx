@@ -236,6 +236,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       };
       setMapRegion(newRegion);
       mapRef.current?.animateToRegion(newRegion, 500);
+      // 現在地に移動後、自動で検索を実行
+      setTimeout(() => {
+        handleSearch();
+      }, 600);
     } else {
       Alert.alert('位置情報', '現在地を取得できませんでした');
     }
@@ -270,6 +274,17 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       />
     ));
   };
+  
+  // アプリ起動時に現在地を取得して自動検索
+  useEffect(() => {
+    const initializeMap = async () => {
+      if (isMapReady) {
+        await handleLocationPress();
+      }
+    };
+    initializeMap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMapReady]);
   
   return (
     <SafeAreaView style={styles.container}>
