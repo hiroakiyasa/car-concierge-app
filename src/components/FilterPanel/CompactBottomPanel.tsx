@@ -11,14 +11,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography } from '@/utils/constants';
 import { useMainStore } from '@/stores/useMainStore';
 import { Spot, CoinParking } from '@/types';
-import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { ParkingTimeSelector } from './ParkingTimeSelector';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // パネルの高さの状態（2パターンのみ）
-const PANEL_COLLAPSED_HEIGHT = 100; // 最小時: 入出庫時間のみ
-const PANEL_EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.33; // 展開時: 画面の1/3
+const PANEL_COLLAPSED_HEIGHT = 130; // 最小時: 入出庫時間のみ
+const PANEL_EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.45; // 展開時: 画面の45%
 
 interface CompactBottomPanelProps {
   navigation?: any;
@@ -33,6 +32,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
+  const [timeSelectorMode, setTimeSelectorMode] = useState<'entry' | 'duration' | 'exit'>('entry');
   
   const { 
     searchResults, 
@@ -75,27 +75,30 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   
   const formatPrice = (spot: CoinParking & { currentFee?: number }): string => {
     if (spot.currentFee !== undefined) {
-      return `¥${spot.currentFee}`;
+      return `¥${spot.currentFee.toLocaleString()}`;
     }
     return '¥0';
   };
   
-  const formatEntryTime = (): string => {
-    const date = searchFilter.parkingDuration.startDate;
+  const formatTime = (date: Date): { date: string; time: string; dayOfWeek: string } => {
     const month = (date.getMonth() + 1).toString();
     const day = date.getDate().toString();
+    const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][date.getDay()];
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${month}/${day} ${hours}:${minutes}`;
+    return {
+      date: `${month}/${day}`,
+      dayOfWeek: `(${dayOfWeek})`,
+      time: `${hours}:${minutes}`
+    };
   };
   
-  const formatExitTime = (): string => {
-    const date = searchFilter.parkingDuration.endDate;
-    const month = (date.getMonth() + 1).toString();
-    const day = date.getDate().toString();
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${month}/${day} ${hours}:${minutes}`;
+  const entryDateTime = formatTime(searchFilter.parkingDuration.startDate);
+  const exitDateTime = formatTime(searchFilter.parkingDuration.endDate);
+  
+  const handleTimeSelectorOpen = (mode: 'entry' | 'duration' | 'exit') => {
+    setTimeSelectorMode(mode);
+    setShowTimeSelector(true);
   };
   
   const togglePanel = () => {
@@ -122,38 +125,52 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
         <View style={styles.dragIndicator} />
       </TouchableOpacity>
       
-      {/* 時間表示部分（常に表示） */}
-      <View style={styles.timeSection}>
+      {/* プレミアムな時間表示部分 */}
+      <View style={styles.premiumTimeSection}>
         <TouchableOpacity 
-          style={styles.timeEntry}
-          onPress={() => setShowTimeSelector(true)}
+          style={styles.timeBlock}
+          onPress={() => handleTimeSelectorOpen('entry')}
         >
-          <Ionicons name="log-in-outline" size={16} color={Colors.success} />
-          <Text style={styles.timeLabel}>入庫</Text>
-          <Text style={styles.timeValue}>{formatEntryTime()}</Text>
-        </TouchableOpacity>
-        
-        <View style={styles.durationContainer}>
-          <Ionicons name="time-outline" size={14} color={Colors.primary} />
-          <Text style={styles.durationText}>
-            {searchFilter.parkingDuration.formattedDuration || '1時間'}
+          <View style={styles.timeHeader}>
+            <Ionicons name="log-in" size={20} color='#4CAF50' />
+            <Text style={styles.timeLabel}>入庫</Text>
+          </View>
+          <Text style={styles.bigTime}>{entryDateTime.time}</Text>
+          <Text style={styles.dateText}>
+            {entryDateTime.date} {entryDateTime.dayOfWeek}
           </Text>
-        </View>
-        
-        <TouchableOpacity 
-          style={styles.timeEntry}
-          onPress={() => setShowTimeSelector(true)}
-        >
-          <Ionicons name="log-out-outline" size={16} color={Colors.error} />
-          <Text style={styles.timeLabel}>出庫</Text>
-          <Text style={styles.timeValue}>{formatExitTime()}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity
-          style={styles.searchButton}
+          style={styles.durationBlock}
+          onPress={() => handleTimeSelectorOpen('duration')}
+        >
+          <Ionicons name="time" size={24} color={Colors.primary} />
+          <Text style={styles.durationValue}>
+            {searchFilter.parkingDuration.formattedDuration || '1時間'}
+          </Text>
+          <Text style={styles.durationLabel}>駐車時間</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.timeBlock}
+          onPress={() => handleTimeSelectorOpen('exit')}
+        >
+          <View style={styles.timeHeader}>
+            <Ionicons name="log-out" size={20} color='#F44336' />
+            <Text style={styles.timeLabel}>出庫</Text>
+          </View>
+          <Text style={styles.bigTime}>{exitDateTime.time}</Text>
+          <Text style={styles.dateText}>
+            {exitDateTime.date} {exitDateTime.dayOfWeek}
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.searchButtonPremium}
           onPress={handleSearch}
         >
-          <Ionicons name="search" size={20} color={Colors.white} />
+          <Ionicons name="search" size={28} color={Colors.white} />
         </TouchableOpacity>
       </View>
       
@@ -161,13 +178,13 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
       {isExpanded && (
         <ScrollView
           style={styles.content}
-          showsVerticalScrollIndicator={true}
+          showsVerticalScrollIndicator={false}
           scrollEnabled={true}
         >
           <View style={styles.listHeader}>
-            <Text style={styles.listTitle}>駐車料金ランキング</Text>
+            <Text style={styles.listTitle}>🏆 駐車料金ランキング</Text>
             <Text style={styles.listSubtitle}>
-              {parkingSpots.length}件の駐車場
+              TOP {parkingSpots.length}
             </Text>
           </View>
           
@@ -175,26 +192,34 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
             parkingSpots.map((spot) => (
               <TouchableOpacity
                 key={spot.id}
-                style={styles.spotItem}
+                style={styles.premiumSpotItem}
                 onPress={() => handleSpotPress(spot)}
-                activeOpacity={0.7}
+                activeOpacity={0.8}
               >
-                <View style={styles.rankBadge}>
-                  <Text style={styles.rankNumber}>{spot.displayRank}</Text>
+                <View style={[
+                  styles.rankBadgePremium,
+                  spot.displayRank === 1 && styles.goldBadge,
+                  spot.displayRank === 2 && styles.silverBadge,
+                  spot.displayRank === 3 && styles.bronzeBadge,
+                ]}>
+                  <Text style={styles.rankNumberPremium}>{spot.displayRank}</Text>
                 </View>
                 <View style={styles.spotInfo}>
-                  <Text style={styles.spotName} numberOfLines={1}>
+                  <Text style={styles.spotNamePremium} numberOfLines={1}>
                     {spot.name}
                   </Text>
                 </View>
-                <Text style={styles.spotPrice}>{formatPrice(spot)}</Text>
+                <View style={styles.priceContainer}>
+                  <Text style={styles.spotPricePremium}>{formatPrice(spot)}</Text>
+                </View>
               </TouchableOpacity>
             ))
           ) : (
             <View style={styles.emptyState}>
-              <Ionicons name="car-outline" size={48} color={Colors.textSecondary} />
+              <Ionicons name="car" size={64} color={Colors.textSecondary} />
+              <Text style={styles.emptyTextLarge}>エリアを選択</Text>
               <Text style={styles.emptyText}>検索ボタンを押して</Text>
-              <Text style={styles.emptyText}>駐車場を検索してください</Text>
+              <Text style={styles.emptyText}>駐車場を探しましょう</Text>
             </View>
           )}
         </ScrollView>
@@ -202,6 +227,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
       
       <ParkingTimeSelector
         duration={searchFilter.parkingDuration}
+        mode={timeSelectorMode}
         onDurationChange={(duration) => {
           setSearchFilter({
             ...searchFilter,
@@ -222,14 +248,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 10,
   },
   containerCollapsed: {
     height: PANEL_COLLAPSED_HEIGHT,
@@ -239,126 +265,189 @@ const styles = StyleSheet.create({
   },
   dragHandle: {
     width: '100%',
-    paddingVertical: 8,
+    paddingVertical: 10,
     alignItems: 'center',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   dragIndicator: {
-    width: 40,
-    height: 4,
-    backgroundColor: Colors.divider,
-    borderRadius: 2,
+    width: 48,
+    height: 5,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 3,
   },
-  timeSection: {
+  premiumTimeSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.medium,
-    paddingVertical: Spacing.small,
-    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 10,
+    backgroundColor: '#FAFAFA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
-  timeEntry: {
+  timeBlock: {
     flex: 1,
+    alignItems: 'center',
+  },
+  timeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginBottom: 4,
   },
   timeLabel: {
-    fontSize: Typography.caption,
-    color: Colors.textSecondary,
-  },
-  timeValue: {
-    fontSize: Typography.caption,
-    color: Colors.textPrimary,
-    fontWeight: '500',
-  },
-  durationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: Colors.background,
-    borderRadius: 12,
-  },
-  durationText: {
-    fontSize: Typography.caption,
-    color: Colors.primary,
+    fontSize: 12,
+    color: '#666',
     fontWeight: '600',
   },
-  searchButton: {
+  bigTime: {
+    fontSize: 24,
+    color: '#1A1A1A',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  dateText: {
+    fontSize: 11,
+    color: '#999',
+    marginTop: 2,
+  },
+  durationBlock: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: Colors.primary + '10',
+    borderRadius: 18,
+  },
+  durationValue: {
+    fontSize: 18,
+    color: Colors.primary,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  durationLabel: {
+    fontSize: 10,
+    color: Colors.primary,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  searchButtonPremium: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  content: {
+    flex: 1,
+  },
+  listHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#F8F9FA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  listTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1A1A1A',
+  },
+  listSubtitle: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+    backgroundColor: Colors.primary + '15',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  premiumSpotItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 12,
+    marginVertical: 6,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  rankBadgePremium: {
     width: 36,
     height: 36,
     borderRadius: 18,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 14,
   },
-  content: {
-    flex: 1,
-    borderTopWidth: 1,
-    borderTopColor: Colors.divider,
+  goldBadge: {
+    backgroundColor: '#FFD700',
   },
-  listHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.medium,
-    paddingVertical: Spacing.small,
-    backgroundColor: Colors.background,
+  silverBadge: {
+    backgroundColor: '#C0C0C0',
   },
-  listTitle: {
-    fontSize: Typography.bodySmall,
-    fontWeight: '600',
-    color: Colors.textPrimary,
+  bronzeBadge: {
+    backgroundColor: '#CD7F32',
   },
-  listSubtitle: {
-    fontSize: Typography.caption,
-    color: Colors.textSecondary,
-  },
-  spotItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: Spacing.medium,
-    borderBottomWidth: 0.5,
-    borderBottomColor: Colors.divider,
-  },
-  rankBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.small,
-  },
-  rankNumber: {
-    fontSize: Typography.caption,
+  rankNumberPremium: {
+    fontSize: 18,
     color: Colors.white,
-    fontWeight: 'bold',
+    fontWeight: '800',
   },
   spotInfo: {
     flex: 1,
-    marginRight: Spacing.small,
+    marginRight: 12,
   },
-  spotName: {
-    fontSize: Typography.bodySmall,
-    color: Colors.textPrimary,
-  },
-  spotPrice: {
-    fontSize: Typography.body,
+  spotNamePremium: {
+    fontSize: 17,
+    color: '#1A1A1A',
     fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  priceContainer: {
+    backgroundColor: Colors.primary + '08',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.primary + '20',
+  },
+  spotPricePremium: {
+    fontSize: 20,
+    fontWeight: '800',
     color: Colors.primary,
   },
   emptyState: {
-    padding: Spacing.xxl,
+    padding: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  emptyTextLarge: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
   emptyText: {
-    fontSize: Typography.bodySmall,
-    color: Colors.textSecondary,
-    marginTop: Spacing.small,
+    fontSize: 16,
+    color: '#666',
+    marginTop: 4,
   },
 });

@@ -36,6 +36,9 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
   const [showTimeSelector, setShowTimeSelector] = useState(false);
   const [timeSelectorMode, setTimeSelectorMode] = useState<'entry' | 'duration' | 'exit'>('entry');
   const panY = useRef(new Animated.Value(0)).current;
+  
+  // デバッグ: レンダリングの確認
+  console.log('🔥 BottomFilterPanel rendering - version 2.0 with 2-row layout');
   const { 
     searchResults, 
     userLocation, 
