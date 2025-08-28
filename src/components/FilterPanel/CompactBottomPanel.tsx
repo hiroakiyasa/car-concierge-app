@@ -17,7 +17,7 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // パネルの高さの状態（2パターンのみ）
 const PANEL_COLLAPSED_HEIGHT = 130; // 最小時: 入出庫時間のみ
-const PANEL_EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.5; // 展開時: 画面の50%
+const PANEL_EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.4; // 展開時: 画面の40%
 
 interface CompactBottomPanelProps {
   navigation?: any;
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   },
   dragHandle: {
     width: '100%',
-    paddingVertical: 10,
+    paddingVertical: 8,
     alignItems: 'center',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -280,11 +280,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 6,
     gap: 10,
     backgroundColor: '#FAFAFA',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
   timeBlock: {
     flex: 1,
@@ -353,10 +351,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 6,
     backgroundColor: '#F8F9FA',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
   },
   listTitle: {
     fontSize: 14,
@@ -375,22 +371,17 @@ const styles = StyleSheet.create({
   premiumSpotItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 16,
     backgroundColor: '#FFFFFF',
     marginHorizontal: 8,
-    marginVertical: 2,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    marginVertical: 1,
+    borderRadius: 8,
   },
   rankBadgePremium: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -406,7 +397,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#CD7F32',
   },
   rankNumberPremium: {
-    fontSize: 14,
+    fontSize: 12,
     color: Colors.white,
     fontWeight: '700',
   },
@@ -415,21 +406,21 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   spotNamePremium: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#1A1A1A',
     fontWeight: '500',
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
   priceContainer: {
     backgroundColor: Colors.primary + '08',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: Colors.primary + '20',
   },
   spotPricePremium: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.primary,
   },
