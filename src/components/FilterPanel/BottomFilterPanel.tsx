@@ -220,48 +220,50 @@ export const BottomFilterPanel: React.FC<BottomFilterPanelProps> = ({ navigation
       
       {!isCollapsed && (
       <View style={styles.timeSection}>
-        <View style={styles.timeSectionRow}>
+        {/* First Row - Labels and Duration */}
+        <View style={styles.timeFirstRow}>
           <TouchableOpacity
-            style={styles.entryTimeButton}
+            style={styles.entryTimeLabel}
             onPress={() => handleTimeSelectorOpen('entry')}
           >
-            <Ionicons name="car" size={16} color={Colors.success} />
-            <Text style={styles.timeLabel}>入庫</Text>
+            <Ionicons name="car" size={18} color={Colors.success} />
+            <Text style={styles.timeLabelText}>入庫</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={styles.durationButton}
+            style={styles.durationDisplay}
             onPress={() => handleTimeSelectorOpen('duration')}
           >
-            <Ionicons name="time" size={16} color={Colors.primary} />
-            <Text style={styles.durationValue}>{formatDuration()}</Text>
-            <Text style={styles.timeLabel}>駐車時間</Text>
+            <Ionicons name="time-outline" size={20} color={Colors.primary} />
+            <Text style={styles.durationValueText}>{formatDuration()}</Text>
+            <Text style={styles.durationLabelText}>駐車時間</Text>
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={styles.exitTimeButton}
+            style={styles.exitTimeLabel}
             onPress={() => handleTimeSelectorOpen('exit')}
           >
-            <Ionicons name="car" size={16} color={Colors.error} />
-            <Text style={styles.timeLabel}>出庫</Text>
+            <Ionicons name="car" size={18} color={Colors.error} />
+            <Text style={styles.timeLabelText}>出庫</Text>
           </TouchableOpacity>
         </View>
         
-        <View style={styles.timeSectionRow}>
+        {/* Second Row - Date Times */}
+        <View style={styles.timeSecondRow}>
           <TouchableOpacity
-            style={styles.entryDateTime}
+            style={styles.entryDateTimeButton}
             onPress={() => handleTimeSelectorOpen('entry')}
           >
-            <Text style={styles.dateTimeText}>{formatEntryTime()}</Text>
+            <Text style={styles.dateTimeValue}>{formatEntryTime()}</Text>
           </TouchableOpacity>
           
-          <View style={styles.durationSpacer} />
+          <View style={styles.centerSpacer} />
           
           <TouchableOpacity
-            style={styles.exitDateTime}
+            style={styles.exitDateTimeButton}
             onPress={() => handleTimeSelectorOpen('exit')}
           >
-            <Text style={styles.dateTimeText}>{formatExitTime()}</Text>
+            <Text style={styles.dateTimeValue}>{formatExitTime()}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -388,61 +390,75 @@ const styles = StyleSheet.create({
   },
   timeSection: {
     paddingHorizontal: Spacing.medium,
-    paddingVertical: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.divider,
+    backgroundColor: Colors.white,
   },
-  timeSectionRow: {
+  timeFirstRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginVertical: 4,
+    marginBottom: 8,
   },
-  entryTimeButton: {
+  timeSecondRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  entryTimeLabel: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    minWidth: 65,
+    minWidth: 70,
   },
-  durationButton: {
+  exitTimeLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 70,
+    justifyContent: 'flex-end',
+  },
+  timeLabelText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  durationDisplay: {
     flexDirection: 'column',
     alignItems: 'center',
     gap: 2,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 4,
     backgroundColor: Colors.background,
     borderRadius: 16,
   },
-  exitTimeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    minWidth: 65,
-    justifyContent: 'flex-end',
-  },
-  timeLabel: {
-    fontSize: Typography.caption,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  durationValue: {
-    fontSize: Typography.h5,
+  durationValueText: {
+    fontSize: 18,
     color: Colors.primary,
     fontWeight: '700',
   },
-  entryDateTime: {
+  durationLabelText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  entryDateTimeButton: {
+    padding: 4,
     minWidth: 100,
   },
-  exitDateTime: {
+  exitDateTimeButton: {
+    padding: 4,
     minWidth: 100,
     alignItems: 'flex-end',
   },
-  dateTimeText: {
-    fontSize: Typography.h6,
+  dateTimeValue: {
+    fontSize: 16,
     color: Colors.textPrimary,
     fontWeight: '600',
   },
-  durationSpacer: {
+  centerSpacer: {
     flex: 1,
   },
   content: {
