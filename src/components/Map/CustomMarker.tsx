@@ -70,8 +70,18 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress 
     );
   }
   
-  // For parking spots with ranking, show custom blue marker with number
+  // For parking spots with ranking, show custom marker with rank-based color
   if (spot.category === 'コインパーキング' && rank && rank <= 20) {
+    // 1位=ゴールド、2位=シルバー、3位=ブロンズ、その他=ブルー
+    const getMarkerStyle = () => {
+      switch(rank) {
+        case 1: return styles.goldMarker;
+        case 2: return styles.silverMarker;
+        case 3: return styles.bronzeMarker;
+        default: return styles.parkingMarker;
+      }
+    };
+    
     return (
       <Marker
         coordinate={{
@@ -82,7 +92,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress 
         tracksViewChanges={false}
         anchor={{ x: 0.5, y: 1 }}
       >
-        <View style={styles.parkingMarker}>
+        <View style={getMarkerStyle()}>
           <Text style={styles.parkingMarkerText}>{rank}</Text>
         </View>
       </Marker>
@@ -122,6 +132,51 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  goldMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFD700',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 6,
+  },
+  silverMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#C0C0C0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 6,
+  },
+  bronzeMarker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#CD7F32',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#CD7F32',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 6,
   },
   parkingMarkerText: {
     color: '#FFFFFF',

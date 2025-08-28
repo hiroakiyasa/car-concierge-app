@@ -379,13 +379,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   rankBadgePremium: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: 8,
   },
   goldBadge: {
     backgroundColor: '#FFD700',
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#CD7F32',
   },
   rankNumberPremium: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.white,
     fontWeight: '700',
   },
