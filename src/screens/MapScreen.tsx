@@ -17,7 +17,6 @@ import { SearchService } from '@/services/search.service';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { CustomMarker } from '@/components/Map/CustomMarker';
 import { CategoryButtons } from '@/components/Map/CategoryButtons';
-import { SimpleMapControls } from '@/components/Map/SimpleMapControls';
 import { CompactBottomPanel } from '@/components/FilterPanel/CompactBottomPanel';
 import { SpotDetailBottomSheet } from '@/screens/SpotDetailBottomSheet';
 import { RankingListModal } from '@/screens/RankingListModal';
@@ -339,9 +338,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         
         <CategoryButtons />
         
-        <SimpleMapControls
-          onLocationPress={handleLocationPress}
-        />
+        {/* 現在地ボタン */}
+        <TouchableOpacity
+          style={styles.locationButton}
+          onPress={handleLocationPress}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="navigate-circle" size={32} color={Colors.primary} />
+        </TouchableOpacity>
         
         {/* ランキングボタン */}
         <TouchableOpacity
@@ -350,7 +354,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           activeOpacity={0.8}
         >
           <Ionicons name="trophy" size={24} color={Colors.white} />
-          <Text style={styles.rankingButtonText}>ランキング</Text>
         </TouchableOpacity>
         
         {searchResults.length > 0 && (
@@ -428,26 +431,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rankingButton: {
+  locationButton: {
     position: 'absolute',
-    bottom: 120,
-    left: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.warning,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    bottom: 190,
+    right: 16,
+    width: 48,
+    height: 48,
     borderRadius: 24,
+    backgroundColor: Colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
-    gap: 6,
   },
-  rankingButtonText: {
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: '600',
+  rankingButton: {
+    position: 'absolute',
+    bottom: 130,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.warning,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });

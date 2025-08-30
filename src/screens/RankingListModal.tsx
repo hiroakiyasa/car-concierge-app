@@ -8,6 +8,8 @@ import {
   Modal,
   ScrollView,
   FlatList,
+  PanResponder,
+  Animated,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +18,7 @@ import { Colors, Spacing, Typography } from '@/utils/constants';
 import { CoinParking } from '@/types';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+const MODAL_HEIGHT = SCREEN_HEIGHT * 0.95;
 
 interface RankingListModalProps {
   visible: boolean;
@@ -29,11 +32,46 @@ export const RankingListModal: React.FC<RankingListModalProps> = ({
   onSpotSelect 
 }) => {
   const { searchResults, searchFilter } = useMainStore();
+  const translateY = React.useRef(new Animated.Value(0)).current;
   
   // コインパーキングのみを抽出してランキング表示
   const parkingSpots = searchResults
     .filter(spot => spot.category === 'コインパーキング')
     .slice(0, 20) as CoinParking[];
+  
+  // スワイプダウンで閉じるジェスチャー
+  const panResponder = React.useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // 下方向へのスワイプのみ反応（5px以上移動したら）
+        return gestureState.dy > 5 && Math.abs(gestureState.dx) < Math.abs(gestureState.dy);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          translateY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 100) { // 100px以上下にスワイプしたら閉じる
+          Animated.timing(translateY, {
+            toValue: MODAL_HEIGHT,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            translateY.setValue(0);
+            onClose();
+          });
+        } else {
+          Animated.spring(translateY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 8,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   const getRankStyle = (rank: number) => {
     switch(rank) {
@@ -77,12 +115,32 @@ export const RankingListModal: React.FC<RankingListModalProps> = ({
   return (
     <Modal
       visible={visible}
-      transparent={false}
+      transparent
       animationType="slide"
       onRequestClose={onClose}
-      presentationStyle="fullScreen"
     >
-      <View style={styles.fullScreenContainer}>
+      <TouchableOpacity 
+        style={styles.overlay} 
+        activeOpacity={1} 
+        onPress={onClose}
+      >
+        <BlurView intensity={20} style={StyleSheet.absoluteFillObject} />
+      </TouchableOpacity>
+      
+      <Animated.View 
+        {...panResponder.panHandlers}
+        style={[
+          styles.modalContainer,
+          {
+            transform: [{ translateY }]
+          }
+        ]}
+      >
+        {/* ドラッグハンドル */}
+        <View style={styles.dragHandle}>
+          <View style={styles.handle} />
+        </View>
+        
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
@@ -108,16 +166,40 @@ export const RankingListModal: React.FC<RankingListModalProps> = ({
             </View>
           }
         />
-      </View>
+      </Animated.View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  fullScreenContainer: {
+  overlay: {
     flex: 1,
+    backgroundColor: 'transparent',
+  },
+  modalContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: MODAL_HEIGHT,
     backgroundColor: Colors.white,
-    paddingTop: 44, // Status bar height
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  dragHandle: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E0E0E0',
   },
   header: {
     flexDirection: 'row',
