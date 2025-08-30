@@ -50,6 +50,15 @@ export class SupabaseService {
       if (spot.Hours) {
         try {
           hoursData = typeof spot.Hours === 'string' ? JSON.parse(spot.Hours) : spot.Hours;
+          // デバッグ: 最初の駐車場の営業時間データを確認
+          if (data && data.indexOf(spot) === 0) {
+            console.log('🕐 営業時間データサンプル:', {
+              raw_Hours: spot.Hours,
+              parsed_hours: hoursData,
+              operating_hours: spot.operating_hours,
+              is_24h: spot.is_24h,
+            });
+          }
         } catch (error) {
           console.log('Hours JSON parse error:', error);
         }
@@ -95,7 +104,9 @@ export class SupabaseService {
         category: 'コインパーキング',
         rates: spot.rates || [],
         hours: hoursData,
-        operatingHours: spot.operating_hours || spot.operatingHours,
+        operatingHours: spot.operating_hours || spot.operatingHours || spot.Hours,
+        operating_hours: spot.operating_hours, // 元のフィールドも保持
+        Hours: spot.Hours, // 元のJSONも保持
         nearestConvenienceStore,
         nearestHotspring,
       };

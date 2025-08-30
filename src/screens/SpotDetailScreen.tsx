@@ -2,12 +2,12 @@ import React from 'react';
 import {
   View,
   Text,
-  ScrollView,
   StyleSheet,
   TouchableOpacity,
   Dimensions,
   Linking,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
@@ -17,9 +17,8 @@ import { Colors, Spacing, Typography } from '@/utils/constants';
 import { CoinParking, ConvenienceStore, HotSpring, GasStation, Festival } from '@/types';
 import { LocationService } from '@/services/location.service';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
-import { Platform } from 'react-native';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface SpotDetailScreenProps {
   navigation: any;
@@ -41,8 +40,9 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
     console.log('💰 calculatedFee:', parkingSpot.calculatedFee);
     console.log('📊 rates:', parkingSpot.rates);
     console.log('🏆 rank:', parkingSpot.rank);
-    console.log('⏰ parkingTimeFilterEnabled:', searchFilter.parkingTimeFilterEnabled);
-    console.log('⏱️ parkingDuration:', searchFilter.parkingDuration);
+    console.log('⏰ hours:', parkingSpot.hours);
+    console.log('🕐 Hours (raw):', (parkingSpot as any).Hours);
+    console.log('🕐 operating_hours:', (parkingSpot as any).operating_hours);
   }
   
   const formatDistance = (): string => {
@@ -52,120 +52,118 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
   };
   
   const formatPrice = (): string => {
-    if (!isParking) {
-      return '---';
-    }
+    if (!isParking) return '---';
     
-    // First check if there's a calculatedFee (from the ranking)
+    // calculatedFeeがある場合（ランキングから）
     if (parkingSpot.calculatedFee !== undefined && parkingSpot.calculatedFee !== null && parkingSpot.calculatedFee > 0) {
-      const { parkingDuration } = searchFilter;
-      const duration = parkingDuration.formattedDuration;
-      return `${duration}の料金: ¥${parkingSpot.calculatedFee}`;
+      return `¥${parkingSpot.calculatedFee}`;
     }
     
-    // If no calculatedFee, try to calculate it now
+    // calculatedFeeがない場合、現在の設定で計算
     if (searchFilter.parkingTimeFilterEnabled && parkingSpot.rates && parkingSpot.rates.length > 0) {
       const fee = ParkingFeeCalculator.calculateFee(parkingSpot, searchFilter.parkingDuration);
       if (fee > 0) {
-        const duration = searchFilter.parkingDuration.formattedDuration;
-        return `${duration}の料金: ¥${fee}`;
+        return `¥${fee}`;
       }
     }
     
-    // Fall back to displaying rate structure if available
-    if (parkingSpot.rates && parkingSpot.rates.length > 0) {
-      const rates = parkingSpot.rates;
-      const baseRates = rates.filter(r => r.type === 'base').sort((a, b) => a.minutes - b.minutes);
-      const maxRate = rates.find(r => r.type === 'max');
-      
-      let priceText = '';
-      baseRates.forEach((rate, index) => {
-        if (index > 0) priceText += '\n';
-        if (rate.price === 0) {
-          priceText += `最初の${rate.minutes}分 無料`;
-        } else {
-          priceText += `${rate.minutes}分 ¥${rate.price}`;
-        }
-      });
-      
-      if (maxRate) {
-        if (priceText) priceText += '\n';
-        priceText += `最大料金 (${Math.floor(maxRate.minutes / 60)}時間) ¥${maxRate.price}`;
-      }
-      
-      return priceText || '料金情報なし';
-    }
-    
-    return '料金情報なし';
-  };
-  
-  const calculateParkingFee = (): string => {
-    if (!isParking) {
-      return null;
-    }
-    
-    // 常に料金計算を表示（parkingTimeFilterEnabledに関係なく）
-    const fee = ParkingFeeCalculator.calculateFee(parkingSpot, searchFilter.parkingDuration);
-    const duration = searchFilter.parkingDuration.formattedDuration;
-    
-    return `${duration}の料金: ¥${fee}`;
-  };
-  
-  const formatOperatingHours = (): string => {
-    if (selectedSpot.category === 'コインパーキング') {
-      // Hoursオブジェクトから営業時間情報を取得
-      if (parkingSpot.hours) {
-        const hours = parkingSpot.hours;
-        if (hours.is_24h || hours.access_24h) {
-          return '24時間営業';
-        }
-        if (hours.original_hours) {
-          return hours.original_hours;
-        }
-        if (hours.hours) {
-          return hours.hours;
-        }
-        if (hours.schedules && hours.schedules.length > 0) {
-          return hours.schedules
-            .map(schedule => `${schedule.days?.join('・') || ''}: ${schedule.time || ''}`)
-            .join('\n');
-        }
-      }
-      // 旧形式のフィールドにフォールバック
-      return parkingSpot.is24h ? '24時間営業' : parkingSpot.operatingHours || '---';
-    } else if ('operatingHours' in selectedSpot) {
-      return (selectedSpot as any).operatingHours || '---';
-    }
     return '---';
   };
   
-  const formatNearbyFacilities = () => {
-    if (!isParking) return null;
-    
-    const facilities = [];
-    
-    if (parkingSpot.nearestConvenienceStore) {
-      facilities.push({
-        emoji: '🏪',
-        name: parkingSpot.nearestConvenienceStore.name,
-        distance: `約${parkingSpot.nearestConvenienceStore.distance}m`
-      });
+  const formatRateStructure = (): string => {
+    if (!isParking || !parkingSpot.rates || parkingSpot.rates.length === 0) {
+      return '料金情報なし';
     }
     
-    if (parkingSpot.nearestHotspring) {
-      facilities.push({
-        emoji: '♨️',
-        name: parkingSpot.nearestHotspring.name,
-        distance: `約${parkingSpot.nearestHotspring.distance}m`
-      });
+    const rates = parkingSpot.rates;
+    const baseRates = rates.filter(r => r.type === 'base').sort((a, b) => a.minutes - b.minutes);
+    const maxRate = rates.find(r => r.type === 'max');
+    
+    let priceText = '';
+    if (baseRates.length > 0) {
+      const firstRate = baseRates[0];
+      if (firstRate.price === 0) {
+        priceText = `最初の${firstRate.minutes}分無料`;
+      } else {
+        priceText = `${firstRate.minutes}分¥${firstRate.price}`;
+      }
     }
     
-    return facilities;
+    if (maxRate) {
+      if (priceText) priceText += ' / ';
+      priceText += `最大¥${maxRate.price}`;
+    }
+    
+    return priceText || '料金情報なし';
+  };
+  
+  const formatOperatingHours = (): string => {
+    if (!isParking) {
+      const spotWithHours = selectedSpot as any;
+      return spotWithHours.operatingHours || spotWithHours.operating_hours || '---';
+    }
+    
+    // 1. hoursオブジェクトをチェック（パース済み）
+    if (parkingSpot.hours) {
+      const hours = parkingSpot.hours;
+      if (hours.is_24h || hours.access_24h) {
+        return '24時間';
+      }
+      if (hours.original_hours) {
+        return hours.original_hours;
+      }
+      if (hours.hours) {
+        return hours.hours;
+      }
+    }
+    
+    // 2. 生のHoursフィールドをチェック
+    const rawHours = (parkingSpot as any).Hours;
+    if (rawHours) {
+      if (typeof rawHours === 'string') {
+        try {
+          const parsed = JSON.parse(rawHours);
+          if (parsed.is_24h || parsed.access_24h) {
+            return '24時間';
+          }
+          if (parsed.original_hours) {
+            return parsed.original_hours;
+          }
+          if (parsed.hours) {
+            return parsed.hours;
+          }
+        } catch (e) {
+          // JSONでない場合はそのまま返す
+          if (rawHours !== '{}' && rawHours !== 'null') {
+            return rawHours;
+          }
+        }
+      } else if (typeof rawHours === 'object') {
+        if (rawHours.is_24h || rawHours.access_24h) {
+          return '24時間';
+        }
+        if (rawHours.original_hours) {
+          return rawHours.original_hours;
+        }
+      }
+    }
+    
+    // 3. operating_hoursフィールドをチェック
+    if ((parkingSpot as any).operating_hours) {
+      return (parkingSpot as any).operating_hours;
+    }
+    
+    // 4. is_24hフラグをチェック
+    if ((parkingSpot as any).is_24h || (parkingSpot as any).is24h) {
+      return '24時間';
+    }
+    
+    return '---';
   };
   
   const getCategoryIcon = () => {
     switch (selectedSpot.category) {
-      case 'コインパーキング': return 'P';
+      case 'コインパーキング': return '🅿️';
       case 'コンビニ': return '🏪';
       case '温泉': return '♨️';
       case 'ガソリンスタンド': return '⛽';
@@ -175,15 +173,40 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
   };
   
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
+    <View style={styles.container}>
+      {/* Top 50%: Map */}
+      <View style={styles.mapSection}>
+        <MapView
+          style={styles.map}
+          provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
+          initialRegion={{
+            latitude: selectedSpot.lat,
+            longitude: selectedSpot.lng,
+            latitudeDelta: 0.005,
+            longitudeDelta: 0.005,
+          }}
+          scrollEnabled={true}
+          zoomEnabled={true}
+          rotateEnabled={false}
+          pitchEnabled={false}
+        >
+          <Marker
+            coordinate={{
+              latitude: selectedSpot.lat,
+              longitude: selectedSpot.lng,
+            }}
+          />
+        </MapView>
+        
+        {/* Header Overlay */}
+        <SafeAreaView style={styles.headerOverlay} edges={['top']}>
           <TouchableOpacity
             style={styles.closeButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.closeButtonText}>閉じる</Text>
+            <View style={styles.closeButtonBg}>
+              <Ionicons name="close" size={24} color="#333" />
+            </View>
           </TouchableOpacity>
           
           <View style={styles.headerActions}>
@@ -192,13 +215,10 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
               onPress={() => {
                 const query = encodeURIComponent(selectedSpot.name);
                 const url = `https://www.google.com/search?q=${query}`;
-                Linking.openURL(url).catch(() => {
-                  Alert.alert('エラー', 'ブラウザを開けませんでした');
-                });
+                Linking.openURL(url);
               }}
             >
-              <Ionicons name="search" size={16} color={Colors.primary} />
-              <Text style={styles.actionButtonText}>検索</Text>
+              <Ionicons name="search" size={20} color="#333" />
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.actionButton}
@@ -209,383 +229,344 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
                 const url = Platform.OS === 'ios'
                   ? `maps:0,0?q=${label}@${lat},${lng}`
                   : `geo:0,0?q=${lat},${lng}(${label})`;
-                
                 Linking.openURL(url).catch(() => {
-                  // フォールバックとしてGoogle MapsのWeb版を開く
-                  const webUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}&query_place_id=${label}`;
+                  const webUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
                   Linking.openURL(webUrl);
                 });
               }}
             >
-              <Ionicons name="map" size={16} color={Colors.primary} />
-              <Text style={styles.actionButtonText}>地図</Text>
+              <Ionicons name="map" size={20} color="#333" />
             </TouchableOpacity>
           </View>
-        </View>
-        
-        {/* Title */}
-        <View style={styles.titleContainer}>
+        </SafeAreaView>
+      </View>
+      
+      {/* Bottom 50%: Details Panel */}
+      <View style={styles.detailsPanel}>
+        {/* Title Section */}
+        <View style={styles.titleSection}>
           <View style={styles.titleRow}>
-            {selectedSpot.rank && (
-              <View style={styles.rankBadge}>
-                <Text style={styles.rankBadgeText}>{selectedSpot.rank}</Text>
+            <Text style={styles.categoryIcon}>{getCategoryIcon()}</Text>
+            <View style={styles.titleInfo}>
+              <View style={styles.nameRow}>
+                <Text style={styles.spotName} numberOfLines={1}>
+                  {selectedSpot.name}
+                </Text>
+                {selectedSpot.rank && (
+                  <View style={styles.rankBadge}>
+                    <Text style={styles.rankText}>#{selectedSpot.rank}</Text>
+                  </View>
+                )}
               </View>
-            )}
-            <View style={styles.parkingBadge}>
-              <Text style={styles.parkingBadgeText}>{getCategoryIcon()}</Text>
-            </View>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryBadgeText}>
-                {selectedSpot.category}
-              </Text>
+              {selectedSpot.address && (
+                <Text style={styles.address} numberOfLines={1}>
+                  {selectedSpot.address}
+                </Text>
+              )}
             </View>
           </View>
-          <Text style={styles.spotName}>{selectedSpot.name}</Text>
-          {selectedSpot.address && (
-            <Text style={styles.address}>{selectedSpot.address}</Text>
-          )}
         </View>
         
-        {/* Pricing Info (for parking) */}
+        {/* Premium Info Grid */}
         {isParking && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>¥</Text>
-              <Text style={styles.sectionTitle}>料金体系</Text>
-            </View>
-            <View style={styles.pricingBox}>
-              <Text style={styles.pricingText}>{formatPrice()}</Text>
-            </View>
-            {calculateParkingFee() && (
-              <View style={styles.calculatedFeeBox}>
-                <Text style={styles.calculatedFeeLabel}>駐車料金（計算結果）</Text>
-                <Text style={styles.calculatedFeeText}>{calculateParkingFee()}</Text>
+          <View style={styles.premiumInfoGrid}>
+            {/* Pricing Card */}
+            <View style={styles.infoCard}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardIcon}>¥</Text>
+                <Text style={styles.cardTitle}>料金</Text>
               </View>
-            )}
-          </View>
-        )}
-        
-        {/* Basic Info */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="information-circle" size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>基本情報</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>距離</Text>
-            <Text style={styles.infoValue}>{formatDistance()}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>営業時間</Text>
-            <Text style={styles.infoValue}>{formatOperatingHours()}</Text>
-          </View>
-          {selectedSpot.elevation !== undefined && (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>標高</Text>
-              <Text style={styles.infoValue}>{selectedSpot.elevation}m</Text>
+              <View style={styles.cardContent}>
+                <Text style={styles.mainValue}>{formatPrice()}</Text>
+                <Text style={styles.subValue}>{formatRateStructure()}</Text>
+              </View>
             </View>
-          )}
-          {isParking && (
-            <>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>駐車場タイプ</Text>
-                <Text style={styles.infoValue}>
-                  {parkingSpot.type || '---'}
+            
+            {/* Operating Hours Card */}
+            <View style={styles.infoCard}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="time-outline" size={16} color="#666" />
+                <Text style={styles.cardTitle}>営業時間</Text>
+              </View>
+              <View style={styles.cardContent}>
+                <Text style={styles.mainValue}>{formatOperatingHours()}</Text>
+              </View>
+            </View>
+            
+            {/* Type Card */}
+            <View style={styles.infoCard}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="car-outline" size={16} color="#666" />
+                <Text style={styles.cardTitle}>タイプ</Text>
+              </View>
+              <View style={styles.cardContent}>
+                <Text style={styles.mainValue}>
+                  {parkingSpot.type || '平面'}
                 </Text>
               </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>収容台数</Text>
-                <Text style={styles.infoValue}>
+            </View>
+            
+            {/* Capacity Card */}
+            <View style={styles.infoCard}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="grid-outline" size={16} color="#666" />
+                <Text style={styles.cardTitle}>収容台数</Text>
+              </View>
+              <View style={styles.cardContent}>
+                <Text style={styles.mainValue}>
                   {parkingSpot.capacity ? `${parkingSpot.capacity}台` : '---'}
                 </Text>
               </View>
-            </>
-          )}
-        </View>
-        
-        {/* Nearby Facilities (for parking) */}
-        {isParking && formatNearbyFacilities() && formatNearbyFacilities().length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="location" size={20} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>周辺施設</Text>
             </View>
-            <View style={styles.facilityRow}>
-              {formatNearbyFacilities().map((facility, index) => (
-                <View key={index} style={styles.facilityItem}>
-                  <Text style={styles.facilityEmoji}>{facility.emoji}</Text>
-                  <Text style={styles.facilityName}>{facility.name}</Text>
-                  <Text style={styles.facilityDistance}>{facility.distance}</Text>
+            
+            {/* Distance Card */}
+            <View style={styles.infoCard}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="navigate-outline" size={16} color="#666" />
+                <Text style={styles.cardTitle}>距離</Text>
+              </View>
+              <View style={styles.cardContent}>
+                <Text style={styles.mainValue}>{formatDistance()}</Text>
+              </View>
+            </View>
+            
+            {/* Elevation Card */}
+            {selectedSpot.elevation !== undefined && (
+              <View style={styles.infoCard}>
+                <View style={styles.cardHeader}>
+                  <Ionicons name="trending-up-outline" size={16} color="#666" />
+                  <Text style={styles.cardTitle}>標高</Text>
                 </View>
-              ))}
-            </View>
-          </View>
-        )}
-        
-        {/* Additional Info (for non-parking spots) */}
-        {!isParking && selectedSpot.category === 'お祭り・花火大会' && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="calendar" size={20} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>イベント情報</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>開催日</Text>
-              <Text style={styles.infoValue}>
-                {(selectedSpot as Festival).eventDate || '---'}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>開催時間</Text>
-              <Text style={styles.infoValue}>
-                {(selectedSpot as Festival).eventTime || '---'}
-              </Text>
-            </View>
-            {(selectedSpot as Festival).description && (
-              <View style={styles.descriptionBox}>
-                <Text style={styles.descriptionText}>
-                  {(selectedSpot as Festival).description}
-                </Text>
+                <View style={styles.cardContent}>
+                  <Text style={styles.mainValue}>{selectedSpot.elevation}m</Text>
+                </View>
               </View>
             )}
           </View>
         )}
         
-        {/* Map */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="map" size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>地図</Text>
+        {/* Nearby Facilities */}
+        {isParking && (parkingSpot.nearestConvenienceStore || parkingSpot.nearestHotspring) && (
+          <View style={styles.nearbySection}>
+            <Text style={styles.nearbyTitle}>周辺施設</Text>
+            <View style={styles.nearbyRow}>
+              {parkingSpot.nearestConvenienceStore && (
+                <View style={styles.nearbyItem}>
+                  <Text style={styles.nearbyIcon}>🏪</Text>
+                  <Text style={styles.nearbyDistance}>
+                    {(parkingSpot.nearestConvenienceStore as any).distance_m || 
+                     parkingSpot.nearestConvenienceStore.distance || '---'}m
+                  </Text>
+                </View>
+              )}
+              {parkingSpot.nearestHotspring && (
+                <View style={styles.nearbyItem}>
+                  <Text style={styles.nearbyIcon}>♨️</Text>
+                  <Text style={styles.nearbyDistance}>
+                    {(parkingSpot.nearestHotspring as any).distance_m || 
+                     parkingSpot.nearestHotspring.distance || '---'}m
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-          <View style={styles.mapContainer}>
-            <MapView
-              style={styles.map}
-              provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
-              region={{
-                latitude: selectedSpot.lat,
-                longitude: selectedSpot.lng,
-                latitudeDelta: 0.005,
-                longitudeDelta: 0.005,
-              }}
-              scrollEnabled={false}
-              zoomEnabled={false}
-              rotateEnabled={false}
-              pitchEnabled={false}
-            >
-              <Marker
-                coordinate={{
-                  latitude: selectedSpot.lat,
-                  longitude: selectedSpot.lng,
-                }}
-              />
-            </MapView>
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        )}
+      </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#000',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.medium,
-    paddingVertical: Spacing.small,
-  },
-  closeButton: {
-    padding: Spacing.small,
-  },
-  closeButtonText: {
-    color: Colors.primary,
-    fontSize: Typography.body,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: Colors.background,
-  },
-  actionButtonText: {
-    fontSize: Typography.caption,
-    color: Colors.primary,
-  },
-  titleContainer: {
-    paddingHorizontal: Spacing.medium,
-    paddingVertical: Spacing.medium,
-    backgroundColor: Colors.white,
-    marginBottom: Spacing.small,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: Spacing.small,
-  },
-  parkingBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 4,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  parkingBadgeText: {
-    color: Colors.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  categoryBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    backgroundColor: Colors.primaryLight,
-  },
-  categoryBadgeText: {
-    color: Colors.white,
-    fontSize: Typography.caption,
-    fontWeight: '600',
-  },
-  spotName: {
-    fontSize: Typography.h5,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  section: {
-    backgroundColor: Colors.white,
-    marginBottom: Spacing.small,
-    paddingHorizontal: Spacing.medium,
-    paddingVertical: Spacing.medium,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: Spacing.medium,
-  },
-  sectionIcon: {
-    fontSize: 20,
-    color: Colors.primary,
-  },
-  sectionTitle: {
-    fontSize: Typography.h6,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.small,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
-  },
-  infoLabel: {
-    fontSize: Typography.bodySmall,
-    color: Colors.textSecondary,
-  },
-  infoValue: {
-    fontSize: Typography.bodySmall,
-    color: Colors.textPrimary,
-    fontWeight: '500',
-  },
-  pricingBox: {
-    marginTop: Spacing.medium,
-    padding: Spacing.medium,
-    backgroundColor: Colors.background,
-    borderRadius: 8,
-  },
-  pricingTitle: {
-    fontSize: Typography.bodySmall,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.small,
-  },
-  pricingText: {
-    fontSize: Typography.h6,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  facilityRow: {
-    gap: 12,
-  },
-  facilityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: Spacing.small,
-  },
-  facilityEmoji: {
-    fontSize: 20,
-  },
-  facilityName: {
-    flex: 1,
-    fontSize: Typography.bodySmall,
-    color: Colors.textPrimary,
-  },
-  facilityDistance: {
-    fontSize: Typography.caption,
-    color: Colors.textSecondary,
-  },
-  mapContainer: {
-    height: 200,
-    borderRadius: 8,
-    overflow: 'hidden',
+  mapSection: {
+    height: SCREEN_HEIGHT * 0.5,
+    position: 'relative',
   },
   map: {
     ...StyleSheet.absoluteFillObject,
   },
-  rankBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.warning,
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  closeButton: {
+    marginTop: 8,
+  },
+  closeButtonBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  rankBadgeText: {
-    color: Colors.white,
-    fontSize: 12,
-    fontWeight: 'bold',
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  actionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  detailsPanel: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    marginTop: -24,
+    paddingTop: 20,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  titleSection: {
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    marginBottom: 16,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  categoryIcon: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  titleInfo: {
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  spotName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    flex: 1,
+  },
+  rankBadge: {
+    backgroundColor: '#FFB800',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  rankText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFF',
   },
   address: {
-    fontSize: Typography.bodySmall,
-    color: Colors.textSecondary,
+    fontSize: 12,
+    color: '#888',
     marginTop: 4,
   },
-  calculatedFeeBox: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: Colors.warningLight,
-    borderRadius: 8,
+  premiumInfoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -4,
+    marginBottom: 16,
   },
-  calculatedFeeLabel: {
-    fontSize: Typography.caption,
-    color: Colors.textSecondary,
+  infoCard: {
+    width: '33.33%',
+    paddingHorizontal: 4,
+    marginBottom: 12,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginBottom: 4,
   },
-  calculatedFeeText: {
-    fontSize: Typography.h6,
-    color: Colors.warning,
-    fontWeight: 'bold',
+  cardIcon: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
   },
-  descriptionBox: {
-    marginTop: Spacing.medium,
-    padding: Spacing.small,
+  cardTitle: {
+    fontSize: 10,
+    color: '#888',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
-  descriptionText: {
-    fontSize: Typography.bodySmall,
-    color: Colors.textPrimary,
-    lineHeight: 20,
+  cardContent: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 10,
+    minHeight: 50,
+    justifyContent: 'center',
+  },
+  mainValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 2,
+  },
+  subValue: {
+    fontSize: 10,
+    color: '#666',
+    lineHeight: 14,
+  },
+  nearbySection: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+  },
+  nearbyTitle: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#888',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 8,
+  },
+  nearbyRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  nearbyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  nearbyIcon: {
+    fontSize: 20,
+  },
+  nearbyDistance: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1A1A1A',
   },
 });
