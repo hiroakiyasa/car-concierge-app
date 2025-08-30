@@ -92,8 +92,8 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
         ...searchFilter,
         elevationFilterEnabled: false,
         nearbyFilterEnabled: isNearbyActive,
-        convenienceRadius: effectiveConvenienceRadius,
-        hotspringRadius: effectiveHotspringRadius
+        convenienceStoreRadius: effectiveConvenienceRadius,
+        hotSpringRadius: effectiveHotspringRadius
       });
     } else {
       // 駐車料金タブの場合は両方のフィルターを無効化

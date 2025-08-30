@@ -175,26 +175,51 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         
         // 周辺検索フィルターが有効な場合
         if (searchFilter.nearbyFilterEnabled) {
-          const convenienceLimit = searchFilter.convenienceRadius || 0;
-          const hotspringLimit = searchFilter.hotspringRadius || 0;
+          const convenienceLimit = searchFilter.convenienceStoreRadius || 0;
+          const hotspringLimit = searchFilter.hotSpringRadius || 0;
+          
+          console.log(`📝 フィルター設定: nearbyFilterEnabled=${searchFilter.nearbyFilterEnabled}, convenienceStoreRadius=${searchFilter.convenienceStoreRadius}, hotSpringRadius=${searchFilter.hotSpringRadius}`);
           
           if (convenienceLimit > 0 || hotspringLimit > 0) {
             console.log(`🔍 周辺検索: コンビニ ${convenienceLimit}m以内, 温泉 ${hotspringLimit}m以内`);
             
             // 指定距離内にある駐車場のみフィルタリング
-            parkingSpots = parkingSpots.filter(spot => {
+            let debugCount = 0;
+            parkingSpots = parkingSpots.filter((spot, index) => {
               // 両方の条件が設定されている場合はAND条件
               let matchConvenience = true;
               let matchHotspring = true;
               
               if (convenienceLimit > 0) {
-                matchConvenience = spot.nearestConvenienceStore ? 
-                  spot.nearestConvenienceStore.distance <= convenienceLimit : false;
+                if (spot.nearestConvenienceStore) {
+                  const distance = spot.nearestConvenienceStore.distance;
+                  matchConvenience = distance <= convenienceLimit;
+                  
+                  // 最初の5件をデバッグ
+                  if (index < 5) {
+                    console.log(`🏪 駐車場[${index}] ${spot.name}: コンビニ距離=${distance}m, 制限=${convenienceLimit}m, マッチ=${matchConvenience}`);
+                    if (spot.nearestConvenienceStore.distance <= 30) {
+                      debugCount++;
+                    }
+                  }
+                } else {
+                  matchConvenience = false;
+                  if (index < 5) {
+                    console.log(`🏪 駐車場[${index}] ${spot.name}: コンビニデータなし`);
+                  }
+                }
               }
               
               if (hotspringLimit > 0) {
-                matchHotspring = spot.nearestHotspring ? 
-                  spot.nearestHotspring.distance <= hotspringLimit : false;
+                if (spot.nearestHotspring) {
+                  const distance = spot.nearestHotspring.distance;
+                  matchHotspring = distance <= hotspringLimit;
+                  if (index < 5) {
+                    console.log(`♨️ 駐車場[${index}] ${spot.name}: 温泉距離=${distance}m, 制限=${hotspringLimit}m, マッチ=${matchHotspring}`);
+                  }
+                } else {
+                  matchHotspring = false;
+                }
               }
               
               // 両方設定されている場合はAND、片方だけの場合はその条件のみ
@@ -206,6 +231,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
                 return matchHotspring;
               }
             });
+            
+            if (debugCount > 0) {
+              console.log(`⚠️ 30m以内にコンビニがある駐車場が${debugCount}件見つかりましたが、フィルタリングで除外されています`);
+            }
             
             console.log(`🎯 周辺検索後: ${parkingSpots.length}件の駐車場`);
           }
@@ -246,11 +275,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           
           // 表示される駐車場に紐づく施設のIDを収集
           top20ParkingSpots.forEach(parking => {
-            if ((searchFilter.convenienceRadius || 0) > 0 && parking.nearestConvenienceStore) {
+            if ((searchFilter.convenienceStoreRadius || 0) > 0 && parking.nearestConvenienceStore) {
               convenienceIds.add(parking.nearestConvenienceStore.id);
               console.log(`🏪 駐車場 ${parking.name} の最寄りコンビニ: ${parking.nearestConvenienceStore.name} (${parking.nearestConvenienceStore.distance}m)`);
             }
-            if ((searchFilter.hotspringRadius || 0) > 0 && parking.nearestHotspring) {
+            if ((searchFilter.hotSpringRadius || 0) > 0 && parking.nearestHotspring) {
               hotspringIds.add(parking.nearestHotspring.id);
               console.log(`♨️ 駐車場 ${parking.name} の最寄り温泉: ${parking.nearestHotspring.name} (${parking.nearestHotspring.distance}m)`);
             }

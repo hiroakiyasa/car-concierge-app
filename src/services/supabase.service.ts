@@ -62,8 +62,14 @@ export class SupabaseService {
           nearestConvenienceStore = typeof spot.nearest_convenience_store === 'string' 
             ? JSON.parse(spot.nearest_convenience_store) 
             : spot.nearest_convenience_store;
+          
+          // データ構造のデバッグ（最初の1件のみ）
+          if (data && data.indexOf(spot) === 0 && nearestConvenienceStore) {
+            console.log('📍 コンビニデータ構造サンプル:', nearestConvenienceStore);
+          }
         } catch (error) {
-          console.log('Nearest convenience store JSON parse error:', error);
+          console.error('Nearest convenience store JSON parse error:', error);
+          console.error('Raw data:', spot.nearest_convenience_store);
         }
       }
       
@@ -73,8 +79,14 @@ export class SupabaseService {
           nearestHotspring = typeof spot.nearest_hotspring === 'string' 
             ? JSON.parse(spot.nearest_hotspring) 
             : spot.nearest_hotspring;
+            
+          // データ構造のデバッグ（最初の1件のみ）
+          if (data && data.indexOf(spot) === 0 && nearestHotspring) {
+            console.log('♨️ 温泉データ構造サンプル:', nearestHotspring);
+          }
         } catch (error) {
-          console.log('Nearest hotspring JSON parse error:', error);
+          console.error('Nearest hotspring JSON parse error:', error);
+          console.error('Raw data:', spot.nearest_hotspring);
         }
       }
       
