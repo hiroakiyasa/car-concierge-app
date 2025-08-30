@@ -32,6 +32,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const [timeSelectorMode, setTimeSelectorMode] = useState<'entry' | 'duration' | 'exit'>('entry');
   const [activeTab, setActiveTab] = useState<'parking' | 'nearby' | 'elevation'>('parking');
   const [minElevation, setMinElevation] = useState(0);
+  const [sliderValue, setSliderValue] = useState(0); // 0-100のスライダー値
   
   const { 
     searchFilter,
@@ -89,6 +90,29 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   // 温度差を計算（100mごとに0.6℃下がる）
   const calculateTemperatureDrop = (elevation: number) => {
     return (elevation / 100 * 0.6).toFixed(1);
+  };
+  
+  // 対数スケール変換関数
+  const sliderToElevation = (value: number): number => {
+    // 0-100のスライダー値を0-2000mの対数スケールに変換
+    if (value === 0) return 0;
+    // 対数スケール: 10^(value/50) * 20 - 20
+    // value=0 -> 0m, value=25 -> ~100m, value=50 -> ~400m, value=75 -> ~1000m, value=100 -> 2000m
+    const elevation = Math.pow(10, value / 33.33) * 20 - 20;
+    return Math.min(2000, Math.round(elevation / 10) * 10); // 10m単位に丸める
+  };
+  
+  const elevationToSlider = (elevation: number): number => {
+    // 標高を0-100のスライダー値に変換
+    if (elevation === 0) return 0;
+    const value = 33.33 * Math.log10((elevation + 20) / 20);
+    return Math.max(0, Math.min(100, value));
+  };
+  
+  // スライダー値が変更されたときに標高を更新
+  const handleSliderChange = (value: number) => {
+    setSliderValue(value);
+    setMinElevation(sliderToElevation(value));
   };
   
   return (
@@ -196,17 +220,27 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
         {activeTab === 'elevation' && (
           <View style={styles.elevationContent}>
             <View style={styles.sliderContainer}>
-              <Slider
-                style={styles.slider}
-                minimumValue={0}
-                maximumValue={2000}
-                value={minElevation}
-                onValueChange={setMinElevation}
-                minimumTrackTintColor="#E0E0E0"
-                maximumTrackTintColor={Colors.primary}
-                thumbTintColor={Colors.primary}
-                step={50}
-              />
+              <View style={styles.sliderWrapper}>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={0}
+                  maximumValue={100}
+                  value={sliderValue}
+                  onValueChange={handleSliderChange}
+                  minimumTrackTintColor="#E0E0E0"
+                  maximumTrackTintColor={Colors.primary}
+                  thumbTintColor={Colors.primary}
+                  step={1}
+                />
+                {/* スケールラベル */}
+                <View style={styles.scaleLabels}>
+                  <Text style={[styles.scaleLabel, { left: '0%' }]}>0</Text>
+                  <Text style={[styles.scaleLabel, { left: '16%' }]}>100</Text>
+                  <Text style={[styles.scaleLabel, { left: '50%' }]}>500</Text>
+                  <Text style={[styles.scaleLabel, { left: '75%' }]}>1000</Text>
+                  <Text style={[styles.scaleLabel, { right: '0%' }]}>2000</Text>
+                </View>
+              </View>
               <View style={styles.elevationInfo}>
                 <Text style={styles.elevationValue}>
                   最低標高: {minElevation}m
@@ -384,15 +418,33 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
+  sliderWrapper: {
+    position: 'relative',
+    flex: 1,
+  },
   slider: {
     flex: 1,
     height: 40,
+  },
+  scaleLabels: {
+    position: 'absolute',
+    bottom: -15,
+    left: 10,
+    right: 10,
+    height: 20,
+    flexDirection: 'row',
+  },
+  scaleLabel: {
+    position: 'absolute',
+    fontSize: 9,
+    color: '#999',
+    fontWeight: '500',
   },
   elevationInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 10,
-    marginTop: 4,
+    marginTop: 8,
   },
   elevationValue: {
     fontSize: 14,
