@@ -206,7 +206,7 @@ export const RankingListModal: React.FC<RankingListModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)', // 軽い半透明のみ、ぼかし無し
+    backgroundColor: 'transparent', // 完全に透明、地図をそのまま表示
   },
   modalContainer: {
     position: 'absolute',

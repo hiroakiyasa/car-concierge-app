@@ -274,6 +274,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const handleMarkerPress = (spot: Spot) => {
     selectSpot(spot);
     setShowDetailSheet(true);
+    
+    // 選択したスポットを画面上部50%の中央に配置
+    if (mapRef.current) {
+      // 詳細シートが45%なので、上部55%の中央に配置
+      const offsetLatitude = spot.lat - 0.0015; // 緯度を少し下げて上部中央に配置
+      
+      mapRef.current.animateToRegion({
+        latitude: offsetLatitude,
+        longitude: spot.lng,
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008,
+      }, 500);
+    }
   };
   
   const handleRankingSpotSelect = (spot: CoinParking) => {
@@ -393,12 +406,24 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         onSpotDetail={(spot) => {
           console.log('🎯 詳細表示を開く:', spot.name);
           selectSpot(spot);
+          
+          // 選択したスポットを画面上部50%の中央に配置
+          if (mapRef.current) {
+            const offsetLatitude = spot.lat - 0.0015;
+            mapRef.current.animateToRegion({
+              latitude: offsetLatitude,
+              longitude: spot.lng,
+              latitudeDelta: 0.008,
+              longitudeDelta: 0.008,
+            }, 300);
+          }
+          
           // ランキングモーダルを閉じてから詳細を表示
           setShowRankingModal(false);
           setShouldReopenRanking(true);
           setTimeout(() => {
             setShowDetailSheet(true);
-          }, 300); // モーダルが閉じるアニメーションを待つ
+          }, 400); // モーダルが閉じるアニメーションを待つ
         }}
       />
       

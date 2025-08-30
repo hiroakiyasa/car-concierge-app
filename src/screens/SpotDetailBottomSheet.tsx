@@ -10,7 +10,6 @@ import {
   Linking,
   Platform,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useMainStore } from '@/stores/useMainStore';
 import { Colors, Spacing, Typography } from '@/utils/constants';
@@ -139,9 +138,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         style={styles.overlay} 
         activeOpacity={1} 
         onPress={onClose}
-      >
-        <BlurView intensity={20} style={StyleSheet.absoluteFillObject} />
-      </TouchableOpacity>
+      />
       
       <View style={styles.sheet}>
         {/* Handle Bar */}
@@ -251,7 +248,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'transparent', // 完全に透明、地図をクリアに表示
   },
   sheet: {
     position: 'absolute',
