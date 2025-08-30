@@ -257,7 +257,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                   </Text>
                   <Text style={[styles.scaleLabel, { left: getLabelPosition(500) }]}>500</Text>
                   <Text style={[styles.scaleLabel, { left: getLabelPosition(1000) }]}>1000</Text>
-                  <Text style={[styles.scaleLabel, { left: getLabelPosition(2000) }]}>2000</Text>
+                  <Text style={[styles.scaleLabel, styles.maxLabel, { right: '15%' }]}>2000</Text>
                 </View>
               </View>
               <View style={styles.elevationInfo}>
@@ -465,11 +465,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  maxLabel: {
+    fontSize: 14,
+    color: '#999',
+    fontWeight: '600',
+  },
   elevationInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 10,
-    marginTop: 8,
+    marginTop: 15,
   },
   elevationValue: {
     fontSize: 14,
