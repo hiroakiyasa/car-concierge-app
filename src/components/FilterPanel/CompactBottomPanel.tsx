@@ -253,6 +253,10 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                 {/* スケールラベル */}
                 <View style={styles.scaleLabels}>
                   <Text style={[styles.scaleLabel, { left: getLabelPosition(0) }]}>0</Text>
+                  <Text style={[styles.scaleLabel, styles.tsunamiLabel, { left: getLabelPosition(30) }]}>
+                    30m{'\n'}
+                    <Text style={styles.tsunamiText}>(津波最大)</Text>
+                  </Text>
                   <Text style={[styles.scaleLabel, { left: getLabelPosition(100) }]}>100</Text>
                   <Text style={[styles.scaleLabel, { left: getLabelPosition(500) }]}>500</Text>
                   <Text style={[styles.scaleLabel, { left: getLabelPosition(1000) }]}>1000</Text>
@@ -446,10 +450,10 @@ const styles = StyleSheet.create({
   },
   scaleLabels: {
     position: 'absolute',
-    bottom: -15,
+    bottom: -20,
     left: 10,
     right: 10,
-    height: 20,
+    height: 30,
     flexDirection: 'row',
   },
   scaleLabel: {
@@ -457,6 +461,18 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#999',
     fontWeight: '500',
+  },
+  tsunamiLabel: {
+    fontSize: 8,
+    color: '#FF6B6B',
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 10,
+  },
+  tsunamiText: {
+    fontSize: 7,
+    color: '#FF6B6B',
+    fontWeight: '400',
   },
   elevationInfo: {
     flexDirection: 'row',
