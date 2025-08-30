@@ -15,7 +15,7 @@ import { ParkingTimeSelector } from './ParkingTimeSelector';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // パネルの高さ（固定）
-const PANEL_HEIGHT = 130; // 入出庫時間のみ
+const PANEL_HEIGHT = 145; // 5%増加して余裕を持たせる
 
 interface CompactBottomPanelProps {
   navigation?: any;
@@ -33,6 +33,12 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const [activeTab, setActiveTab] = useState<'parking' | 'nearby' | 'elevation'>('parking');
   const [minElevation, setMinElevation] = useState(0);
   const [sliderValue, setSliderValue] = useState(0); // 0-100のスライダー値
+  const [convenienceRadius, setConvenienceRadius] = useState(0); // コンビニ検索半径
+  const [hotspringRadius, setHotspringRadius] = useState(0); // 温泉検索半径
+  const [convenienceSlider, setConvenienceSlider] = useState(0); // コンビニスライダー値 0-100
+  const [hotspringSlider, setHotspringSlider] = useState(0); // 温泉スライダー値 0-100
+  const [convenienceSelected, setConvenienceSelected] = useState(false); // コンビニ選択状態
+  const [hotspringSelected, setHotspringSelected] = useState(false); // 温泉選択状態
   
   const { 
     searchFilter,
@@ -68,18 +74,33 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   };
   
   const handleSearch = () => {
-    // 標高タブが選択されている場合は、最低標高をフィルターに設定
+    // タブに応じてフィルターを設定
     if (activeTab === 'elevation') {
       setSearchFilter({
         ...searchFilter,
         minElevation: minElevation,
-        elevationFilterEnabled: true
+        elevationFilterEnabled: true,
+        nearbyFilterEnabled: false
       });
-    } else {
-      // 標高タブ以外の場合は標高フィルターを無効化
+    } else if (activeTab === 'nearby') {
+      // 選択された施設の検索半径を設定
+      const effectiveConvenienceRadius = convenienceSelected ? convenienceRadius : 0;
+      const effectiveHotspringRadius = hotspringSelected ? hotspringRadius : 0;
+      const isNearbyActive = effectiveConvenienceRadius > 0 || effectiveHotspringRadius > 0;
+      
       setSearchFilter({
         ...searchFilter,
-        elevationFilterEnabled: false
+        elevationFilterEnabled: false,
+        nearbyFilterEnabled: isNearbyActive,
+        convenienceRadius: effectiveConvenienceRadius,
+        hotspringRadius: effectiveHotspringRadius
+      });
+    } else {
+      // 駐車料金タブの場合は両方のフィルターを無効化
+      setSearchFilter({
+        ...searchFilter,
+        elevationFilterEnabled: false,
+        nearbyFilterEnabled: false
       });
     }
     if (onSearch) {
@@ -90,6 +111,46 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   // 温度差を計算（100mごとに0.6℃下がる）
   const calculateTemperatureDrop = (elevation: number) => {
     return (elevation / 100 * 0.6).toFixed(1);
+  };
+  
+  // 周辺検索用のスライダー変換関数
+  // 左半分(0-50): 0-100m (10m単位)
+  // 右半分(50-100): 100-1000m (100m単位)
+  const sliderToRadius = (value: number): number => {
+    if (value === 0) return 0;
+    
+    // 0-50%: 0-100m (10m単位)
+    if (value <= 50) {
+      return Math.round((value / 50) * 100 / 10) * 10;
+    }
+    // 50-100%: 100-1000m (100m単位)
+    else {
+      const normalized = (value - 50) / 50;
+      return 100 + Math.round(normalized * 900 / 100) * 100;
+    }
+  };
+  
+  const radiusToSlider = (radius: number): number => {
+    if (radius === 0) return 0;
+    
+    // 0-100m
+    if (radius <= 100) {
+      return (radius / 100) * 50;
+    }
+    // 100-1000m
+    else {
+      return 50 + ((radius - 100) / 900) * 50;
+    }
+  };
+  
+  const handleConvenienceSliderChange = (value: number) => {
+    setConvenienceSlider(value);
+    setConvenienceRadius(sliderToRadius(value));
+  };
+  
+  const handleHotspringSliderChange = (value: number) => {
+    setHotspringSlider(value);
+    setHotspringRadius(sliderToRadius(value));
   };
   
   // 対数スケール変換関数（低標高域により細かい粒度、高標高域により広い粒度）
@@ -186,10 +247,10 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
       {/* コンテンツ部分（タブによって切り替え） */}
       <View style={styles.premiumTimeSection}>
         {activeTab === 'parking' && (
-          <>
-            <TouchableOpacity 
-              style={styles.timeBlock}
-              onPress={() => handleTimeSelectorOpen('entry')}
+            <>
+              <TouchableOpacity 
+                style={styles.timeBlock}
+                onPress={() => handleTimeSelectorOpen('entry')}
             >
               <View style={styles.timeHeader}>
                 <Ionicons name="log-in" size={20} color='#4CAF50' />
@@ -268,10 +329,83 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
         
         {activeTab === 'nearby' && (
           <View style={styles.nearbyContent}>
-            <Text style={styles.nearbyText}>周辺施設から検索</Text>
-            <Text style={styles.nearbyDescription}>
-              地図上の施設から近い駐車場を検索します
-            </Text>
+            <View style={styles.nearbyFacilities}>
+              {/* コンビニ */}
+              <View style={styles.facilityRow}>
+                <TouchableOpacity
+                  style={[styles.facilityButton, convenienceSelected && styles.facilityButtonActive]}
+                  onPress={() => {
+                    const newSelected = !convenienceSelected;
+                    setConvenienceSelected(newSelected);
+                    // 選択時にデフォルト30mを設定
+                    if (newSelected && convenienceRadius === 0) {
+                      setConvenienceRadius(30);
+                      setConvenienceSlider(radiusToSlider(30));
+                    }
+                  }}
+                >
+                  <Text style={styles.facilityIcon}>🏪</Text>
+                  <Text style={[styles.facilityName, convenienceSelected && styles.facilityNameActive]}>
+                    コンビニ
+                  </Text>
+                </TouchableOpacity>
+                <View style={styles.sliderSection}>
+                  <Slider
+                    style={styles.horizontalSlider}
+                    minimumValue={0}
+                    maximumValue={100}
+                    value={convenienceSlider}
+                    onValueChange={handleConvenienceSliderChange}
+                    minimumTrackTintColor={convenienceSelected ? Colors.primary : '#E0E0E0'}
+                    maximumTrackTintColor="#E0E0E0"
+                    thumbTintColor={convenienceSelected ? Colors.primary : '#999'}
+                    step={1}
+                    disabled={!convenienceSelected}
+                  />
+                  <Text style={[styles.radiusValue, !convenienceSelected && styles.radiusValueDisabled]}>
+                    {convenienceRadius > 0 ? `${convenienceRadius}m` : '0m'}
+                  </Text>
+                </View>
+              </View>
+              
+              {/* 温泉 */}
+              <View style={styles.facilityRow}>
+                <TouchableOpacity
+                  style={[styles.facilityButton, hotspringSelected && styles.facilityButtonActive]}
+                  onPress={() => {
+                    const newSelected = !hotspringSelected;
+                    setHotspringSelected(newSelected);
+                    // 選択時にデフォルト100mを設定
+                    if (newSelected && hotspringRadius === 0) {
+                      setHotspringRadius(100);
+                      setHotspringSlider(radiusToSlider(100));
+                    }
+                  }}
+                >
+                  <Text style={styles.facilityIcon}>♨️</Text>
+                  <Text style={[styles.facilityName, hotspringSelected && styles.facilityNameActive]}>
+                    温泉
+                  </Text>
+                </TouchableOpacity>
+                <View style={styles.sliderSection}>
+                  <Slider
+                    style={styles.horizontalSlider}
+                    minimumValue={0}
+                    maximumValue={100}
+                    value={hotspringSlider}
+                    onValueChange={handleHotspringSliderChange}
+                    minimumTrackTintColor={hotspringSelected ? '#FF6B6B' : '#E0E0E0'}
+                    maximumTrackTintColor="#E0E0E0"
+                    thumbTintColor={hotspringSelected ? '#FF6B6B' : '#999'}
+                    step={1}
+                    disabled={!hotspringSelected}
+                  />
+                  <Text style={[styles.radiusValue, !hotspringSelected && styles.radiusValueDisabled]}>
+                    {hotspringRadius > 0 ? `${hotspringRadius}m` : '0m'}
+                  </Text>
+                </View>
+              </View>
+            </View>
           </View>
         )}
         
@@ -325,8 +459,8 @@ const styles = StyleSheet.create({
   filterTabs: {
     flexDirection: 'row',
     paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingTop: 10,
+    paddingBottom: 6,
     gap: 8,
   },
   filterTab: {
@@ -358,8 +492,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 2,
-    paddingBottom: 6,
+    paddingTop: 8,
+    paddingBottom: 12,
     gap: 10,
     backgroundColor: '#FAFAFA',
   },
@@ -427,6 +561,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingRight: 10,
   },
+  nearbyContent: {
+    flex: 1,
+    paddingHorizontal: 8,
+  },
   sliderContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -441,7 +579,7 @@ const styles = StyleSheet.create({
   },
   scaleLabels: {
     position: 'absolute',
-    bottom: -25,
+    bottom: -35,
     left: 10,
     right: 10,
     height: 30,
@@ -462,34 +600,82 @@ const styles = StyleSheet.create({
   elevationInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    marginTop: 15,
-  },
-  elevationValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  temperatureText: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  nearbyContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  nearbyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textPrimary,
+    paddingHorizontal: 16,
+    marginTop: 28,
     marginBottom: 4,
   },
-  nearbyDescription: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    textAlign: 'center',
+  elevationValue: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    letterSpacing: 0.3,
+  },
+  temperatureText: {
+    fontSize: 17,
+    color: Colors.primary,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  nearbyFacilities: {
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
+    paddingHorizontal: 8,
+    paddingTop: 0,
+    paddingBottom: 4,
+    gap: 4,
+  },
+  facilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    gap: 8,
+  },
+  facilityButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    minWidth: 90,
+  },
+  facilityButtonActive: {
+    backgroundColor: Colors.primary + '15',
+    borderColor: Colors.primary,
+  },
+  facilityIcon: {
+    fontSize: 16,
+    marginRight: 4,
+  },
+  facilityName: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#666',
+  },
+  facilityNameActive: {
+    color: Colors.primary,
+  },
+  sliderSection: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  horizontalSlider: {
+    flex: 1,
+    height: 30,
+  },
+  radiusValue: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+    minWidth: 45,
+    textAlign: 'right',
+  },
+  radiusValueDisabled: {
+    color: '#999',
   },
 });

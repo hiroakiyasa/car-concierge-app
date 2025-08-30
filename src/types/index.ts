@@ -119,6 +119,9 @@ export interface SearchFilter {
   showMultiStoryParking: boolean;
   showMechanicalParking: boolean;
   parkingDuration: ParkingDuration;
+  nearbyFilterEnabled?: boolean;
+  nearbyRadius?: number;
+  nearbyCategory?: 'convenience' | 'hotspring';
 }
 
 // Map types

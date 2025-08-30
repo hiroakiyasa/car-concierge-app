@@ -37,48 +37,68 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   const isParking = selectedSpot.category === 'コインパーキング';
   const parkingSpot = selectedSpot as CoinParking;
   
-  const formatPrice = (): string => {
+  const formatPrice = (): { calculated: string; original: string } => {
     if (!isParking) {
-      return '---';
+      return { calculated: '---', original: '---' };
     }
     
-    // First check if there's a calculatedFee (from the ranking)
+    let calculatedStr = '';
+    let originalStr = '';
+    
+    // Calculate fee for current duration
     if (parkingSpot.calculatedFee !== undefined && parkingSpot.calculatedFee !== null && parkingSpot.calculatedFee > 0) {
       const { parkingDuration } = searchFilter;
       const duration = parkingDuration.formattedDuration;
-      return `${duration}: ¥${parkingSpot.calculatedFee}`;
-    }
-    
-    // If no calculatedFee, try to calculate it now
-    if (searchFilter.parkingTimeFilterEnabled && parkingSpot.rates && parkingSpot.rates.length > 0) {
+      calculatedStr = `${duration}: ¥${parkingSpot.calculatedFee.toLocaleString()}`;
+    } else if (searchFilter.parkingTimeFilterEnabled && parkingSpot.rates && parkingSpot.rates.length > 0) {
       const fee = ParkingFeeCalculator.calculateFee(parkingSpot, searchFilter.parkingDuration);
       if (fee > 0) {
         const duration = searchFilter.parkingDuration.formattedDuration;
-        return `${duration}: ¥${fee}`;
+        calculatedStr = `${duration}: ¥${fee.toLocaleString()}`;
       }
     }
     
-    // Fall back to displaying rate structure if available
-    if (parkingSpot.rates && parkingSpot.rates.length > 0) {
+    // Get original fee information from backend
+    if (parkingSpot.originalFees) {
+      originalStr = parkingSpot.originalFees;
+    } else if (parkingSpot.rates && parkingSpot.rates.length > 0) {
       const rates = parkingSpot.rates;
       const baseRates = rates.filter(r => r.type === 'base').sort((a, b) => a.minutes - b.minutes);
-      const maxRate = rates.find(r => r.type === 'max');
+      const maxRates = rates.filter(r => r.type === 'max').sort((a, b) => a.minutes - b.minutes);
       
-      let priceText = '';
-      if (baseRates.length > 0) {
-        const rate = baseRates[0];
-        priceText = `${rate.minutes}分 ¥${rate.price}`;
+      const rateStrings: string[] = [];
+      
+      // Add all base rates
+      baseRates.forEach(rate => {
+        rateStrings.push(`${rate.minutes}分 ¥${rate.price.toLocaleString()}`);
+      });
+      
+      // Add all max rates
+      maxRates.forEach(rate => {
+        const hours = Math.floor(rate.minutes / 60);
+        if (hours >= 24) {
+          rateStrings.push(`最大料金(24時間) ¥${rate.price.toLocaleString()}`);
+        } else if (hours > 0) {
+          rateStrings.push(`最大料金(${hours}時間) ¥${rate.price.toLocaleString()}`);
+        } else {
+          rateStrings.push(`最大料金(${rate.minutes}分) ¥${rate.price.toLocaleString()}`);
+        }
+      });
+      
+      if (rateStrings.length > 0) {
+        originalStr = rateStrings.join('\n');
       }
-      
-      if (maxRate) {
-        if (priceText) priceText += ' / ';
-        priceText += `最大 ¥${maxRate.price}`;
-      }
-      
-      return priceText || '料金情報なし';
     }
     
-    return '料金情報なし';
+    // Legacy hourly_price field
+    if (!originalStr && parkingSpot.hourly_price) {
+      originalStr = `¥${parkingSpot.hourly_price}/時間`;
+    }
+    
+    return {
+      calculated: calculatedStr || '計算不可',
+      original: originalStr || '料金情報なし'
+    };
   };
   
   const formatOperatingHours = (): string => {
@@ -184,15 +204,29 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         >
           {/* Price Section for Parking */}
           {isParking && (
-            <View style={styles.priceSection}>
-              <View style={styles.priceIcon}>
-                <Text style={styles.priceIconText}>¥</Text>
+            <>
+              {formatPrice().calculated && (
+                <View style={styles.priceSection}>
+                  <View style={styles.priceIcon}>
+                    <Ionicons name="calculator" size={20} color={Colors.primary} />
+                  </View>
+                  <View style={styles.priceInfo}>
+                    <Text style={styles.priceLabel}>計算料金</Text>
+                    <Text style={styles.priceValue}>{formatPrice().calculated}</Text>
+                  </View>
+                </View>
+              )}
+              
+              <View style={styles.priceSection}>
+                <View style={styles.priceIcon}>
+                  <Text style={styles.priceIconText}>¥</Text>
+                </View>
+                <View style={styles.priceInfo}>
+                  <Text style={styles.priceLabel}>料金体系</Text>
+                  <Text style={styles.priceValue}>{formatPrice().original}</Text>
+                </View>
               </View>
-              <View style={styles.priceInfo}>
-                <Text style={styles.priceLabel}>料金体系</Text>
-                <Text style={styles.priceValue}>{formatPrice()}</Text>
-              </View>
-            </View>
+            </>
           )}
           
           {/* Info Grid */}
@@ -374,10 +408,11 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   priceValue: {
-    fontSize: Typography.h6,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.white,
     marginTop: 2,
+    lineHeight: 20,
   },
   infoGrid: {
     flexDirection: 'row',

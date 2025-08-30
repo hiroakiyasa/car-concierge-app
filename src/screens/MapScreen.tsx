@@ -173,6 +173,44 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         
         console.log(`🅿️ 検索された駐車場: ${parkingSpots.length}件`);
         
+        // 周辺検索フィルターが有効な場合
+        if (searchFilter.nearbyFilterEnabled) {
+          const convenienceLimit = searchFilter.convenienceRadius || 0;
+          const hotspringLimit = searchFilter.hotspringRadius || 0;
+          
+          if (convenienceLimit > 0 || hotspringLimit > 0) {
+            console.log(`🔍 周辺検索: コンビニ ${convenienceLimit}m以内, 温泉 ${hotspringLimit}m以内`);
+            
+            // 指定距離内にある駐車場のみフィルタリング
+            parkingSpots = parkingSpots.filter(spot => {
+              // 両方の条件が設定されている場合はAND条件
+              let matchConvenience = true;
+              let matchHotspring = true;
+              
+              if (convenienceLimit > 0) {
+                matchConvenience = spot.nearestConvenienceStore ? 
+                  spot.nearestConvenienceStore.distance <= convenienceLimit : false;
+              }
+              
+              if (hotspringLimit > 0) {
+                matchHotspring = spot.nearestHotspring ? 
+                  spot.nearestHotspring.distance <= hotspringLimit : false;
+              }
+              
+              // 両方設定されている場合はAND、片方だけの場合はその条件のみ
+              if (convenienceLimit > 0 && hotspringLimit > 0) {
+                return matchConvenience && matchHotspring;
+              } else if (convenienceLimit > 0) {
+                return matchConvenience;
+              } else {
+                return matchHotspring;
+              }
+            });
+            
+            console.log(`🎯 周辺検索後: ${parkingSpots.length}件の駐車場`);
+          }
+        }
+        
         // 300件を超える場合は警告を表示
         if (parkingSpots.length >= 300) {
           Alert.alert(
@@ -200,31 +238,82 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         displaySpots.push(...top20ParkingSpots);
         
         console.log(`🏆 上位20件の駐車場を地図に表示`);
+        
+        // 周辺検索が有効な場合、関連施設も地図に表示
+        if (searchFilter.nearbyFilterEnabled) {
+          const convenienceIds = new Set<string>();
+          const hotspringIds = new Set<string>();
+          
+          // 表示される駐車場に紐づく施設のIDを収集
+          top20ParkingSpots.forEach(parking => {
+            if ((searchFilter.convenienceRadius || 0) > 0 && parking.nearestConvenienceStore) {
+              convenienceIds.add(parking.nearestConvenienceStore.id);
+            }
+            if ((searchFilter.hotspringRadius || 0) > 0 && parking.nearestHotspring) {
+              hotspringIds.add(parking.nearestHotspring.id);
+            }
+          });
+          
+          // コンビニを表示に追加
+          if (convenienceIds.size > 0) {
+            const relatedStores = spots.filter(spot => 
+              spot.category === 'コンビニ' && convenienceIds.has(spot.id)
+            );
+            displaySpots.push(...relatedStores);
+            console.log(`🏪 関連コンビニ: ${relatedStores.length}件を表示`);
+          }
+          
+          // 温泉を表示に追加
+          if (hotspringIds.size > 0) {
+            const relatedSprings = spots.filter(spot => 
+              spot.category === '温泉' && hotspringIds.has(spot.id)
+            );
+            displaySpots.push(...relatedSprings);
+            console.log(`♨️ 関連温泉: ${relatedSprings.length}件を表示`);
+          }
+        }
       }
       
-      // その他のカテゴリーのスポットを全て表示
-      if (selectedCategories.has('コンビニ')) {
-        const convenienceStores = spots.filter(spot => spot.category === 'コンビニ');
-        displaySpots.push(...convenienceStores);
-        console.log(`🏂 コンビニ: ${convenienceStores.length}件`);
-      }
-      
-      if (selectedCategories.has('ガソリンスタンド')) {
-        const gasStations = spots.filter(spot => spot.category === 'ガソリンスタンド');
-        displaySpots.push(...gasStations);
-        console.log(`⛽ ガソリンスタンド: ${gasStations.length}件`);
-      }
-      
-      if (selectedCategories.has('温泉')) {
-        const hotSprings = spots.filter(spot => spot.category === '温泉');
-        displaySpots.push(...hotSprings);
-        console.log(`♨️ 温泉: ${hotSprings.length}件`);
-      }
-      
-      if (selectedCategories.has('お祭り・花火大会')) {
-        const festivals = spots.filter(spot => spot.category === 'お祭り・花火大会');
-        displaySpots.push(...festivals);
-        console.log(`🎆 お祭り・花火大会: ${festivals.length}件`);
+      // その他のカテゴリーのスポットを全て表示（周辺検索でない場合のみ）
+      if (!searchFilter.nearbyFilterEnabled) {
+        let nonParkingSpots: Spot[] = [];
+        
+        if (selectedCategories.has('コンビニ')) {
+          const convenienceStores = spots.filter(spot => spot.category === 'コンビニ');
+          nonParkingSpots.push(...convenienceStores);
+          displaySpots.push(...convenienceStores);
+          console.log(`🏂 コンビニ: ${convenienceStores.length}件`);
+        }
+        
+        if (selectedCategories.has('ガソリンスタンド')) {
+          const gasStations = spots.filter(spot => spot.category === 'ガソリンスタンド');
+          nonParkingSpots.push(...gasStations);
+          displaySpots.push(...gasStations);
+          console.log(`⛽ ガソリンスタンド: ${gasStations.length}件`);
+        }
+        
+        if (selectedCategories.has('温泉')) {
+          const hotSprings = spots.filter(spot => spot.category === '温泉');
+          nonParkingSpots.push(...hotSprings);
+          displaySpots.push(...hotSprings);
+          console.log(`♨️ 温泉: ${hotSprings.length}件`);
+        }
+        
+        if (selectedCategories.has('お祭り・花火大会')) {
+          const festivals = spots.filter(spot => spot.category === 'お祭り・花火大会');
+          nonParkingSpots.push(...festivals);
+          displaySpots.push(...festivals);
+          console.log(`🎆 お祭り・花火大会: ${festivals.length}件`);
+        }
+        
+        // 駐車場以外のスポットが100件を超える場合は警告を表示
+        if (nonParkingSpots.length >= 100) {
+          Alert.alert(
+            '検索範囲が広すぎます',
+            `${nonParkingSpots.length}件の施設が見つかりました。地図を拡大してください。`,
+            [{ text: 'OK', style: 'default' }]
+          );
+        }
       }
       
       console.log(`🗺️ 合計${displaySpots.length}件を地図に表示`);
