@@ -158,9 +158,20 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         console.log(`🏔️ 標高フィルター有効: ${searchFilter.minElevation}m以上の駐車場のみ表示`);
       }
       
+      // 周辺検索が有効な場合は、関連施設も取得するためにカテゴリーを追加
+      const categoriesForFetch = new Set(selectedCategories);
+      if (searchFilter.nearbyFilterEnabled && selectedCategories.has('コインパーキング')) {
+        if ((searchFilter.convenienceStoreRadius || 0) > 0) {
+          categoriesForFetch.add('コンビニ');
+        }
+        if ((searchFilter.hotSpringRadius || 0) > 0) {
+          categoriesForFetch.add('温泉');
+        }
+      }
+      
       const spots = await SupabaseService.fetchSpotsByCategories(
         searchRegion,
-        selectedCategories,
+        categoriesForFetch,
         minElevation
       );
       
@@ -192,10 +203,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
               
               if (convenienceLimit > 0) {
                 if (spot.nearestConvenienceStore) {
-                  // distanceフィールドの存在を確認
-                  const distance = typeof spot.nearestConvenienceStore.distance === 'number' 
-                    ? spot.nearestConvenienceStore.distance 
-                    : (spot.nearestConvenienceStore as any).Distance || 999999;
+                  // distance_m フィールドを使用
+                  const distance = (spot.nearestConvenienceStore as any).distance_m || 
+                                   spot.nearestConvenienceStore.distance || 
+                                   999999;
                   
                   matchConvenience = distance <= convenienceLimit;
                   
@@ -221,9 +232,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
               
               if (hotspringLimit > 0) {
                 if (spot.nearestHotspring) {
-                  const distance = typeof spot.nearestHotspring.distance === 'number'
-                    ? spot.nearestHotspring.distance
-                    : (spot.nearestHotspring as any).Distance || 999999;
+                  // distance_m フィールドを使用
+                  const distance = (spot.nearestHotspring as any).distance_m || 
+                                   spot.nearestHotspring.distance || 
+                                   999999;
                     
                   matchHotspring = distance <= hotspringLimit;
                   if (index < 5) {
@@ -302,31 +314,88 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           // 表示される駐車場に紐づく施設のIDを収集
           top20ParkingSpots.forEach(parking => {
             if ((searchFilter.convenienceStoreRadius || 0) > 0 && parking.nearestConvenienceStore) {
-              convenienceIds.add(parking.nearestConvenienceStore.id);
-              console.log(`🏪 駐車場 ${parking.name} の最寄りコンビニ: ${parking.nearestConvenienceStore.name} (${parking.nearestConvenienceStore.distance}m)`);
+              const convenienceStore = parking.nearestConvenienceStore;
+              const id = convenienceStore.id || (convenienceStore as any).store_id;
+              const distance = (convenienceStore as any).distance_m || convenienceStore.distance;
+              const name = convenienceStore.name || (convenienceStore as any).store_name || 'Unknown';
+              
+              if (id) {
+                convenienceIds.add(id);
+                console.log(`🏪 駐車場 ${parking.name} の最寄りコンビニ: ID=${id}, 距離=${distance}m`);
+              }
             }
             if ((searchFilter.hotSpringRadius || 0) > 0 && parking.nearestHotspring) {
-              hotspringIds.add(parking.nearestHotspring.id);
-              console.log(`♨️ 駐車場 ${parking.name} の最寄り温泉: ${parking.nearestHotspring.name} (${parking.nearestHotspring.distance}m)`);
+              const hotspring = parking.nearestHotspring;
+              const id = hotspring.id || (hotspring as any).spring_id;
+              const distance = (hotspring as any).distance_m || hotspring.distance;
+              const name = hotspring.name || (hotspring as any).spring_name || 'Unknown';
+              
+              if (id) {
+                hotspringIds.add(id);
+                console.log(`♨️ 駐車場 ${parking.name} の最寄り温泉: ID=${id}, 距離=${distance}m`);
+              }
             }
           });
           
           // コンビニを表示に追加
           if (convenienceIds.size > 0) {
-            const relatedStores = spots.filter(spot => 
-              spot.category === 'コンビニ' && convenienceIds.has(spot.id)
-            );
+            const relatedStores = spots.filter(spot => {
+              if (spot.category !== 'コンビニ') return false;
+              
+              // IDマッチングのバリエーションを試す
+              const spotId = spot.id;
+              const spotIdString = (spot as any).idString;
+              
+              // デバッグ用
+              if (spots.filter(s => s.category === 'コンビニ').indexOf(spot) < 3) {
+                console.log(`🏪 コンビニマッチング試行: spot.id=${spotId}, idString=${spotIdString}, 検索対象IDs:`, Array.from(convenienceIds));
+              }
+              
+              return convenienceIds.has(spotId) || 
+                     convenienceIds.has(spotIdString) ||
+                     Array.from(convenienceIds).some(id => 
+                       id === spotId || 
+                       id === spotIdString ||
+                       spotId === id ||
+                       spotIdString === id
+                     );
+            });
+            
+            if (relatedStores.length === 0 && convenienceIds.size > 0) {
+              console.log('⚠️ コンビニIDマッチ失敗。検索対象:', Array.from(convenienceIds));
+              console.log('利用可能なコンビニ:', spots.filter(s => s.category === 'コンビニ').slice(0, 5).map(s => ({ id: s.id, idString: (s as any).idString })));
+            }
+            
             displaySpots.push(...relatedStores);
-            console.log(`🏪 関連コンビニ: ${relatedStores.length}件を表示`);
+            console.log(`🏪 関連コンビニ: ${relatedStores.length}件を表示 (対象ID: ${convenienceIds.size}件)`);
           }
           
           // 温泉を表示に追加
           if (hotspringIds.size > 0) {
-            const relatedSprings = spots.filter(spot => 
-              spot.category === '温泉' && hotspringIds.has(spot.id)
-            );
+            const relatedSprings = spots.filter(spot => {
+              if (spot.category !== '温泉') return false;
+              
+              const spotId = spot.id;
+              
+              // デバッグ用
+              if (spots.filter(s => s.category === '温泉').indexOf(spot) < 3) {
+                console.log(`♨️ 温泉マッチング試行: spot.id=${spotId}, 検索対象IDs:`, Array.from(hotspringIds));
+              }
+              
+              return hotspringIds.has(spotId) ||
+                     Array.from(hotspringIds).some(id => 
+                       id === spotId ||
+                       spotId === id
+                     );
+            });
+            
+            if (relatedSprings.length === 0 && hotspringIds.size > 0) {
+              console.log('⚠️ 温泉IDマッチ失敗。検索対象:', Array.from(hotspringIds));
+              console.log('利用可能な温泉:', spots.filter(s => s.category === '温泉').slice(0, 5).map(s => ({ id: s.id })));
+            }
+            
             displaySpots.push(...relatedSprings);
-            console.log(`♨️ 関連温泉: ${relatedSprings.length}件を表示`);
+            console.log(`♨️ 関連温泉: ${relatedSprings.length}件を表示 (対象ID: ${hotspringIds.size}件)`);
           }
         }
       }
@@ -370,6 +439,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
             `${nonParkingSpots.length}件の施設が見つかりました。地図を拡大してください。`,
             [{ text: 'OK', style: 'default' }]
           );
+        }
+      } else {
+        // 周辺検索が有効な場合でも、関連施設以外の選択カテゴリーは表示
+        if (selectedCategories.has('ガソリンスタンド')) {
+          const gasStations = spots.filter(spot => spot.category === 'ガソリンスタンド');
+          displaySpots.push(...gasStations);
+          console.log(`⛽ ガソリンスタンド: ${gasStations.length}件`);
+        }
+        
+        if (selectedCategories.has('お祭り・花火大会')) {
+          const festivals = spots.filter(spot => spot.category === 'お祭り・花火大会');
+          displaySpots.push(...festivals);
+          console.log(`🎆 お祭り・花火大会: ${festivals.length}件`);
         }
       }
       

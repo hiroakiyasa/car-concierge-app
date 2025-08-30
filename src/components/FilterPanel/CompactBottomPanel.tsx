@@ -33,8 +33,8 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const [activeTab, setActiveTab] = useState<'parking' | 'nearby' | 'elevation'>('parking');
   const [minElevation, setMinElevation] = useState(0);
   const [sliderValue, setSliderValue] = useState(0); // 0-100のスライダー値
-  const [convenienceRadius, setConvenienceRadius] = useState(0); // コンビニ検索半径
-  const [hotspringRadius, setHotspringRadius] = useState(0); // 温泉検索半径
+  const [convenienceRadius, setConvenienceRadius] = useState(10); // コンビニ検索半径（最小10m）
+  const [hotspringRadius, setHotspringRadius] = useState(10); // 温泉検索半径（最小10m）
   const [convenienceSlider, setConvenienceSlider] = useState(0); // コンビニスライダー値 0-100
   const [hotspringSlider, setHotspringSlider] = useState(0); // 温泉スライダー値 0-100
   const [convenienceSelected, setConvenienceSelected] = useState(false); // コンビニ選択状態
@@ -83,9 +83,9 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
         nearbyFilterEnabled: false
       });
     } else if (activeTab === 'nearby') {
-      // 選択された施設の検索半径を設定
-      const effectiveConvenienceRadius = convenienceSelected ? convenienceRadius : 0;
-      const effectiveHotspringRadius = hotspringSelected ? hotspringRadius : 0;
+      // 選択された施設の検索半径を設定（最小10m）
+      const effectiveConvenienceRadius = convenienceSelected ? Math.max(10, convenienceRadius || 10) : 0;
+      const effectiveHotspringRadius = hotspringSelected ? Math.max(10, hotspringRadius || 10) : 0;
       const isNearbyActive = effectiveConvenienceRadius > 0 || effectiveHotspringRadius > 0;
       
       setSearchFilter({
@@ -114,14 +114,15 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   };
   
   // 周辺検索用のスライダー変換関数
-  // 左半分(0-50): 0-100m (10m単位)
+  // 左半分(0-50): 10-100m (10m単位)
   // 右半分(50-100): 100-1000m (100m単位)
   const sliderToRadius = (value: number): number => {
-    if (value === 0) return 0;
+    if (value === 0) return 10; // 最小値は10m
     
-    // 0-50%: 0-100m (10m単位)
+    // 0-50%: 10-100m (10m単位)
     if (value <= 50) {
-      return Math.round((value / 50) * 100 / 10) * 10;
+      const radius = 10 + Math.round((value / 50) * 90 / 10) * 10;
+      return Math.max(10, radius); // 最小値を10mに保証
     }
     // 50-100%: 100-1000m (100m単位)
     else {
@@ -131,11 +132,11 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   };
   
   const radiusToSlider = (radius: number): number => {
-    if (radius === 0) return 0;
+    if (radius <= 10) return 0; // 10m以下は0%
     
-    // 0-100m
+    // 10-100m
     if (radius <= 100) {
-      return (radius / 100) * 50;
+      return ((radius - 10) / 90) * 50;
     }
     // 100-1000m
     else {
@@ -363,7 +364,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                     disabled={!convenienceSelected}
                   />
                   <Text style={[styles.radiusValue, !convenienceSelected && styles.radiusValueDisabled]}>
-                    {convenienceRadius > 0 ? `${convenienceRadius}m` : '0m'}
+                    {convenienceRadius >= 10 ? `${convenienceRadius}m` : '10m'}
                   </Text>
                 </View>
               </View>
@@ -401,7 +402,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                     disabled={!hotspringSelected}
                   />
                   <Text style={[styles.radiusValue, !hotspringSelected && styles.radiusValueDisabled]}>
-                    {hotspringRadius > 0 ? `${hotspringRadius}m` : '0m'}
+                    {hotspringRadius >= 10 ? `${hotspringRadius}m` : '10m'}
                   </Text>
                 </View>
               </View>

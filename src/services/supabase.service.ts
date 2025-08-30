@@ -125,8 +125,9 @@ export class SupabaseService {
       
       // 距離の分布を確認
       const convenienceDistances = results
-        .filter(p => p.nearestConvenienceStore?.distance)
-        .map(p => p.nearestConvenienceStore!.distance)
+        .filter(p => p.nearestConvenienceStore && 
+                 ((p.nearestConvenienceStore as any).distance_m || p.nearestConvenienceStore.distance))
+        .map(p => (p.nearestConvenienceStore as any).distance_m || p.nearestConvenienceStore!.distance)
         .sort((a, b) => a - b);
         
       if (convenienceDistances.length > 0) {

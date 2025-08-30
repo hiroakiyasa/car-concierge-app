@@ -52,8 +52,9 @@ export interface VehicleDimensions {
 
 export interface NearbyFacility {
   id: string;
-  name: string;
-  distance: number;
+  name?: string;
+  distance?: number;
+  distance_m?: number; // データベースのフィールド名
 }
 
 export interface CoinParking extends Spot {
