@@ -92,18 +92,18 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
     return (elevation / 100 * 0.6).toFixed(1);
   };
   
-  // 対数スケール変換関数
+  // 対数スケール変換関数（低標高域により細かい粒度、高標高域により広い粒度）
   const sliderToElevation = (value: number): number => {
     // 0-100のスライダー値を0-2000mの対数スケールに変換
     if (value === 0) return 0;
     if (value === 100) return 2000;
     
-    // 対数補間を使用
-    // log(1) = 0, log(2001) ≈ 3.301
-    const minLog = Math.log10(1);
-    const maxLog = Math.log10(2001);
-    const logValue = minLog + (maxLog - minLog) * (value / 100);
-    const elevation = Math.pow(10, logValue) - 1;
+    // より強い対数カーブを使用（べき乗を調整）
+    // 低標高域: より細かい粒度
+    // 高標高域: より広い粒度
+    const power = 2.5; // べき乗を大きくすることで、高標高域の粒度を広げる
+    const normalizedValue = value / 100;
+    const elevation = 2000 * Math.pow(normalizedValue, power);
     
     return Math.round(elevation / 10) * 10; // 10m単位に丸める
   };
@@ -113,10 +113,9 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
     if (elevation === 0) return 0;
     if (elevation >= 2000) return 100;
     
-    const minLog = Math.log10(1);
-    const maxLog = Math.log10(2001);
-    const logElevation = Math.log10(elevation + 1);
-    const value = ((logElevation - minLog) / (maxLog - minLog)) * 100;
+    const power = 2.5;
+    const normalizedElevation = elevation / 2000;
+    const value = 100 * Math.pow(normalizedElevation, 1 / power);
     
     return Math.max(0, Math.min(100, value));
   };
@@ -254,8 +253,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                 <View style={styles.scaleLabels}>
                   <Text style={[styles.scaleLabel, { left: getLabelPosition(0) }]}>0</Text>
                   <Text style={[styles.scaleLabel, styles.tsunamiLabel, { left: getLabelPosition(30) }]}>
-                    30m{'\n'}
-                    <Text style={styles.tsunamiText}>(津波最大)</Text>
+                    30m(津波最大)
                   </Text>
                   <Text style={[styles.scaleLabel, { left: getLabelPosition(100) }]}>100</Text>
                   <Text style={[styles.scaleLabel, { left: getLabelPosition(500) }]}>500</Text>
@@ -463,16 +461,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   tsunamiLabel: {
-    fontSize: 8,
-    color: '#FF6B6B',
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 10,
-  },
-  tsunamiText: {
     fontSize: 7,
     color: '#FF6B6B',
-    fontWeight: '400',
+    fontWeight: '500',
+    textAlign: 'center',
   },
   elevationInfo: {
     flexDirection: 'row',
