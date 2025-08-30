@@ -396,4 +396,113 @@ export class SupabaseService {
   static unsubscribe(subscription: any) {
     supabase.removeChannel(subscription);
   }
+  
+  // Fetch convenience store details by ID
+  static async fetchConvenienceStoreById(id: string): Promise<ConvenienceStore | null> {
+    if (!id) return null;
+    
+    console.log(`🏪 コンビニ詳細取得: ID=${id}`);
+    
+    const { data, error } = await supabase
+      .from('convenience_stores')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching convenience store:', error);
+      return null;
+    }
+    
+    if (data) {
+      return {
+        ...data,
+        idString: data.id,
+        category: 'コンビニ',
+        brand: data.brand || data.name,
+        operatingHours: data.Hours || data.operating_hours || data.operatingHours,
+      } as ConvenienceStore;
+    }
+    
+    return null;
+  }
+  
+  // Fetch hot spring details by ID
+  static async fetchHotSpringById(id: string): Promise<HotSpring | null> {
+    if (!id) return null;
+    
+    console.log(`♨️ 温泉詳細取得: ID=${id}`);
+    
+    const { data, error } = await supabase
+      .from('hot_springs')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching hot spring:', error);
+      return null;
+    }
+    
+    if (data) {
+      return {
+        ...data,
+        category: '温泉',
+        operatingHours: data.Hours || data.operating_hours || data.operatingHours,
+      } as HotSpring;
+    }
+    
+    return null;
+  }
+  
+  // Batch fetch facilities by IDs
+  static async fetchFacilitiesByIds(
+    convenienceIds: string[] = [],
+    hotspringIds: string[] = []
+  ): Promise<{ conveniences: ConvenienceStore[], hotsprings: HotSpring[] }> {
+    const results = {
+      conveniences: [] as ConvenienceStore[],
+      hotsprings: [] as HotSpring[]
+    };
+    
+    // Fetch convenience stores
+    if (convenienceIds.length > 0) {
+      const { data, error } = await supabase
+        .from('convenience_stores')
+        .select('*')
+        .in('id', convenienceIds);
+      
+      if (!error && data) {
+        results.conveniences = data.map(store => ({
+          ...store,
+          idString: store.id,
+          category: 'コンビニ',
+          brand: store.brand || store.name,
+          operatingHours: store.Hours || store.operating_hours || store.operatingHours,
+        })) as ConvenienceStore[];
+        
+        console.log(`🏪 ${results.conveniences.length}件のコンビニ詳細を取得`);
+      }
+    }
+    
+    // Fetch hot springs
+    if (hotspringIds.length > 0) {
+      const { data, error } = await supabase
+        .from('hot_springs')
+        .select('*')
+        .in('id', hotspringIds);
+      
+      if (!error && data) {
+        results.hotsprings = data.map(spring => ({
+          ...spring,
+          category: '温泉',
+          operatingHours: spring.Hours || spring.operating_hours || spring.operatingHours,
+        })) as HotSpring[];
+        
+        console.log(`♨️ ${results.hotsprings.length}件の温泉詳細を取得`);
+      }
+    }
+    
+    return results;
+  }
 }

@@ -16,6 +16,7 @@ import { useMainStore } from '@/stores/useMainStore';
 import { Colors } from '@/utils/constants';
 import { CoinParking } from '@/types';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
+import { SupabaseService } from '@/services/supabase.service';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.5; // 50% of screen height
@@ -29,36 +30,77 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   visible, 
   onClose 
 }) => {
+  // すべてのフックを最初に定義（条件分岐なし）
   const { selectedSpot, searchFilter } = useMainStore();
-  
-  // Hooks must be called before any conditional returns
-  React.useEffect(() => {
-    if (selectedSpot && selectedSpot.category === 'コインパーキング' && visible) {
-      const parkingSpot = selectedSpot as CoinParking;
-      console.log('🚗 SpotDetailBottomSheet - 駐車場データ:', {
-        name: parkingSpot.name,
-        hours: parkingSpot.hours,
-        Hours: (parkingSpot as any).Hours,
-        operating_hours: (parkingSpot as any).operating_hours,
-        operatingHours: parkingSpot.operatingHours,
-        rates: parkingSpot.rates,
-        type: parkingSpot.type,
-        capacity: parkingSpot.capacity,
-      });
-    }
-  }, [visible, selectedSpot]);
-  
-  if (!selectedSpot) {
-    return null;
-  }
-  
-  const isParking = selectedSpot.category === 'コインパーキング';
-  const parkingSpot = selectedSpot as CoinParking;
-  
-  // スクロールアニメーション用
+  const [facilityNames, setFacilityNames] = React.useState<{
+    convenience?: string;
+    hotspring?: string;
+  }>({});
   const scrollX = React.useRef(new Animated.Value(0)).current;
   const [nameWidth, setNameWidth] = React.useState(0);
   const [containerWidth, setContainerWidth] = React.useState(0);
+  
+  // 駐車場データのログと施設名の取得
+  React.useEffect(() => {
+    if (!selectedSpot || selectedSpot.category !== 'コインパーキング' || !visible) {
+      return;
+    }
+    
+    const parkingSpot = selectedSpot as CoinParking;
+    console.log('🚗 SpotDetailBottomSheet - 駐車場データ:', {
+      name: parkingSpot.name,
+      hours: parkingSpot.hours,
+      Hours: (parkingSpot as any).Hours,
+      operating_hours: (parkingSpot as any).operating_hours,
+      operatingHours: parkingSpot.operatingHours,
+      rates: parkingSpot.rates,
+      type: parkingSpot.type,
+      capacity: parkingSpot.capacity,
+    });
+    
+    // 施設名を取得
+    const fetchFacilityNames = async () => {
+      const names: { convenience?: string; hotspring?: string } = {};
+      
+      if (parkingSpot.nearestConvenienceStore) {
+        const convenienceId = parkingSpot.nearestConvenienceStore.id || 
+                              parkingSpot.nearestConvenienceStore.store_id ||
+                              (parkingSpot.nearestConvenienceStore as any).facility_id;
+        
+        if (convenienceId) {
+          console.log('🏪 コンビニID取得:', convenienceId);
+          const store = await SupabaseService.fetchConvenienceStoreById(convenienceId);
+          if (store) {
+            names.convenience = store.name || store.store_name || 'コンビニ';
+            console.log('🏪 コンビニ名取得成功:', names.convenience);
+          } else {
+            console.log('🏪 コンビニ情報取得失敗');
+          }
+        }
+      }
+      
+      if (parkingSpot.nearestHotspring) {
+        const hotspringId = parkingSpot.nearestHotspring.id || 
+                           parkingSpot.nearestHotspring.spring_id ||
+                           (parkingSpot.nearestHotspring as any).facility_id;
+        
+        if (hotspringId) {
+          console.log('♨️ 温泉ID取得:', hotspringId);
+          const spring = await SupabaseService.fetchHotSpringById(hotspringId);
+          if (spring) {
+            names.hotspring = spring.name || spring.spring_name || '温泉';
+            console.log('♨️ 温泉名取得成功:', names.hotspring);
+          } else {
+            console.log('♨️ 温泉情報取得失敗');
+          }
+        }
+      }
+      
+      setFacilityNames(names);
+    };
+    
+    fetchFacilityNames();
+  }, [visible, selectedSpot]);
   
   // 名前のスクロールアニメーション
   React.useEffect(() => {
@@ -84,30 +126,14 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     }
   }, [nameWidth, containerWidth, scrollX]);
   
-  // 施設名を取得する関数
-  const getFacilityName = (facility: any, type: 'convenience' | 'hotspring'): string => {
-    if (!facility) return type === 'convenience' ? 'コンビニ' : '温泉';
-    
-    // 各種フィールドをチェック
-    if (facility.name) return facility.name;
-    if (facility.store_name) return facility.store_name;
-    if (facility.spring_name) return facility.spring_name;
-    if (facility.facility_name) return facility.facility_name;
-    
-    // IDから推測（例: CVS_FM_023814 → ファミリーマート）
-    if (facility.id || facility.store_id || facility.spring_id) {
-      const id = facility.id || facility.store_id || facility.spring_id;
-      if (typeof id === 'string') {
-        if (id.includes('FM') || id.includes('FAMILY')) return 'ファミリーマート';
-        if (id.includes('7E') || id.includes('SEVEN')) return 'セブンイレブン';
-        if (id.includes('LS') || id.includes('LAWSON')) return 'ローソン';
-        if (id.includes('MS') || id.includes('MINISTOP')) return 'ミニストップ';
-        if (id.includes('DY') || id.includes('DAILY')) return 'デイリーヤマザキ';
-      }
-    }
-    
-    return type === 'convenience' ? 'コンビニ' : '温泉';
-  };
+  // 早期リターン（フックの後）
+  if (!selectedSpot) {
+    return null;
+  }
+  
+  const isParking = selectedSpot.category === 'コインパーキング';
+  const parkingSpot = selectedSpot as CoinParking;
+  
   
   const formatPrice = (): string => {
     if (!isParking) return '---';
@@ -438,43 +464,37 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               </View>
             </View>
             
-            {/* Nearby Facilities - Compact */}
+            {/* Nearby Facilities - Vertical Compact */}
             {(parkingSpot.nearestConvenienceStore || parkingSpot.nearestHotspring) && (
               <View style={styles.nearbySection}>
                 <View style={styles.nearbyHeader}>
-                  <Ionicons name="location-outline" size={16} color="#888" />
+                  <Ionicons name="location-outline" size={14} color="#666" />
                   <Text style={styles.nearbyTitle}>周辺施設</Text>
                 </View>
-                <View style={styles.nearbyContent}>
-                  {parkingSpot.nearestConvenienceStore && (
-                    <View style={styles.nearbyItem}>
-                      <Text style={styles.nearbyIcon}>🏪</Text>
-                      <View style={styles.nearbyInfo}>
-                        <Text style={styles.nearbyName}>
-                          {getFacilityName(parkingSpot.nearestConvenienceStore, 'convenience')}
-                        </Text>
-                        <Text style={styles.nearbyDistance}>
-                          {(parkingSpot.nearestConvenienceStore as any).distance_m || 
-                           parkingSpot.nearestConvenienceStore.distance || '---'}m
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                  {parkingSpot.nearestHotspring && (
-                    <View style={styles.nearbyItem}>
-                      <Text style={styles.nearbyIcon}>♨️</Text>
-                      <View style={styles.nearbyInfo}>
-                        <Text style={styles.nearbyName}>
-                          {getFacilityName(parkingSpot.nearestHotspring, 'hotspring')}
-                        </Text>
-                        <Text style={styles.nearbyDistance}>
-                          {(parkingSpot.nearestHotspring as any).distance_m || 
-                           parkingSpot.nearestHotspring.distance || '---'}m
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
+                {parkingSpot.nearestConvenienceStore && (
+                  <View style={styles.nearbyItemCompact}>
+                    <Text style={styles.nearbyIconCompact}>🏪</Text>
+                    <Text style={styles.nearbyNameCompact}>
+                      {facilityNames.convenience || 'コンビニ'}
+                    </Text>
+                    <Text style={styles.nearbyDistanceCompact}>
+                      {(parkingSpot.nearestConvenienceStore as any).distance_m || 
+                       parkingSpot.nearestConvenienceStore.distance || '---'}m
+                    </Text>
+                  </View>
+                )}
+                {parkingSpot.nearestHotspring && (
+                  <View style={styles.nearbyItemCompact}>
+                    <Text style={styles.nearbyIconCompact}>♨️</Text>
+                    <Text style={styles.nearbyNameCompact}>
+                      {facilityNames.hotspring || '温泉'}
+                    </Text>
+                    <Text style={styles.nearbyDistanceCompact}>
+                      {(parkingSpot.nearestHotspring as any).distance_m || 
+                       parkingSpot.nearestHotspring.distance || '---'}m
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
           </ScrollView>
@@ -665,51 +685,39 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
   },
   nearbySection: {
-    backgroundColor: '#FFF3E0',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 16,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
   },
   nearbyHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
+    gap: 4,
+    marginBottom: 6,
   },
   nearbyTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#888',
+    color: '#666',
   },
-  nearbyContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    gap: 12,
-  },
-  nearbyItem: {
+  nearbyItemCompact: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 4,
     gap: 8,
-    backgroundColor: '#FFF',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+  },
+  nearbyIconCompact: {
+    fontSize: 16,
+    width: 20,
+  },
+  nearbyNameCompact: {
     flex: 1,
-  },
-  nearbyIcon: {
-    fontSize: 20,
-  },
-  nearbyInfo: {
-    flex: 1,
-  },
-  nearbyName: {
     fontSize: 12,
     color: '#666',
-    marginBottom: 2,
   },
-  nearbyDistance: {
-    fontSize: 14,
+  nearbyDistanceCompact: {
+    fontSize: 13,
     fontWeight: '600',
     color: '#1A1A1A',
   },

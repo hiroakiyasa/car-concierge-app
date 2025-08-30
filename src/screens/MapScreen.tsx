@@ -37,6 +37,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const [bottomPanelHeight, setBottomPanelHeight] = useState(100);
   const [isPanelExpanded, setIsPanelExpanded] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
+  const [nearbyFacilities, setNearbyFacilities] = useState<Spot[]>([]);
   
   const {
     mapRegion,
@@ -499,9 +500,71 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
     });
   };
   
-  const handleMarkerPress = (spot: Spot) => {
+  const handleMarkerPress = async (spot: Spot) => {
     selectSpot(spot);
     setShowDetailSheet(true);
+    
+    // コインパーキングの場合、最寄りの施設を地図に表示
+    if (spot.category === 'コインパーキング') {
+      const parkingSpot = spot as CoinParking;
+      const facilities: Spot[] = [];
+      
+      console.log('🅿️ 駐車場タップ:', parkingSpot.name);
+      console.log('📍 最寄りコンビニ:', parkingSpot.nearestConvenienceStore);
+      console.log('♨️ 最寄り温泉:', parkingSpot.nearestHotspring);
+      
+      // 最寄りのコンビニを取得して地図に追加
+      if (parkingSpot.nearestConvenienceStore) {
+        const convenienceId = parkingSpot.nearestConvenienceStore.id || 
+                              parkingSpot.nearestConvenienceStore.store_id ||
+                              (parkingSpot.nearestConvenienceStore as any).facility_id;
+        
+        console.log('🏪 コンビニID:', convenienceId);
+        
+        if (convenienceId) {
+          try {
+            const store = await SupabaseService.fetchConvenienceStoreById(convenienceId);
+            if (store) {
+              console.log('✅ コンビニ取得成功:', store.name);
+              facilities.push(store);
+            } else {
+              console.log('❌ コンビニ情報なし');
+            }
+          } catch (error) {
+            console.error('コンビニ情報取得エラー:', error);
+          }
+        }
+      }
+      
+      // 最寄りの温泉を取得して地図に追加
+      if (parkingSpot.nearestHotspring) {
+        const hotspringId = parkingSpot.nearestHotspring.id || 
+                           parkingSpot.nearestHotspring.spring_id ||
+                           (parkingSpot.nearestHotspring as any).facility_id;
+        
+        console.log('♨️ 温泉ID:', hotspringId);
+        
+        if (hotspringId) {
+          try {
+            const spring = await SupabaseService.fetchHotSpringById(hotspringId);
+            if (spring) {
+              console.log('✅ 温泉取得成功:', spring.name);
+              facilities.push(spring);
+            } else {
+              console.log('❌ 温泉情報なし');
+            }
+          } catch (error) {
+            console.error('温泉情報取得エラー:', error);
+          }
+        }
+      }
+      
+      console.log('🗺️ 地図に追加する施設数:', facilities.length);
+      setNearbyFacilities(facilities);
+    } else {
+      // コインパーキング以外の場合は最寄り施設をクリア
+      setNearbyFacilities([]);
+    }
     
     // 選択したスポットを画面上部50%の中央に配置
     if (mapRef.current) {
@@ -537,8 +600,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   };
   
   const renderMarkers = () => {
-    // 上位20件の駐車場のみを表示
-    return searchResults.map((spot) => (
+    // 検索結果のマーカーを表示
+    const markers = searchResults.map((spot) => (
       <CustomMarker
         key={spot.id}
         spot={spot}
@@ -548,6 +611,24 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         isSelected={selectedSpot?.id === spot.id}
       />
     ));
+    
+    // 詳細表示時の最寄り施設を追加
+    if (nearbyFacilities.length > 0) {
+      console.log('🗺️ 最寄り施設をマーカーに追加:', nearbyFacilities.length, '件');
+      nearbyFacilities.forEach((facility) => {
+        console.log(`  - ${facility.category}: ${facility.name} (${facility.lat}, ${facility.lng})`);
+        markers.push(
+          <CustomMarker
+            key={`nearby-${facility.id}`}
+            spot={facility}
+            onPress={() => {}} // 最寄り施設はタップ無効
+            isSelected={false}
+          />
+        );
+      });
+    }
+    
+    return markers;
   };
   
   // アプリ起動時に現在地を取得して自動検索
@@ -631,9 +712,48 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         visible={showRankingModal}
         onClose={() => setShowRankingModal(false)}
         onSpotSelect={handleRankingSpotSelect}
-        onSpotDetail={(spot) => {
+        onSpotDetail={async (spot) => {
           console.log('🎯 詳細表示を開く:', spot.name);
           selectSpot(spot);
+          
+          // コインパーキングの最寄り施設を取得
+          const facilities: Spot[] = [];
+          
+          if (spot.nearestConvenienceStore) {
+            const convenienceId = spot.nearestConvenienceStore.id || 
+                                  spot.nearestConvenienceStore.store_id ||
+                                  (spot.nearestConvenienceStore as any).facility_id;
+            
+            if (convenienceId) {
+              try {
+                const store = await SupabaseService.fetchConvenienceStoreById(convenienceId);
+                if (store) {
+                  facilities.push(store);
+                }
+              } catch (error) {
+                console.error('コンビニ情報取得エラー:', error);
+              }
+            }
+          }
+          
+          if (spot.nearestHotspring) {
+            const hotspringId = spot.nearestHotspring.id || 
+                               spot.nearestHotspring.spring_id ||
+                               (spot.nearestHotspring as any).facility_id;
+            
+            if (hotspringId) {
+              try {
+                const spring = await SupabaseService.fetchHotSpringById(hotspringId);
+                if (spring) {
+                  facilities.push(spring);
+                }
+              } catch (error) {
+                console.error('温泉情報取得エラー:', error);
+              }
+            }
+          }
+          
+          setNearbyFacilities(facilities);
           
           // 選択したスポットを画面上部50%の中央に配置
           if (mapRef.current) {
@@ -659,6 +779,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         visible={showDetailSheet}
         onClose={() => {
           setShowDetailSheet(false);
+          // 最寄り施設を地図から削除
+          setNearbyFacilities([]);
           // 詳細を閉じた後、必要に応じてランキングを再表示
           if (shouldReopenRanking) {
             setTimeout(() => {
