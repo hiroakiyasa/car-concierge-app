@@ -192,13 +192,22 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
               
               if (convenienceLimit > 0) {
                 if (spot.nearestConvenienceStore) {
-                  const distance = spot.nearestConvenienceStore.distance;
+                  // distanceフィールドの存在を確認
+                  const distance = typeof spot.nearestConvenienceStore.distance === 'number' 
+                    ? spot.nearestConvenienceStore.distance 
+                    : (spot.nearestConvenienceStore as any).Distance || 999999;
+                  
                   matchConvenience = distance <= convenienceLimit;
                   
                   // 最初の5件をデバッグ
                   if (index < 5) {
-                    console.log(`🏪 駐車場[${index}] ${spot.name}: コンビニ距離=${distance}m, 制限=${convenienceLimit}m, マッチ=${matchConvenience}`);
-                    if (spot.nearestConvenienceStore.distance <= 30) {
+                    console.log(`🏪 駐車場[${index}] ${spot.name}:`, {
+                      データ: spot.nearestConvenienceStore,
+                      距離: distance,
+                      制限: convenienceLimit,
+                      マッチ: matchConvenience
+                    });
+                    if (distance <= 800) {
                       debugCount++;
                     }
                   }
@@ -212,10 +221,18 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
               
               if (hotspringLimit > 0) {
                 if (spot.nearestHotspring) {
-                  const distance = spot.nearestHotspring.distance;
+                  const distance = typeof spot.nearestHotspring.distance === 'number'
+                    ? spot.nearestHotspring.distance
+                    : (spot.nearestHotspring as any).Distance || 999999;
+                    
                   matchHotspring = distance <= hotspringLimit;
                   if (index < 5) {
-                    console.log(`♨️ 駐車場[${index}] ${spot.name}: 温泉距離=${distance}m, 制限=${hotspringLimit}m, マッチ=${matchHotspring}`);
+                    console.log(`♨️ 駐車場[${index}] ${spot.name}:`, {
+                      データ: spot.nearestHotspring,
+                      距離: distance,
+                      制限: hotspringLimit,
+                      マッチ: matchHotspring
+                    });
                   }
                 } else {
                   matchHotspring = false;
@@ -233,7 +250,16 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
             });
             
             if (debugCount > 0) {
-              console.log(`⚠️ 30m以内にコンビニがある駐車場が${debugCount}件見つかりましたが、フィルタリングで除外されています`);
+              console.log(`⚠️ 800m以内にコンビニがある駐車場が${debugCount}件見つかりました`);
+            }
+            
+            // 全体の統計情報を表示
+            const totalWithConvenience = parkingSpots.filter(s => s.nearestConvenienceStore).length;
+            const totalWithHotspring = parkingSpots.filter(s => s.nearestHotspring).length;
+            console.log(`📊 全駐車場統計: コンビニデータ有り=${totalWithConvenience}件, 温泉データ有り=${totalWithHotspring}件`);
+            
+            if (totalWithConvenience === 0 && convenienceLimit > 0) {
+              console.error('❌ エラー: コンビニデータが1件も見つかりません。データベースの問題の可能性があります。');
             }
             
             console.log(`🎯 周辺検索後: ${parkingSpots.length}件の駐車場`);

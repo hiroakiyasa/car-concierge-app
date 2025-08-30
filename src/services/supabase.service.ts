@@ -103,10 +103,40 @@ export class SupabaseService {
     
     console.log(`🔎 Supabaseから${results.length}件の駐車場を取得`);
     
-    // 近隣施設データの確認（デバッグ用）
+    // 近隣施設データの詳細確認
     const withConvenience = results.filter(p => p.nearestConvenienceStore).length;
     const withHotspring = results.filter(p => p.nearestHotspring).length;
     console.log(`📊 近隣施設データ: コンビニ付き ${withConvenience}件, 温泉付き ${withHotspring}件`);
+    
+    // さらに詳細なデバッグ
+    if (results.length > 0) {
+      const sample = results[0];
+      console.log('🔍 サンプルデータ構造:', {
+        name: sample.name,
+        hasNearestConvenience: !!sample.nearestConvenienceStore,
+        nearestConvenience: sample.nearestConvenienceStore,
+        hasNearestHotspring: !!sample.nearestHotspring,
+        nearestHotspring: sample.nearestHotspring,
+        rawData: {
+          nearest_convenience_store: (data && data[0]) ? data[0].nearest_convenience_store : null,
+          nearest_hotspring: (data && data[0]) ? data[0].nearest_hotspring : null
+        }
+      });
+      
+      // 距離の分布を確認
+      const convenienceDistances = results
+        .filter(p => p.nearestConvenienceStore?.distance)
+        .map(p => p.nearestConvenienceStore!.distance)
+        .sort((a, b) => a - b);
+        
+      if (convenienceDistances.length > 0) {
+        console.log(`📏 コンビニ距離分布: 最小=${convenienceDistances[0]}m, 中央値=${convenienceDistances[Math.floor(convenienceDistances.length/2)]}m, 最大=${convenienceDistances[convenienceDistances.length-1]}m`);
+        const within800m = convenienceDistances.filter(d => d <= 800).length;
+        console.log(`✅ 800m以内にコンビニがある駐車場: ${within800m}件`);
+      } else {
+        console.log('❌ コンビニ距離データが見つかりません');
+      }
+    }
     
     if (minElevation !== undefined && minElevation > 0) {
       console.log(`🏔️ 標高フィルター適用: ${minElevation}m以上の駐車場${results.length}件`);
