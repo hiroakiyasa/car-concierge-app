@@ -55,16 +55,46 @@ export class SupabaseService {
         }
       }
       
+      // 近隣施設データをパース
+      let nearestConvenienceStore = null;
+      if (spot.nearest_convenience_store) {
+        try {
+          nearestConvenienceStore = typeof spot.nearest_convenience_store === 'string' 
+            ? JSON.parse(spot.nearest_convenience_store) 
+            : spot.nearest_convenience_store;
+        } catch (error) {
+          console.log('Nearest convenience store JSON parse error:', error);
+        }
+      }
+      
+      let nearestHotspring = null;
+      if (spot.nearest_hotspring) {
+        try {
+          nearestHotspring = typeof spot.nearest_hotspring === 'string' 
+            ? JSON.parse(spot.nearest_hotspring) 
+            : spot.nearest_hotspring;
+        } catch (error) {
+          console.log('Nearest hotspring JSON parse error:', error);
+        }
+      }
+      
       return {
         ...spot,
         category: 'コインパーキング',
         rates: spot.rates || [],
         hours: hoursData,
         operatingHours: spot.operating_hours || spot.operatingHours,
+        nearestConvenienceStore,
+        nearestHotspring,
       };
     }) as CoinParking[];
     
     console.log(`🔎 Supabaseから${results.length}件の駐車場を取得`);
+    
+    // 近隣施設データの確認（デバッグ用）
+    const withConvenience = results.filter(p => p.nearestConvenienceStore).length;
+    const withHotspring = results.filter(p => p.nearestHotspring).length;
+    console.log(`📊 近隣施設データ: コンビニ付き ${withConvenience}件, 温泉付き ${withHotspring}件`);
     
     if (minElevation !== undefined && minElevation > 0) {
       console.log(`🏔️ 標高フィルター適用: ${minElevation}m以上の駐車場${results.length}件`);

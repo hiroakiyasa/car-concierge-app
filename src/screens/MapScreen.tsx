@@ -248,9 +248,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           top20ParkingSpots.forEach(parking => {
             if ((searchFilter.convenienceRadius || 0) > 0 && parking.nearestConvenienceStore) {
               convenienceIds.add(parking.nearestConvenienceStore.id);
+              console.log(`🏪 駐車場 ${parking.name} の最寄りコンビニ: ${parking.nearestConvenienceStore.name} (${parking.nearestConvenienceStore.distance}m)`);
             }
             if ((searchFilter.hotspringRadius || 0) > 0 && parking.nearestHotspring) {
               hotspringIds.add(parking.nearestHotspring.id);
+              console.log(`♨️ 駐車場 ${parking.name} の最寄り温泉: ${parking.nearestHotspring.name} (${parking.nearestHotspring.distance}m)`);
             }
           });
           
