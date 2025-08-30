@@ -560,6 +560,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingRight: 10,
+    paddingVertical: 4,
   },
   nearbyContent: {
     flex: 1,
@@ -579,20 +580,20 @@ const styles = StyleSheet.create({
   },
   scaleLabels: {
     position: 'absolute',
-    bottom: -35,
+    bottom: -28,
     left: 10,
     right: 10,
-    height: 30,
+    height: 25,
     flexDirection: 'row',
   },
   scaleLabel: {
     position: 'absolute',
-    fontSize: 14,
+    fontSize: 12,
     color: '#999',
     fontWeight: '600',
   },
   tsunamiLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#FF6B6B',
     fontWeight: '600',
     textAlign: 'center',
@@ -601,8 +602,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    marginTop: 28,
-    marginBottom: 4,
+    marginTop: 22,
+    marginBottom: 0,
   },
   elevationValue: {
     fontSize: 17,
