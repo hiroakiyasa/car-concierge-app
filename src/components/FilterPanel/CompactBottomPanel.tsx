@@ -120,12 +120,6 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
     return Math.max(0, Math.min(100, value));
   };
   
-  // ラベル位置を計算する関数
-  const getLabelPosition = (elevation: number): string => {
-    const position = elevationToSlider(elevation);
-    return `${position}%`;
-  };
-  
   // スライダー値が変更されたときに標高を更新
   const handleSliderChange = (value: number) => {
     setSliderValue(value);
@@ -251,13 +245,13 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                 />
                 {/* スケールラベル */}
                 <View style={styles.scaleLabels}>
-                  <Text style={[styles.scaleLabel, { left: getLabelPosition(0) }]}>0</Text>
-                  <Text style={[styles.scaleLabel, styles.tsunamiLabel, { left: getLabelPosition(30) }]}>
+                  <Text style={[styles.scaleLabel, { left: '0%' }]}>0</Text>
+                  <Text style={[styles.scaleLabel, styles.tsunamiLabel, { left: `${elevationToSlider(30) - 5}%` }]}>
                     30m(津波最大)
                   </Text>
-                  <Text style={[styles.scaleLabel, { left: getLabelPosition(500) }]}>500</Text>
-                  <Text style={[styles.scaleLabel, { left: getLabelPosition(1000) }]}>1000</Text>
-                  <Text style={[styles.scaleLabel, styles.maxLabel, { right: '15%' }]}>2000</Text>
+                  <Text style={[styles.scaleLabel, { left: `${elevationToSlider(500) - 2}%` }]}>500</Text>
+                  <Text style={[styles.scaleLabel, { left: `${elevationToSlider(1000) - 3}%` }]}>1000</Text>
+                  <Text style={[styles.scaleLabel, { right: '0%' }]}>2000</Text>
                 </View>
               </View>
               <View style={styles.elevationInfo}>
@@ -464,11 +458,6 @@ const styles = StyleSheet.create({
     color: '#FF6B6B',
     fontWeight: '600',
     textAlign: 'center',
-  },
-  maxLabel: {
-    fontSize: 14,
-    color: '#999',
-    fontWeight: '600',
   },
   elevationInfo: {
     flexDirection: 'row',
