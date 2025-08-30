@@ -251,7 +251,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                   </Text>
                   <Text style={[styles.scaleLabel, { left: `${elevationToSlider(500) - 2}%` }]}>500</Text>
                   <Text style={[styles.scaleLabel, { left: `${elevationToSlider(1000) - 3}%` }]}>1000</Text>
-                  <Text style={[styles.scaleLabel, { right: '0%' }]}>2000</Text>
+                  <Text style={[styles.scaleLabel, { right: '-5%' }]}>2000</Text>
                 </View>
               </View>
               <View style={styles.elevationInfo}>
