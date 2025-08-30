@@ -10,6 +10,7 @@ interface CustomMarkerProps {
   rank?: number | null;
   onPress?: () => void;
   calculatedFee?: number;
+  isSelected?: boolean;
 }
 
 const getMarkerColor = (category: string): string => {
@@ -34,8 +35,15 @@ const getMarkerIcon = (category: string): string => {
   }
 };
 
-export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress, calculatedFee }) => {
+export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress, calculatedFee, isSelected }) => {
   const [calloutVisible, setCalloutVisible] = React.useState(false);
+  
+  // 選択されたマーカーは自動的に吹き出しを表示
+  React.useEffect(() => {
+    if (isSelected) {
+      setCalloutVisible(true);
+    }
+  }, [isSelected]);
 
   // マーカータップ時の処理
   const handleMarkerPress = () => {
@@ -99,12 +107,20 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
   if (spot.category === 'コインパーキング' && rank && rank <= 20) {
     // 1位=ゴールド、2位=シルバー、3位=ブロンズ、その他=ブルー
     const getMarkerStyle = () => {
-      switch(rank) {
-        case 1: return styles.goldMarker;
-        case 2: return styles.silverMarker;
-        case 3: return styles.bronzeMarker;
-        default: return styles.parkingMarker;
+      const baseStyle = (() => {
+        switch(rank) {
+          case 1: return styles.goldMarker;
+          case 2: return styles.silverMarker;
+          case 3: return styles.bronzeMarker;
+          default: return styles.parkingMarker;
+        }
+      })();
+      
+      // 選択されている場合は強調表示
+      if (isSelected) {
+        return [baseStyle, styles.selectedMarker];
       }
+      return baseStyle;
     };
     
     // 料金をフォーマット
@@ -251,6 +267,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 6,
+  },
+  selectedMarker: {
+    transform: [{ scale: 1.3 }],
+    borderColor: '#FF0000',
+    borderWidth: 4,
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 10,
   },
   parkingMarkerText: {
     color: '#FFFFFF',

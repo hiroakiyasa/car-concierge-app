@@ -33,6 +33,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const [showDetailSheet, setShowDetailSheet] = useState(false);
   const [showRankingModal, setShowRankingModal] = useState(false);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [shouldReopenRanking, setShouldReopenRanking] = useState(false);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(100);
   const [isPanelExpanded, setIsPanelExpanded] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -277,15 +278,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   
   const handleRankingSpotSelect = (spot: CoinParking) => {
     selectSpot(spot);
-    setShowDetailSheet(true);
+    // 詳細表示はしない（マーカータップで表示）
+    setShowDetailSheet(false);
     
-    // 選択した駐車場にズーム
+    // 選択した駐車場を画面上部50%の中央に表示
     if (mapRef.current) {
+      // 画面の上部50%の中央に配置するため、少し下にオフセット
+      const offsetLatitude = spot.lat - 0.002; // 緯度を少し下げて上部中央に配置
+      
       mapRef.current.animateToRegion({
-        latitude: spot.lat,
+        latitude: offsetLatitude,
         longitude: spot.lng,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
+        latitudeDelta: 0.008,
+        longitudeDelta: 0.008,
       }, 500);
     }
   };
@@ -299,6 +304,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         rank={spot.rank}
         calculatedFee={(spot as any).calculatedFee}
         onPress={() => handleMarkerPress(spot)}
+        isSelected={selectedSpot?.id === spot.id}
       />
     ));
   };
@@ -380,15 +386,34 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         onSearch={(isExpanded) => handleSearch(isExpanded)}
       />
       
-      <SpotDetailBottomSheet 
-        visible={showDetailSheet}
-        onClose={() => setShowDetailSheet(false)}
-      />
-      
       <RankingListModal
         visible={showRankingModal}
         onClose={() => setShowRankingModal(false)}
         onSpotSelect={handleRankingSpotSelect}
+        onSpotDetail={(spot) => {
+          console.log('🎯 詳細表示を開く:', spot.name);
+          selectSpot(spot);
+          // ランキングモーダルを閉じてから詳細を表示
+          setShowRankingModal(false);
+          setShouldReopenRanking(true);
+          setTimeout(() => {
+            setShowDetailSheet(true);
+          }, 300); // モーダルが閉じるアニメーションを待つ
+        }}
+      />
+      
+      <SpotDetailBottomSheet 
+        visible={showDetailSheet}
+        onClose={() => {
+          setShowDetailSheet(false);
+          // 詳細を閉じた後、必要に応じてランキングを再表示
+          if (shouldReopenRanking) {
+            setTimeout(() => {
+              setShowRankingModal(true);
+              setShouldReopenRanking(false);
+            }, 300);
+          }
+        }}
       />
     </SafeAreaView>
   );

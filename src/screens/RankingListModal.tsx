@@ -11,28 +11,37 @@ import {
   PanResponder,
   Animated,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useMainStore } from '@/stores/useMainStore';
 import { Colors, Spacing, Typography } from '@/utils/constants';
 import { CoinParking } from '@/types';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
-const MODAL_HEIGHT = SCREEN_HEIGHT * 0.95;
+const MODAL_HEIGHT = SCREEN_HEIGHT * 0.5;
 
 interface RankingListModalProps {
   visible: boolean;
   onClose: () => void;
   onSpotSelect: (spot: CoinParking) => void;
+  onSpotDetail?: (spot: CoinParking) => void;
 }
 
 export const RankingListModal: React.FC<RankingListModalProps> = ({ 
   visible, 
   onClose,
-  onSpotSelect 
+  onSpotSelect,
+  onSpotDetail 
 }) => {
-  const { searchResults, searchFilter } = useMainStore();
+  const { searchResults, searchFilter, selectedSpot } = useMainStore();
   const translateY = React.useRef(new Animated.Value(0)).current;
+  const [lastSelectedId, setLastSelectedId] = React.useState<string | null>(null);
+  
+  // モーダルが開かれた時にリセット
+  React.useEffect(() => {
+    if (!visible) {
+      setLastSelectedId(null);
+    }
+  }, [visible]);
   
   // コインパーキングのみを抽出してランキング表示
   const parkingSpots = searchResults
@@ -94,10 +103,30 @@ export const RankingListModal: React.FC<RankingListModalProps> = ({
     
     return (
       <TouchableOpacity 
-        style={styles.listItem}
+        style={[
+          styles.listItem,
+          selectedSpot?.id === item.id && styles.selectedListItem
+        ]}
         onPress={() => {
-          onSpotSelect(item);
-          onClose();
+          console.log('🔍 タップ:', {
+            itemId: item.id,
+            selectedId: selectedSpot?.id,
+            lastSelectedId: lastSelectedId,
+            shouldShowDetail: selectedSpot?.id === item.id && lastSelectedId === item.id
+          });
+          
+          if (selectedSpot?.id === item.id && lastSelectedId === item.id) {
+            // 既に選択されていて、前回も同じ駐車場を選択していた場合は詳細を表示
+            console.log('📋 詳細表示を呼び出し');
+            if (onSpotDetail) {
+              onSpotDetail(item);
+            }
+          } else {
+            // 初回選択時または別の駐車場を選択時は地図上に表示
+            console.log('🗺️ 地図にセンタリング');
+            onSpotSelect(item);
+            setLastSelectedId(item.id);
+          }
         }}
         activeOpacity={0.7}
       >
@@ -105,7 +134,12 @@ export const RankingListModal: React.FC<RankingListModalProps> = ({
           <Text style={styles.rankText}>{rank}</Text>
         </View>
         
-        <Text style={styles.spotName} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.spotInfo}>
+          <Text style={styles.spotName} numberOfLines={1}>{item.name}</Text>
+          {selectedSpot?.id === item.id && lastSelectedId === item.id && (
+            <Text style={styles.tapForDetailText}>タップで詳細</Text>
+          )}
+        </View>
         
         <Text style={styles.priceText}>{formatPrice(item)}</Text>
       </TouchableOpacity>
@@ -123,9 +157,7 @@ export const RankingListModal: React.FC<RankingListModalProps> = ({
         style={styles.overlay} 
         activeOpacity={1} 
         onPress={onClose}
-      >
-        <BlurView intensity={20} style={StyleSheet.absoluteFillObject} />
-      </TouchableOpacity>
+      />
       
       <Animated.View 
         {...panResponder.panHandlers}
@@ -174,7 +206,7 @@ export const RankingListModal: React.FC<RankingListModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)', // 軽い半透明のみ、ぼかし無し
   },
   modalContainer: {
     position: 'absolute',
@@ -233,6 +265,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: Colors.white,
   },
+  selectedListItem: {
+    backgroundColor: '#E8F4FD',
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primary,
+  },
   rankBadge: {
     width: 28,
     height: 28,
@@ -258,12 +295,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
-  spotName: {
+  spotInfo: {
     flex: 1,
+    paddingRight: 8,
+  },
+  spotName: {
     fontSize: 13,
     fontWeight: '600',
     color: Colors.textPrimary,
-    paddingRight: 8,
+  },
+  tapForDetailText: {
+    fontSize: 10,
+    color: Colors.primary,
+    marginTop: 2,
   },
   priceText: {
     fontSize: 14,

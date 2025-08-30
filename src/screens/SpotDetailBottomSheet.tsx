@@ -7,6 +7,8 @@ import {
   Dimensions,
   Modal,
   ScrollView,
+  Linking,
+  Platform,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,7 +31,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
 }) => {
   const { selectedSpot, searchFilter } = useMainStore();
   
-  if (!selectedSpot || !visible) {
+  if (!selectedSpot) {
     return null;
   }
   
@@ -98,6 +100,33 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     }
     return '---';
   };
+  
+  const openGoogleSearch = () => {
+    const searchQuery = encodeURIComponent(selectedSpot.name);
+    const url = `https://www.google.com/search?q=${searchQuery}`;
+    Linking.openURL(url);
+  };
+  
+  const openGoogleMaps = () => {
+    const { lat, lng } = selectedSpot;
+    const label = encodeURIComponent(selectedSpot.name);
+    
+    const scheme = Platform.select({
+      ios: 'maps:0,0?q=',
+      android: 'geo:0,0?q='
+    });
+    const latLng = `${lat},${lng}`;
+    const url = Platform.select({
+      ios: `${scheme}${label}@${latLng}`,
+      android: `${scheme}${latLng}(${label})`
+    });
+    
+    Linking.openURL(url as string).catch(() => {
+      // Fallback to browser if Google Maps app is not installed
+      const browserUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      Linking.openURL(browserUrl);
+    });
+  };
 
   return (
     <Modal
@@ -138,9 +167,17 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               <Text style={styles.category}>{selectedSpot.category}</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color={Colors.textSecondary} />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity onPress={openGoogleSearch} style={styles.actionButton}>
+              <Ionicons name="search" size={20} color={Colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={openGoogleMaps} style={styles.actionButton}>
+              <Ionicons name="map" size={20} color={Colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={Colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
         </View>
         
         <ScrollView 
@@ -291,6 +328,16 @@ const styles = StyleSheet.create({
     fontSize: Typography.caption,
     color: Colors.textSecondary,
     marginTop: 2,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionButton: {
+    padding: 8,
+    backgroundColor: Colors.background,
+    borderRadius: 20,
   },
   closeButton: {
     padding: 8,
