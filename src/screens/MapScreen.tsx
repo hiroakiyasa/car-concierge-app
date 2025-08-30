@@ -154,6 +154,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       // 標高フィルターが有効な場合はminElevationを渡す
       const minElevation = searchFilter.elevationFilterEnabled ? searchFilter.minElevation : undefined;
       
+      if (searchFilter.elevationFilterEnabled) {
+        console.log(`🏔️ 標高フィルター有効: ${searchFilter.minElevation}m以上の駐車場のみ表示`);
+      }
+      
       const spots = await SupabaseService.fetchSpotsByCategories(
         searchRegion,
         selectedCategories,

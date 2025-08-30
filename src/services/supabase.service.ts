@@ -65,6 +65,10 @@ export class SupabaseService {
     }) as CoinParking[];
     
     console.log(`🔎 Supabaseから${results.length}件の駐車場を取得`);
+    
+    if (minElevation !== undefined && minElevation > 0) {
+      console.log(`🏔️ 標高フィルター適用: ${minElevation}m以上の駐車場${results.length}件`);
+    }
     return results;
   }
   
