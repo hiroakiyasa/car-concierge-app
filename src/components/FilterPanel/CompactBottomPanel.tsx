@@ -96,17 +96,35 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const sliderToElevation = (value: number): number => {
     // 0-100のスライダー値を0-2000mの対数スケールに変換
     if (value === 0) return 0;
-    // 対数スケール: 10^(value/50) * 20 - 20
-    // value=0 -> 0m, value=25 -> ~100m, value=50 -> ~400m, value=75 -> ~1000m, value=100 -> 2000m
-    const elevation = Math.pow(10, value / 33.33) * 20 - 20;
-    return Math.min(2000, Math.round(elevation / 10) * 10); // 10m単位に丸める
+    if (value === 100) return 2000;
+    
+    // 対数補間を使用
+    // log(1) = 0, log(2001) ≈ 3.301
+    const minLog = Math.log10(1);
+    const maxLog = Math.log10(2001);
+    const logValue = minLog + (maxLog - minLog) * (value / 100);
+    const elevation = Math.pow(10, logValue) - 1;
+    
+    return Math.round(elevation / 10) * 10; // 10m単位に丸める
   };
   
   const elevationToSlider = (elevation: number): number => {
     // 標高を0-100のスライダー値に変換
     if (elevation === 0) return 0;
-    const value = 33.33 * Math.log10((elevation + 20) / 20);
+    if (elevation >= 2000) return 100;
+    
+    const minLog = Math.log10(1);
+    const maxLog = Math.log10(2001);
+    const logElevation = Math.log10(elevation + 1);
+    const value = ((logElevation - minLog) / (maxLog - minLog)) * 100;
+    
     return Math.max(0, Math.min(100, value));
+  };
+  
+  // ラベル位置を計算する関数
+  const getLabelPosition = (elevation: number): string => {
+    const position = elevationToSlider(elevation);
+    return `${position}%`;
   };
   
   // スライダー値が変更されたときに標高を更新
@@ -234,11 +252,11 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                 />
                 {/* スケールラベル */}
                 <View style={styles.scaleLabels}>
-                  <Text style={[styles.scaleLabel, { left: '0%' }]}>0</Text>
-                  <Text style={[styles.scaleLabel, { left: '16%' }]}>100</Text>
-                  <Text style={[styles.scaleLabel, { left: '50%' }]}>500</Text>
-                  <Text style={[styles.scaleLabel, { left: '75%' }]}>1000</Text>
-                  <Text style={[styles.scaleLabel, { right: '0%' }]}>2000</Text>
+                  <Text style={[styles.scaleLabel, { left: getLabelPosition(0) }]}>0</Text>
+                  <Text style={[styles.scaleLabel, { left: getLabelPosition(100) }]}>100</Text>
+                  <Text style={[styles.scaleLabel, { left: getLabelPosition(500) }]}>500</Text>
+                  <Text style={[styles.scaleLabel, { left: getLabelPosition(1000) }]}>1000</Text>
+                  <Text style={[styles.scaleLabel, { left: getLabelPosition(2000) }]}>2000</Text>
                 </View>
               </View>
               <View style={styles.elevationInfo}>
