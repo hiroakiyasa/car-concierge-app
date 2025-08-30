@@ -3,7 +3,7 @@ import { Spot, CoinParking, HotSpring, ConvenienceStore, GasStation, Festival, R
 
 export class SupabaseService {
   // Fetch parking spots within a region
-  static async fetchParkingSpots(region: Region): Promise<CoinParking[]> {
+  static async fetchParkingSpots(region: Region, minElevation?: number): Promise<CoinParking[]> {
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
     
     // latitudeDelta と longitudeDelta は表示範囲全体の幅なので、半分にして中心から加減算
@@ -18,17 +18,26 @@ export class SupabaseService {
       東端経度: maxLng.toFixed(6),
       西端経度: minLng.toFixed(6),
       中心: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+      最低標高: minElevation ? `${minElevation}m` : '制限なし',
     });
     
-    // 最大300件まで取得
-    const { data, error } = await supabase
+    // クエリビルダーを作成
+    let query = supabase
       .from('parking_spots')
       .select('*')
       .gte('lat', minLat)
       .lte('lat', maxLat)
       .gte('lng', minLng)
-      .lte('lng', maxLng)
-      .limit(300);
+      .lte('lng', maxLng);
+    
+    // 標高フィルターが指定されている場合は追加
+    if (minElevation !== undefined && minElevation > 0) {
+      query = query.gte('elevation', minElevation);
+      console.log(`🏔️ 標高${minElevation}m以上でフィルタリング`);
+    }
+    
+    // 最大300件まで取得
+    const { data, error } = await query.limit(300);
     
     if (error) {
       console.error('Error fetching parking spots:', error);
@@ -245,12 +254,13 @@ export class SupabaseService {
   // Fetch all spots by category
   static async fetchSpotsByCategories(
     region: Region,
-    categories: Set<string>
+    categories: Set<string>,
+    minElevation?: number
   ): Promise<Spot[]> {
     const results: Spot[] = [];
     
     if (categories.has('コインパーキング')) {
-      const parkingSpots = await this.fetchParkingSpots(region);
+      const parkingSpots = await this.fetchParkingSpots(region, minElevation);
       results.push(...parkingSpots);
     }
     

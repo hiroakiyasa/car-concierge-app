@@ -151,29 +151,23 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       const selectedCategories = searchFilter.selectedCategories;
       console.log('🔍 選択されたカテゴリー:', Array.from(selectedCategories));
       
+      // 標高フィルターが有効な場合はminElevationを渡す
+      const minElevation = searchFilter.elevationFilterEnabled ? searchFilter.minElevation : undefined;
+      
       const spots = await SupabaseService.fetchSpotsByCategories(
         searchRegion,
-        selectedCategories
+        selectedCategories,
+        minElevation
       );
       
       // カテゴリー別に処理
       let displaySpots: Spot[] = [];
       
       if (selectedCategories.has('コインパーキング')) {
-        // 駐車場のみをフィルタリング
+        // 駐車場のみをフィルタリング（標高フィルタリングは既にSupabaseで実行済み）
         let parkingSpots = spots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
         
         console.log(`🅿️ 検索された駐車場: ${parkingSpots.length}件`);
-        
-        // 標高フィルターが有効な場合は標高でフィルタリング
-        if (searchFilter.elevationFilterEnabled && searchFilter.minElevation > 0) {
-          parkingSpots = parkingSpots.filter(spot => {
-            // 標高データがない場合は0として扱う
-            const elevation = spot.elevation || 0;
-            return elevation >= searchFilter.minElevation;
-          });
-          console.log(`🏔️ 標高${searchFilter.minElevation}m以上の駐車場: ${parkingSpots.length}件`);
-        }
         
         // 300件を超える場合は警告を表示
         if (parkingSpots.length >= 300) {

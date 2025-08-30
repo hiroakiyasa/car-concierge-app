@@ -202,8 +202,8 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                 maximumValue={2000}
                 value={minElevation}
                 onValueChange={setMinElevation}
-                minimumTrackTintColor={Colors.primary}
-                maximumTrackTintColor="#E0E0E0"
+                minimumTrackTintColor="#E0E0E0"
+                maximumTrackTintColor={Colors.primary}
                 thumbTintColor={Colors.primary}
                 step={50}
               />
