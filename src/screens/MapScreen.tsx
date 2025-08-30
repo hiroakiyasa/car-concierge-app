@@ -19,8 +19,11 @@ import { CustomMarker } from '@/components/Map/CustomMarker';
 import { CategoryButtons } from '@/components/Map/CategoryButtons';
 import { SimpleMapControls } from '@/components/Map/SimpleMapControls';
 import { CompactBottomPanel } from '@/components/FilterPanel/CompactBottomPanel';
+import { SpotDetailBottomSheet } from '@/screens/SpotDetailBottomSheet';
+import { RankingListModal } from '@/screens/RankingListModal';
 import { Colors } from '@/utils/constants';
 import { Region, Spot, CoinParking } from '@/types';
+import { Ionicons } from '@expo/vector-icons';
 
 interface MapScreenProps {
   navigation: any;
@@ -28,6 +31,8 @@ interface MapScreenProps {
 
 export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const mapRef = useRef<MapView>(null);
+  const [showDetailSheet, setShowDetailSheet] = useState(false);
+  const [showRankingModal, setShowRankingModal] = useState(false);
   const [isMapReady, setIsMapReady] = useState(false);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(100);
   const [isPanelExpanded, setIsPanelExpanded] = useState(false);
@@ -156,9 +161,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       
       if (selectedCategories.has('コインパーキング')) {
         // 駐車場のみをフィルタリング
-        const parkingSpots = spots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
+        let parkingSpots = spots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
         
         console.log(`🅿️ 検索された駐車場: ${parkingSpots.length}件`);
+        
+        // 標高フィルターが有効な場合は標高でフィルタリング
+        if (searchFilter.elevationFilterEnabled && searchFilter.minElevation > 0) {
+          parkingSpots = parkingSpots.filter(spot => {
+            // 標高データがない場合は0として扱う
+            const elevation = spot.elevation || 0;
+            return elevation >= searchFilter.minElevation;
+          });
+          console.log(`🏔️ 標高${searchFilter.minElevation}m以上の駐車場: ${parkingSpots.length}件`);
+        }
         
         // 300件を超える場合は警告を表示
         if (parkingSpots.length >= 300) {
@@ -260,7 +275,22 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   
   const handleMarkerPress = (spot: Spot) => {
     selectSpot(spot);
-    navigation.navigate('SpotDetail');
+    setShowDetailSheet(true);
+  };
+  
+  const handleRankingSpotSelect = (spot: CoinParking) => {
+    selectSpot(spot);
+    setShowDetailSheet(true);
+    
+    // 選択した駐車場にズーム
+    if (mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: spot.lat,
+        longitude: spot.lng,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      }, 500);
+    }
   };
   
   const renderMarkers = () => {
@@ -270,6 +300,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         key={spot.id}
         spot={spot}
         rank={spot.rank}
+        calculatedFee={(spot as any).calculatedFee}
         onPress={() => handleMarkerPress(spot)}
       />
     ));
@@ -314,6 +345,16 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           onLocationPress={handleLocationPress}
         />
         
+        {/* ランキングボタン */}
+        <TouchableOpacity
+          style={styles.rankingButton}
+          onPress={() => setShowRankingModal(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="trophy" size={24} color={Colors.white} />
+          <Text style={styles.rankingButtonText}>ランキング</Text>
+        </TouchableOpacity>
+        
         {searchResults.length > 0 && (
           <View style={styles.resultContainer}>
             <Text style={styles.resultText}>
@@ -336,6 +377,17 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           setIsPanelExpanded(isExpanded);
         }}
         onSearch={(isExpanded) => handleSearch(isExpanded)}
+      />
+      
+      <SpotDetailBottomSheet 
+        visible={showDetailSheet}
+        onClose={() => setShowDetailSheet(false)}
+      />
+      
+      <RankingListModal
+        visible={showRankingModal}
+        onClose={() => setShowRankingModal(false)}
+        onSpotSelect={handleRankingSpotSelect}
       />
     </SafeAreaView>
   );
@@ -377,5 +429,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  rankingButton: {
+    position: 'absolute',
+    bottom: 120,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.warning,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    gap: 6,
+  },
+  rankingButtonText: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

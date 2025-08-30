@@ -38,9 +38,11 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
   // デバッグ: 駐車場データの確認
   if (isParking) {
     console.log('🚗 駐車場データ:', parkingSpot);
-    console.log('🚗 hours フィールド:', parkingSpot.hours);
-    console.log('🚗 operatingHours フィールド:', parkingSpot.operatingHours);
-    console.log('🚗 is24h フィールド:', parkingSpot.is24h);
+    console.log('💰 calculatedFee:', parkingSpot.calculatedFee);
+    console.log('📊 rates:', parkingSpot.rates);
+    console.log('🏆 rank:', parkingSpot.rank);
+    console.log('⏰ parkingTimeFilterEnabled:', searchFilter.parkingTimeFilterEnabled);
+    console.log('⏱️ parkingDuration:', searchFilter.parkingDuration);
   }
   
   const formatDistance = (): string => {
@@ -50,30 +52,51 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
   };
   
   const formatPrice = (): string => {
-    if (!isParking || !parkingSpot.rates || parkingSpot.rates.length === 0) {
+    if (!isParking) {
       return '---';
     }
     
-    const rates = parkingSpot.rates;
-    const baseRates = rates.filter(r => r.type === 'base').sort((a, b) => a.minutes - b.minutes);
-    const maxRate = rates.find(r => r.type === 'max');
-    
-    let priceText = '';
-    baseRates.forEach((rate, index) => {
-      if (index > 0) priceText += '\n';
-      if (rate.price === 0) {
-        priceText += `最初の${rate.minutes}分 無料`;
-      } else {
-        priceText += `${rate.minutes}分 ¥${rate.price}`;
-      }
-    });
-    
-    if (maxRate) {
-      if (priceText) priceText += '\n';
-      priceText += `最大料金 (${Math.floor(maxRate.minutes / 60)}時間) ¥${maxRate.price}`;
+    // First check if there's a calculatedFee (from the ranking)
+    if (parkingSpot.calculatedFee !== undefined && parkingSpot.calculatedFee !== null && parkingSpot.calculatedFee > 0) {
+      const { parkingDuration } = searchFilter;
+      const duration = parkingDuration.formattedDuration;
+      return `${duration}の料金: ¥${parkingSpot.calculatedFee}`;
     }
     
-    return priceText || '料金情報なし';
+    // If no calculatedFee, try to calculate it now
+    if (searchFilter.parkingTimeFilterEnabled && parkingSpot.rates && parkingSpot.rates.length > 0) {
+      const fee = ParkingFeeCalculator.calculateFee(parkingSpot, searchFilter.parkingDuration);
+      if (fee > 0) {
+        const duration = searchFilter.parkingDuration.formattedDuration;
+        return `${duration}の料金: ¥${fee}`;
+      }
+    }
+    
+    // Fall back to displaying rate structure if available
+    if (parkingSpot.rates && parkingSpot.rates.length > 0) {
+      const rates = parkingSpot.rates;
+      const baseRates = rates.filter(r => r.type === 'base').sort((a, b) => a.minutes - b.minutes);
+      const maxRate = rates.find(r => r.type === 'max');
+      
+      let priceText = '';
+      baseRates.forEach((rate, index) => {
+        if (index > 0) priceText += '\n';
+        if (rate.price === 0) {
+          priceText += `最初の${rate.minutes}分 無料`;
+        } else {
+          priceText += `${rate.minutes}分 ¥${rate.price}`;
+        }
+      });
+      
+      if (maxRate) {
+        if (priceText) priceText += '\n';
+        priceText += `最大料金 (${Math.floor(maxRate.minutes / 60)}時間) ¥${maxRate.price}`;
+      }
+      
+      return priceText || '料金情報なし';
+    }
+    
+    return '料金情報なし';
   };
   
   const calculateParkingFee = (): string => {
