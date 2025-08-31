@@ -17,6 +17,7 @@ import { SearchService } from '@/services/search.service';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { CustomMarker } from '@/components/Map/CustomMarker';
 import { CategoryButtons } from '@/components/Map/CategoryButtons';
+import { MapScale } from '@/components/Map/MapScale';
 import { CompactBottomPanel } from '@/components/FilterPanel/CompactBottomPanel';
 import { SpotDetailBottomSheet } from '@/screens/SpotDetailBottomSheet';
 import { RankingListModal } from '@/screens/RankingListModal';
@@ -721,6 +722,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         </MapView>
         
         <CategoryButtons />
+        
+        {/* 縮尺バー */}
+        {isMapReady && mapRegion && (
+          <MapScale region={mapRegion} />
+        )}
         
         {/* 現在地ボタン */}
         <TouchableOpacity
