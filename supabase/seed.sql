@@ -1,15 +1,18 @@
 -- テストデータの投入スクリプト
 
 -- 駐車場のテストデータ
-INSERT INTO parking_spots (name, lat, lng, address, type, capacity, is_24h, rates, elevation, prefecture) VALUES
+INSERT INTO parking_spots (name, lat, lng, address, type, capacity, is_24h, hours, rates, elevation, prefecture) VALUES
 -- 東京駅周辺
 ('NTTル・パルク日本橋二丁目第1', 35.6834, 139.7752, '東京都中央区日本橋2-1-1', '平面', 20, false, 
+ '{"text": "7:00〜22:00", "is_24h": false}'::jsonb,
  '[{"id": "1", "type": "base", "minutes": 20, "price": 0}, {"id": "2", "type": "base", "minutes": 60, "price": 200}, {"id": "3", "type": "max", "minutes": 720, "price": 2000}]'::jsonb, 
  5, '東京都'),
 ('日本橋高島屋S.C. 東館駐車場', 35.6829, 139.7744, '東京都中央区日本橋2-5-1', '立体', 150, false,
+ '{"text": "10:00〜20:00", "is_24h": false}'::jsonb,
  '[{"id": "1", "type": "base", "minutes": 30, "price": 0}, {"id": "2", "type": "base", "minutes": 60, "price": 300}, {"id": "3", "type": "max", "minutes": 600, "price": 3000}]'::jsonb,
  10, '東京都'),
 ('FINEパーキング 八丁堀', 35.6751, 139.7711, '東京都中央区八丁堀3-1-1', '機械', 5, true,
+ '{"text": "24時間営業", "is_24h": true}'::jsonb,
  '[{"id": "1", "type": "base", "minutes": 15, "price": 100}, {"id": "2", "type": "max", "minutes": 1440, "price": 1200}]'::jsonb,
  3, '東京都'),
 ('オリックスパーキングスポット日本橋兜町', 35.6798, 139.7783, '東京都中央区日本橋兜町1-1', '平面', 10, false,

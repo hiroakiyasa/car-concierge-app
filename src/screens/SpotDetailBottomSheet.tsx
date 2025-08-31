@@ -183,20 +183,32 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     }
     
     console.log('🕐 営業時間デバッグ:', {
+      is_24h: (parkingSpot as any).is_24h,
       hours: parkingSpot.hours,
       Hours: (parkingSpot as any).Hours,
       operating_hours: (parkingSpot as any).operating_hours,
       operatingHours: parkingSpot.operatingHours,
     });
     
-    // 1. パース済みのhoursオブジェクトをチェック
+    // 1. is_24hフラグを最初にチェック（データベースの実際のフィールド）
+    if ((parkingSpot as any).is_24h === true) {
+      return '24時間営業';
+    }
+    
+    // 2. パース済みのhoursオブジェクトをチェック（Supabaseからの実際のJSONB構造）
     if (parkingSpot.hours && typeof parkingSpot.hours === 'object') {
       const hours = parkingSpot.hours;
       console.log('🕐 hoursオブジェクト内容:', hours);
       
-      if (hours.is_24h === true || hours.access_24h === true) {
-        return '24時間';
+      // Supabaseのseed.sqlで定義された構造: {"text": "営業時間", "is_24h": boolean}
+      if (hours.is_24h === true) {
+        return '24時間営業';
       }
+      if (hours.text && hours.text !== '') {
+        return hours.text;
+      }
+      
+      // その他の可能な構造もチェック
       if (hours.original_hours && hours.original_hours !== '') {
         return hours.original_hours;
       }
@@ -213,7 +225,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       }
     }
     
-    // 2. 生のHoursフィールドをチェック（JSON文字列の可能性）
+    // 3. 生のHoursフィールドをチェック（JSON文字列の可能性）
     const rawHours = (parkingSpot as any).Hours;
     if (rawHours) {
       console.log('🕐 rawHours:', rawHours, 'type:', typeof rawHours);
@@ -221,7 +233,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       if (typeof rawHours === 'string' && rawHours !== '{}' && rawHours !== 'null' && rawHours !== '') {
         // まず24時間営業かチェック
         if (rawHours.includes('24時間') || rawHours.includes('24h')) {
-          return '24時間';
+          return '24時間営業';
         }
         
         // JSON文字列の場合
@@ -230,8 +242,12 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
             const parsed = JSON.parse(rawHours);
             console.log('🕐 パース済みHours:', parsed);
             
-            if (parsed.is_24h === true || parsed.access_24h === true) {
-              return '24時間';
+            // Supabaseのseed.sqlで定義された構造
+            if (parsed.is_24h === true) {
+              return '24時間営業';
+            }
+            if (parsed.text && parsed.text !== '') {
+              return parsed.text;
             }
             if (parsed.original_hours && parsed.original_hours !== '') {
               return parsed.original_hours;
@@ -256,8 +272,11 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         }
       } else if (typeof rawHours === 'object' && rawHours !== null) {
         // オブジェクトの場合
-        if (rawHours.is_24h === true || rawHours.access_24h === true) {
-          return '24時間';
+        if (rawHours.is_24h === true) {
+          return '24時間営業';
+        }
+        if (rawHours.text && rawHours.text !== '') {
+          return rawHours.text;
         }
         if (rawHours.original_hours && rawHours.original_hours !== '') {
           return rawHours.original_hours;
@@ -268,23 +287,23 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       }
     }
     
-    // 3. operating_hoursフィールドをチェック
+    // 4. operating_hoursフィールドをチェック
     if ((parkingSpot as any).operating_hours && (parkingSpot as any).operating_hours !== '') {
       return (parkingSpot as any).operating_hours;
     }
     
-    // 4. operatingHoursフィールドをチェック
+    // 5. operatingHoursフィールドをチェック
     if (parkingSpot.operatingHours && parkingSpot.operatingHours !== '') {
       return parkingSpot.operatingHours;
     }
     
-    // 5. is_24hフラグをチェック
-    if ((parkingSpot as any).is_24h === true || (parkingSpot as any).is24h === true) {
-      return '24時間';
-    }
+    // 6. hoursがnullの場合の追加情報
+    console.log('🕐 営業時間が見つかりません - データベースにhoursフィールドが設定されていない可能性があります');
+    console.log('🕐 駐車場名:', parkingSpot.name);
+    console.log('🕐 利用可能なフィールド:', Object.keys(parkingSpot).filter(key => parkingSpot[key] !== null && parkingSpot[key] !== undefined));
     
-    console.log('🕐 営業時間が見つかりません');
-    return '情報なし';
+    // 7. データがない場合のより具体的なメッセージ
+    return 'データ未登録';
   };
   
   const openGoogleSearch = () => {
@@ -361,11 +380,6 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                     )}
                   </Animated.View>
                 </View>
-                {selectedSpot.rank && (
-                  <View style={styles.rankBadge}>
-                    <Text style={styles.rankText}>#{selectedSpot.rank}</Text>
-                  </View>
-                )}
               </View>
               {selectedSpot.address && (
                 <Text style={styles.address} numberOfLines={1}>
