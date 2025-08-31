@@ -11,13 +11,14 @@ interface CustomMarkerProps {
   onPress?: () => void;
   calculatedFee?: number;
   isSelected?: boolean;
+  isNearbyFacility?: boolean; // 最寄り施設フラグを追加
 }
 
 const getMarkerColor = (category: string): string => {
   switch (category) {
     case 'コインパーキング': return '#007AFF'; // iOSブルー
     case 'コンビニ': return '#FF9500'; // オレンジ
-    case '温泉': return '#FF3B30'; // 赤
+    case '温泉': return '#FFD700'; // 黄色（ゴールド）
     case 'ガソリンスタンド': return '#FF3B30'; // 赤
     case 'お祭り・花火大会': return '#AF52DE'; // 紫
     default: return '#8E8E93';
@@ -35,7 +36,7 @@ const getMarkerIcon = (category: string): string => {
   }
 };
 
-export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress, calculatedFee, isSelected }) => {
+export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress, calculatedFee, isSelected, isNearbyFacility }) => {
   const [calloutVisible, setCalloutVisible] = React.useState(false);
   
   // 選択されたマーカーは自動的に吹き出しを表示
@@ -91,7 +92,10 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
         tracksViewChanges={false}
         anchor={{ x: 0.5, y: 0.5 }}
       >
-        <View style={styles.logoMarker}>
+        <View style={[
+          styles.logoMarker,
+          isNearbyFacility && styles.nearbyFacilityLogoMarker // 最寄り施設の場合は青い枠を追加
+        ]}>
           <Image source={logo} style={styles.logoImage} resizeMode="contain" />
         </View>
         <Callout tooltip onPress={handleCalloutPress}>
@@ -195,7 +199,11 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
       tracksViewChanges={false}
       anchor={{ x: 0.5, y: 1 }}
     >
-      <View style={[styles.categoryMarker, { backgroundColor: getMarkerColor(spot.category) }]}>
+      <View style={[
+        styles.categoryMarker, 
+        { backgroundColor: getMarkerColor(spot.category) },
+        isNearbyFacility && styles.nearbyFacilityMarker // 最寄り施設の場合は目立つ枠を追加
+      ]}>
         <Text style={styles.categoryMarkerIcon}>{getMarkerIcon(spot.category)}</Text>
       </View>
       <Callout tooltip onPress={handleCalloutPress}>
@@ -298,6 +306,15 @@ const styles = StyleSheet.create({
   categoryMarkerIcon: {
     fontSize: 18,
   },
+  nearbyFacilityMarker: {
+    borderWidth: 4,
+    borderColor: '#007AFF', // 青色の太い枠
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 8,
+    transform: [{ scale: 1.1 }], // 少し大きく表示
+  },
   logoMarker: {
     width: 40,
     height: 40,
@@ -311,6 +328,18 @@ const styles = StyleSheet.create({
     elevation: 5,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  nearbyFacilityLogoMarker: {
+    borderWidth: 4,
+    borderColor: '#007AFF', // 青色の太い枠
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 8,
+    transform: [{ scale: 1.1 }], // 少し大きく表示
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   logoImage: {
     width: 32,
