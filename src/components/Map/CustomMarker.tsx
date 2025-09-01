@@ -1,6 +1,19 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
-import { Marker, Callout } from 'react-native-maps';
+import { View, Text, StyleSheet, Image, Platform } from 'react-native';
+
+// プラットフォームに応じてマップコンポーネントを条件付きインポート
+let Marker: any;
+let Callout: any;
+
+if (Platform.OS === 'web') {
+  const { WebMarker: WebMarkerComp, WebCallout: WebCalloutComp } = require('./WebMapView');
+  Marker = WebMarkerComp;
+  Callout = WebCalloutComp;
+} else {
+  const ReactNativeMaps = require('react-native-maps');
+  Marker = ReactNativeMaps.Marker;
+  Callout = ReactNativeMaps.Callout;
+}
 import { Spot, ConvenienceStore, GasStation, CoinParking } from '@/types';
 import { getConvenienceStoreLogo, getGasStationLogo } from '@/utils/brandLogos';
 import { Colors } from '@/utils/constants';

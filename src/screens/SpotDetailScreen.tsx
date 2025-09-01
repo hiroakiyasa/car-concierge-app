@@ -10,7 +10,25 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, PROVIDER_GOOGLE, PROVIDER_DEFAULT } from 'react-native-maps';
+// プラットフォームに応じてマップコンポーネントを条件付きインポート
+let MapView: any;
+let Marker: any;
+let PROVIDER_GOOGLE: any;
+let PROVIDER_DEFAULT: any;
+
+if (Platform.OS === 'web') {
+  const { WebMapView: WebMap, WebMarker: WebMarkerComp } = require('@/components/Map/WebMapView');
+  MapView = WebMap;
+  Marker = WebMarkerComp;
+  PROVIDER_GOOGLE = 'google';
+  PROVIDER_DEFAULT = 'default';
+} else {
+  const ReactNativeMaps = require('react-native-maps');
+  MapView = ReactNativeMaps.default;
+  Marker = ReactNativeMaps.Marker;
+  PROVIDER_GOOGLE = ReactNativeMaps.PROVIDER_GOOGLE;
+  PROVIDER_DEFAULT = ReactNativeMaps.PROVIDER_DEFAULT;
+}
 import { Ionicons } from '@expo/vector-icons';
 import { useMainStore } from '@/stores/useMainStore';
 import { Colors, Spacing, Typography } from '@/utils/constants';

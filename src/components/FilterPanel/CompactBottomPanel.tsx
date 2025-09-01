@@ -10,7 +10,7 @@ import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Typography } from '@/utils/constants';
 import { useMainStore } from '@/stores/useMainStore';
-import { ParkingTimeSelector } from './ParkingTimeSelector';
+import { ParkingTimeModal } from './ParkingTimeModal';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -418,18 +418,36 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
         </TouchableOpacity>
       </View>
       
-      <ParkingTimeSelector
-        duration={searchFilter.parkingDuration}
-        mode={timeSelectorMode}
-        onDurationChange={(duration) => {
+      <ParkingTimeModal
+        visible={showTimeSelector}
+        onClose={() => setShowTimeSelector(false)}
+        onConfirm={(startTime, endTime) => {
+          const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
           setSearchFilter({
             ...searchFilter,
-            parkingDuration: duration,
+            parkingDuration: {
+              startDate: startTime,
+              duration: duration,
+              get endDate() {
+                return new Date(this.startDate.getTime() + this.duration * 1000);
+              },
+              get durationInMinutes() {
+                return Math.round(this.duration / 60);
+              },
+              get formattedDuration() {
+                const h = Math.floor(this.duration / 3600);
+                const m = Math.floor((this.duration % 3600) / 60);
+                if (h > 0) {
+                  return `${h}時間${m > 0 ? `${m}分` : ''}`;
+                }
+                return `${m}分`;
+              },
+            },
             parkingTimeFilterEnabled: true
           });
         }}
-        visible={showTimeSelector}
-        onClose={() => setShowTimeSelector(false)}
+        initialStartTime={searchFilter.parkingDuration.startDate}
+        initialEndTime={searchFilter.parkingDuration.endDate}
       />
     </View>
   );

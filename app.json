@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "car-concierge-app",
+    "name": "車旅コンシェルジュ",
     "slug": "car-concierge-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.carconciege.app"
+      "bundleIdentifier": "com.carconciege.app",
+      "buildNumber": "6"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,11 +25,14 @@
       "package": "com.carconciege.app",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "output": "single"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -49,8 +53,13 @@
           ]
         }
       ],
-      "expo-video",
-      "react-native-video"
-    ]
+      "expo-video"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "faf23c02-6ed4-4585-bd02-6c6e5130890c"
+      }
+    },
+    "owner": "hiroakiyasa"
   }
 }

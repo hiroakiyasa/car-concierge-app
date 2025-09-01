@@ -8,7 +8,26 @@ import {
   Text,
   TouchableOpacity,
 } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, PROVIDER_DEFAULT, Marker } from 'react-native-maps';
+
+// プラットフォームに応じてマップコンポーネントを条件付きインポート
+let MapView: any;
+let PROVIDER_GOOGLE: any;
+let PROVIDER_DEFAULT: any;
+let Marker: any;
+
+if (Platform.OS === 'web') {
+  const { WebMapView: WebMap, WebMarker: WebMarkerComp } = require('@/components/Map/WebMapView');
+  MapView = WebMap;
+  Marker = WebMarkerComp;
+  PROVIDER_GOOGLE = 'google';
+  PROVIDER_DEFAULT = 'default';
+} else {
+  const ReactNativeMaps = require('react-native-maps');
+  MapView = ReactNativeMaps.default;
+  Marker = ReactNativeMaps.Marker;
+  PROVIDER_GOOGLE = ReactNativeMaps.PROVIDER_GOOGLE;
+  PROVIDER_DEFAULT = ReactNativeMaps.PROVIDER_DEFAULT;
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMainStore } from '@/stores/useMainStore';
 import { LocationService } from '@/services/location.service';
