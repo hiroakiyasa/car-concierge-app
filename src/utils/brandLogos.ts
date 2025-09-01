@@ -12,18 +12,18 @@ export const CONVENIENCE_STORE_LOGOS: { [key: string]: any } = {
 export const GAS_STATION_LOGOS: { [key: string]: any } = {
   'ENEOS': require('../../gasolin_logo/eneos.png'),
   'エネオス': require('../../gasolin_logo/eneos.png'),
-  'コスモ石油': require('../../gasolin_logo/コスモ石油.png'),
-  'アポロステーション': require('../../gasolin_logo/アポロステーション.png'),
-  '出光': require('../../gasolin_logo/アポロステーション.png'),
-  'シェル': require('../../gasolin_logo/アポロステーション.png'),
+  'コスモ石油': require('../../gasolin_logo/cosmo.png'),
+  'アポロステーション': require('../../gasolin_logo/apollo_station.png'),
+  '出光': require('../../gasolin_logo/apollo_station.png'),
+  'シェル': require('../../gasolin_logo/apollo_station.png'),
   'SOLATO': require('../../gasolin_logo/SOLATO.png'),
   'JA-SS': require('../../gasolin_logo/JA-SS.png'),
-  'ホクレン': require('../../gasolin_logo/ホクレン.png'),
-  '伊藤忠': require('../../gasolin_logo/伊藤忠.png'),
-  '丸紅エネルギー': require('../../gasolin_logo/丸紅エネルギー.png'),
-  '三菱商事エネルギー': require('../../gasolin_logo/三菱商事エネルギー.png'),
-  'ギグナス': require('../../gasolin_logo/ギグナス石油.png'),
-  '国際石油': require('../../gasolin_logo/国際石油.png'),
+  'ホクレン': require('../../gasolin_logo/hokuren.png'),
+  '伊藤忠': require('../../gasolin_logo/itochu.png'),
+  '丸紅エネルギー': require('../../gasolin_logo/marubeni.png'),
+  '三菱商事エネルギー': require('../../gasolin_logo/mitsubishi.png'),
+  'ギグナス': require('../../gasolin_logo/gygnus.png'),
+  '国際石油': require('../../gasolin_logo/kokusai.png'),
 };
 
 // ブランド名からロゴを取得するヘルパー関数
