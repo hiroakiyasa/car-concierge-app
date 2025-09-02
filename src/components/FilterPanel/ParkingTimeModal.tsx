@@ -39,16 +39,90 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   const hourScrollRef = useRef<ScrollView>(null);
   const minuteScrollRef = useRef<ScrollView>(null);
 
-  // 駐車時間オプション
+  // 駐車時間オプション（48時間まで対応）
+  // 1時間まで: 10分ごと
+  // 24時間まで: 30分単位
+  // 48時間まで: 1時間ごと
   const durations = [
+    // 1時間まで（10分ごと）
     { minutes: 10, label: '10分間' },
     { minutes: 20, label: '20分間' },
     { minutes: 30, label: '30分間' },
     { minutes: 40, label: '40分間' },
     { minutes: 50, label: '50分間' },
     { minutes: 60, label: '1時間' },
+    // 24時間まで（30分単位）
+    { minutes: 90, label: '1時間30分' },
     { minutes: 120, label: '2時間' },
+    { minutes: 150, label: '2時間30分' },
     { minutes: 180, label: '3時間' },
+    { minutes: 210, label: '3時間30分' },
+    { minutes: 240, label: '4時間' },
+    { minutes: 270, label: '4時間30分' },
+    { minutes: 300, label: '5時間' },
+    { minutes: 330, label: '5時間30分' },
+    { minutes: 360, label: '6時間' },
+    { minutes: 390, label: '6時間30分' },
+    { minutes: 420, label: '7時間' },
+    { minutes: 450, label: '7時間30分' },
+    { minutes: 480, label: '8時間' },
+    { minutes: 510, label: '8時間30分' },
+    { minutes: 540, label: '9時間' },
+    { minutes: 570, label: '9時間30分' },
+    { minutes: 600, label: '10時間' },
+    { minutes: 630, label: '10時間30分' },
+    { minutes: 660, label: '11時間' },
+    { minutes: 690, label: '11時間30分' },
+    { minutes: 720, label: '12時間' },
+    { minutes: 750, label: '12時間30分' },
+    { minutes: 780, label: '13時間' },
+    { minutes: 810, label: '13時間30分' },
+    { minutes: 840, label: '14時間' },
+    { minutes: 870, label: '14時間30分' },
+    { minutes: 900, label: '15時間' },
+    { minutes: 930, label: '15時間30分' },
+    { minutes: 960, label: '16時間' },
+    { minutes: 990, label: '16時間30分' },
+    { minutes: 1020, label: '17時間' },
+    { minutes: 1050, label: '17時間30分' },
+    { minutes: 1080, label: '18時間' },
+    { minutes: 1110, label: '18時間30分' },
+    { minutes: 1140, label: '19時間' },
+    { minutes: 1170, label: '19時間30分' },
+    { minutes: 1200, label: '20時間' },
+    { minutes: 1230, label: '20時間30分' },
+    { minutes: 1260, label: '21時間' },
+    { minutes: 1290, label: '21時間30分' },
+    { minutes: 1320, label: '22時間' },
+    { minutes: 1350, label: '22時間30分' },
+    { minutes: 1380, label: '23時間' },
+    { minutes: 1410, label: '23時間30分' },
+    { minutes: 1440, label: '24時間' },
+    // 48時間まで（1時間ごと）
+    { minutes: 1500, label: '25時間' },
+    { minutes: 1560, label: '26時間' },
+    { minutes: 1620, label: '27時間' },
+    { minutes: 1680, label: '28時間' },
+    { minutes: 1740, label: '29時間' },
+    { minutes: 1800, label: '30時間' },
+    { minutes: 1860, label: '31時間' },
+    { minutes: 1920, label: '32時間' },
+    { minutes: 1980, label: '33時間' },
+    { minutes: 2040, label: '34時間' },
+    { minutes: 2100, label: '35時間' },
+    { minutes: 2160, label: '36時間' },
+    { minutes: 2220, label: '37時間' },
+    { minutes: 2280, label: '38時間' },
+    { minutes: 2340, label: '39時間' },
+    { minutes: 2400, label: '40時間' },
+    { minutes: 2460, label: '41時間' },
+    { minutes: 2520, label: '42時間' },
+    { minutes: 2580, label: '43時間' },
+    { minutes: 2640, label: '44時間' },
+    { minutes: 2700, label: '45時間' },
+    { minutes: 2760, label: '46時間' },
+    { minutes: 2820, label: '47時間' },
+    { minutes: 2880, label: '48時間' },
   ];
 
   // 日付オプション（今日から7日間）
@@ -262,6 +336,10 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
               <Text style={styles.currentTimeButtonText}>現在時刻</Text>
             </TouchableOpacity>
           )}
+          
+          <TouchableOpacity onPress={handleConfirm} style={styles.confirmButton}>
+            <Text style={styles.confirmText}>完了</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Content */}

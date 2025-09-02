@@ -12,6 +12,7 @@ import { TestDataFetch } from '@/screens/TestDataFetch';
 import { DebugSupabase } from '@/screens/DebugSupabase';
 import { TestOperatingHours } from '@/screens/TestOperatingHours';
 import { TestNearbyData } from '@/screens/TestNearbyData';
+import TestParkingFeeAdvanced from '@/screens/TestParkingFeeAdvanced';
 
 const Stack = createStackNavigator();
 const queryClient = new QueryClient({
@@ -47,6 +48,7 @@ export default function App() {
             <Stack.Screen name="DebugSupabase" component={DebugSupabase} />
             <Stack.Screen name="TestHours" component={TestOperatingHours} />
             <Stack.Screen name="TestNearby" component={TestNearbyData} />
+            <Stack.Screen name="TestParkingFee" component={TestParkingFeeAdvanced} />
             <Stack.Screen 
               name="SpotDetail" 
               component={SpotDetailScreen}
