@@ -13,7 +13,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMainStore } from '@/stores/useMainStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { Colors } from '@/utils/constants';
+import { FavoriteButton } from '@/components/FavoriteButton';
+import { RatingDisplay } from '@/components/RatingDisplay';
+import { ReviewsService } from '@/services/reviews.service';
 import { CoinParking } from '@/types';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { SupabaseService } from '@/services/supabase.service';
@@ -32,10 +36,15 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
 }) => {
   // すべてのフックを最初に定義（条件分岐なし）
   const { selectedSpot, searchFilter } = useMainStore();
+  const { isAuthenticated } = useAuthStore();
   const [facilityNames, setFacilityNames] = React.useState<{
     convenience?: string;
     hotspring?: string;
   }>({});
+  const [reviewStats, setReviewStats] = React.useState<{
+    average_rating: number;
+    total_reviews: number;
+  }>({ average_rating: 0, total_reviews: 0 });
   const scrollX = React.useRef(new Animated.Value(0)).current;
   const [nameWidth, setNameWidth] = React.useState(0);
   const [containerWidth, setContainerWidth] = React.useState(0);
@@ -100,6 +109,18 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     };
     
     fetchFacilityNames();
+  }, [visible, selectedSpot]);
+  
+  // レビュー統計を取得
+  React.useEffect(() => {
+    if (!selectedSpot || !visible) return;
+    
+    const fetchReviewStats = async () => {
+      const stats = await ReviewsService.getSpotReviewStats(selectedSpot.id);
+      setReviewStats(stats);
+    };
+    
+    fetchReviewStats();
   }, [visible, selectedSpot]);
   
   // 名前のスクロールアニメーション
@@ -381,14 +402,29 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                   </Animated.View>
                 </View>
               </View>
-              {selectedSpot.address && (
-                <Text style={styles.address} numberOfLines={1}>
-                  {selectedSpot.address}
-                </Text>
-              )}
+              <View style={styles.addressRow}>
+                {selectedSpot.address && (
+                  <Text style={styles.address} numberOfLines={1}>
+                    {selectedSpot.address}
+                  </Text>
+                )}
+                {reviewStats.total_reviews > 0 && (
+                  <RatingDisplay
+                    rating={reviewStats.average_rating}
+                    totalReviews={reviewStats.total_reviews}
+                    size="small"
+                  />
+                )}
+              </View>
             </View>
           </View>
           <View style={styles.titleActions}>
+            <FavoriteButton
+              spotId={selectedSpot.id}
+              spotType={selectedSpot.category}
+              size={20}
+              style={styles.favoriteButton}
+            />
             <TouchableOpacity onPress={openGoogleSearch} style={styles.actionButton}>
               <Ionicons name="search" size={18} color="#666" />
             </TouchableOpacity>
@@ -595,14 +631,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFF',
   },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 2,
+  },
   address: {
     fontSize: 12,
     color: '#888',
-    marginTop: 2,
+    flex: 1,
   },
   titleActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 4,
+  },
+  favoriteButton: {
+    padding: 6,
   },
   actionButton: {
     width: 32,

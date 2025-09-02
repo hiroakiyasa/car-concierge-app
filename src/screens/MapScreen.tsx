@@ -38,6 +38,7 @@ import { CustomMarker } from '@/components/Map/CustomMarker';
 import { CategoryButtons } from '@/components/Map/CategoryButtons';
 import { MapScale } from '@/components/Map/MapScale';
 import { MenuButton } from '@/components/Map/MenuButton';
+import { MenuModal } from '@/components/MenuModal';
 import { CompactBottomPanel } from '@/components/FilterPanel/CompactBottomPanel';
 import { SpotDetailBottomSheet } from '@/screens/SpotDetailBottomSheet';
 import { RankingListModal } from '@/screens/RankingListModal';
@@ -53,6 +54,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const mapRef = useRef<MapView>(null);
   const [showDetailSheet, setShowDetailSheet] = useState(false);
   const [showRankingModal, setShowRankingModal] = useState(false);
+  const [showMenuModal, setShowMenuModal] = useState(false);
   const [isMapReady, setIsMapReady] = useState(false);
   const [shouldReopenRanking, setShouldReopenRanking] = useState(false);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(100);
@@ -750,13 +752,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         
         {/* メニューボタン */}
         <MenuButton 
-          onPress={() => {
-            Alert.alert(
-              'メニュー',
-              'ユーザー認証機能を実装中です',
-              [{ text: 'OK' }]
-            );
-          }}
+          onPress={() => setShowMenuModal(true)}
         />
         
         {/* 現在地ボタン */}
@@ -908,6 +904,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
             }, 300);
           }
         }}
+      />
+      
+      <MenuModal
+        visible={showMenuModal}
+        onClose={() => setShowMenuModal(false)}
+        navigation={navigation}
       />
     </SafeAreaView>
   );
