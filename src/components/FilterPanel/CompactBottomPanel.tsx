@@ -7,6 +7,7 @@ import {
   Dimensions,
   PanResponder,
   Animated,
+  ScrollView,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,8 +36,8 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const [activeTab, setActiveTab] = useState<'parking' | 'nearby' | 'elevation'>('parking');
   const [minElevation, setMinElevation] = useState(0);
   const [sliderValue, setSliderValue] = useState(0); // 0-100のスライダー値
-  const [convenienceRadius, setConvenienceRadius] = useState(10); // コンビニ検索半径（最小10m）
-  const [hotspringRadius, setHotspringRadius] = useState(10); // 温泉検索半径（最小10m）
+  const [convenienceRadius, setConvenienceRadius] = useState(0); // コンビニ検索半径
+  const [hotspringRadius, setHotspringRadius] = useState(0); // 温泉検索半径
   const [convenienceSlider, setConvenienceSlider] = useState(0); // コンビニスライダー値 0-100
   const [hotspringSlider, setHotspringSlider] = useState(0); // 温泉スライダー値 0-100
   const [convenienceSelected, setConvenienceSelected] = useState(false); // コンビニ選択状態
@@ -47,45 +48,80 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const [nearbyEnabled, setNearbyEnabled] = useState(false);
   const [elevationEnabled, setElevationEnabled] = useState(false);
   
-  // スワイプ用のAnimation値
-  const swipeAnimation = useRef(new Animated.Value(0)).current;
+  // スワイプ用のAnimation値（初期値を設定）
+  const translateX = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
   
   const { 
     searchFilter,
     setSearchFilter
   } = useMainStore();
   
-  // パンレスポンダー設定（左右スワイプでタブ切り替え）
+  // タブインデックスを取得
+  const getTabIndex = () => {
+    // 正しい順序: parking -> nearby -> elevation
+    const tabs = ['parking', 'nearby', 'elevation'];
+    return tabs.indexOf(activeTab);
+  };
+  
+  // パンレスポンダー設定（コンテンツ部分のスワイプ）
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // 横方向のスワイプのみ検知
-        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
+        return Math.abs(gestureState.dx) > 5;
       },
-      onPanResponderMove: Animated.event(
-        [null, { dx: swipeAnimation }],
-        { useNativeDriver: false }
-      ),
+      onPanResponderGrant: () => {
+        // スワイプ開始時の処理
+      },
+      onPanResponderMove: (_, gestureState) => {
+        // 現在のタブインデックス
+        const currentIndex = getTabIndex();
+        const offset = -currentIndex * SCREEN_WIDTH + gestureState.dx;
+        
+        // 循環スワイプのための制限を緩和
+        const maxOffset = SCREEN_WIDTH; // 右端から更に右にスワイプ可能
+        const minOffset = -3 * SCREEN_WIDTH; // 左端から更に左にスワイプ可能
+        
+        if (offset <= maxOffset && offset >= minOffset) {
+          translateX.setValue(offset);
+        }
+      },
       onPanResponderRelease: (_, gestureState) => {
+        // 正しいタブの順序: parking -> nearby -> elevation
         const tabs = ['parking', 'nearby', 'elevation'];
         const currentIndex = tabs.indexOf(activeTab);
+        const threshold = SCREEN_WIDTH / 4; // スワイプ判定の閾値
         
-        if (gestureState.dx < -50 && currentIndex < tabs.length - 1) {
-          // 左スワイプ（次のタブへ）
-          setActiveTab(tabs[currentIndex + 1] as 'parking' | 'nearby' | 'elevation');
-        } else if (gestureState.dx > 50 && currentIndex > 0) {
-          // 右スワイプ（前のタブへ）
-          setActiveTab(tabs[currentIndex - 1] as 'parking' | 'nearby' | 'elevation');
+        let newIndex = currentIndex;
+        
+        if (gestureState.dx > threshold) {
+          // 右スワイプ（前のタブへ - 循環）
+          newIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        } else if (gestureState.dx < -threshold) {
+          // 左スワイプ（次のタブへ - 循環）
+          newIndex = (currentIndex + 1) % tabs.length;
         }
         
-        // アニメーションをリセット
-        Animated.spring(swipeAnimation, {
-          toValue: 0,
-          useNativeDriver: false,
+        // 新しいタブに切り替え
+        setActiveTab(tabs[newIndex] as 'parking' | 'nearby' | 'elevation');
+        
+        // アニメーションでスナップ
+        Animated.spring(translateX, {
+          toValue: -newIndex * SCREEN_WIDTH,
+          useNativeDriver: true,
+          tension: 50,
+          friction: 8,
         }).start();
       },
     })
   ).current;
+  
+  // タブが変更されたときにコンテンツをスライド
+  useEffect(() => {
+    const index = getTabIndex();
+    // タブが変更されたときは即座に位置を更新
+    translateX.setValue(-index * SCREEN_WIDTH);
+  }, [activeTab]);
   
   // パネル高さを通知
   useEffect(() => {
@@ -124,8 +160,8 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
     
     // 周辺検索フィルター
     if (nearbyEnabled) {
-      const effectiveConvenienceRadius = convenienceSelected ? Math.max(10, convenienceRadius || 10) : 0;
-      const effectiveHotspringRadius = hotspringSelected ? Math.max(10, hotspringRadius || 10) : 0;
+      const effectiveConvenienceRadius = convenienceSelected ? convenienceRadius : 0;
+      const effectiveHotspringRadius = hotspringSelected ? hotspringRadius : 0;
       newFilter.nearbyFilterEnabled = effectiveConvenienceRadius > 0 || effectiveHotspringRadius > 0;
       newFilter.convenienceStoreRadius = effectiveConvenienceRadius;
       newFilter.hotSpringRadius = effectiveHotspringRadius;
@@ -151,35 +187,34 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
     return (elevation / 100 * 0.6).toFixed(1);
   };
   
-  // 周辺検索用のスライダー変換関数
-  // 左半分(0-50): 10-100m (10m単位)
-  // 右半分(50-100): 100-1000m (100m単位)
+  // 周辺検索用のスライダー変換関数（対数的スケール）
+  // 0-70%: 0-100m (より細かい粒度)
+  // 70-100%: 100-1000m
   const sliderToRadius = (value: number): number => {
-    if (value === 0) return 10; // 最小値は10m
+    if (value <= 0) return 0;
+    if (value >= 100) return 1000;
     
-    // 0-50%: 10-100m (10m単位)
-    if (value <= 50) {
-      const radius = 10 + Math.round((value / 50) * 90 / 10) * 10;
-      return Math.max(10, radius); // 最小値を10mに保証
+    // 0-70の範囲で0-100mをマッピング
+    if (value <= 70) {
+      return Math.round((value / 70) * 100);
     }
-    // 50-100%: 100-1000m (100m単位)
-    else {
-      const normalized = (value - 50) / 50;
-      return 100 + Math.round(normalized * 900 / 100) * 100;
-    }
+    
+    // 70-100の範囲で100-1000mをマッピング
+    const normalized = (value - 70) / 30;
+    return Math.round(100 + normalized * 900);
   };
   
   const radiusToSlider = (radius: number): number => {
-    if (radius <= 10) return 0; // 10m以下は0%
+    if (radius <= 0) return 0;
+    if (radius >= 1000) return 100;
     
-    // 10-100m
+    // 0-100mは0-70%にマッピング
     if (radius <= 100) {
-      return ((radius - 10) / 90) * 50;
+      return Math.round((radius / 100) * 70);
     }
-    // 100-1000m
-    else {
-      return 50 + ((radius - 100) / 900) * 50;
-    }
+    
+    // 100-1000mは70-100%にマッピング
+    return Math.round(70 + ((radius - 100) / 900) * 30);
   };
   
   const handleConvenienceSliderChange = (value: number) => {
@@ -227,21 +262,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   };
   
   return (
-    <Animated.View 
-      style={[
-        styles.container,
-        {
-          transform: [{
-            translateX: swipeAnimation.interpolate({
-              inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
-              outputRange: [-20, 0, 20],
-              extrapolate: 'clamp',
-            })
-          }]
-        }
-      ]}
-      {...panResponder.panHandlers}
-    >
+    <View style={styles.container}>
       
       {/* フィルタータブ */}
       <View style={styles.filterTabs}>
@@ -264,7 +285,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
             <Ionicons 
               name={parkingEnabled ? "checkbox" : "square-outline"} 
               size={18} 
-              color={parkingEnabled ? Colors.primary : '#999'} 
+              color={activeTab === 'parking' ? Colors.white : (parkingEnabled ? Colors.primary : '#999')} 
             />
           </TouchableOpacity>
         </TouchableOpacity>
@@ -288,7 +309,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
             <Ionicons 
               name={nearbyEnabled ? "checkbox" : "square-outline"} 
               size={18} 
-              color={nearbyEnabled ? Colors.primary : '#999'} 
+              color={activeTab === 'nearby' ? Colors.white : (nearbyEnabled ? Colors.primary : '#999')} 
             />
           </TouchableOpacity>
         </TouchableOpacity>
@@ -312,59 +333,182 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
             <Ionicons 
               name={elevationEnabled ? "checkbox" : "square-outline"} 
               size={18} 
-              color={elevationEnabled ? Colors.primary : '#999'} 
+              color={activeTab === 'elevation' ? Colors.white : (elevationEnabled ? Colors.primary : '#999')} 
             />
           </TouchableOpacity>
         </TouchableOpacity>
       </View>
       
-      {/* コンテンツ部分（タブによって切り替え） */}
-      <View style={styles.premiumTimeSection}>
-        {activeTab === 'parking' && (
-            <>
-              <TouchableOpacity 
-                style={styles.timeBlock}
-                onPress={() => handleTimeSelectorOpen('entry')}
-              >
-                <View style={styles.timeHeader}>
-                  <Ionicons name="log-in" size={20} color='#4CAF50' />
-                  <Text style={styles.timeLabel}>入庫</Text>
+      {/* コンテンツ部分（スワイプ可能） */}
+      <View style={styles.contentContainer} {...panResponder.panHandlers}>
+        <Animated.View 
+          style={[
+            styles.contentSlider,
+            {
+              transform: [{ translateX }]
+            }
+          ]}
+        >
+          {/* 駐車料金コンテンツ */}
+          <View style={[styles.premiumTimeSection, styles.contentPage]}>
+            <TouchableOpacity 
+              style={styles.timeBlock}
+              onPress={() => handleTimeSelectorOpen('entry')}
+            >
+              <View style={styles.timeHeader}>
+                <Ionicons name="log-in" size={20} color='#4CAF50' />
+                <Text style={styles.timeLabel}>入庫</Text>
+              </View>
+              <Text style={styles.bigTime}>{entryDateTime.time}</Text>
+              <Text style={styles.dateText}>
+                {entryDateTime.date} {entryDateTime.dayOfWeek}
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.durationBlock}
+              onPress={() => handleTimeSelectorOpen('duration')}
+            >
+              <Ionicons name="time" size={24} color={Colors.primary} />
+              <Text style={styles.durationValue}>
+                {searchFilter.parkingDuration.formattedDuration || '1時間'}
+              </Text>
+              <Text style={styles.durationLabel}>駐車時間</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.timeBlock}
+              onPress={() => handleTimeSelectorOpen('exit')}
+            >
+              <View style={styles.timeHeader}>
+                <Ionicons name="log-out" size={20} color='#F44336' />
+                <Text style={styles.timeLabel}>出庫</Text>
+              </View>
+              <Text style={styles.bigTime}>{exitDateTime.time}</Text>
+              <Text style={styles.dateText}>
+                {exitDateTime.date} {exitDateTime.dayOfWeek}
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.searchButtonPremium}
+              onPress={handleSearch}
+            >
+              <Ionicons name="search" size={24} color={Colors.white} />
+            </TouchableOpacity>
+          </View>
+          
+          {/* 周辺検索コンテンツ */}
+          <View style={[styles.nearbyContent, styles.contentPage]}>
+            <View style={styles.nearbyFacilities}>
+              {/* コンビニ */}
+              <View style={styles.facilityRow}>
+                <TouchableOpacity
+                  style={[styles.facilityButton, convenienceSelected && styles.facilityButtonActive]}
+                  onPress={() => {
+                    const newSelected = !convenienceSelected;
+                    setConvenienceSelected(newSelected);
+                    // 選択時にデフォルト100mを設定
+                    if (newSelected && convenienceRadius === 0) {
+                      setConvenienceRadius(100);
+                      setConvenienceSlider(radiusToSlider(100));
+                    }
+                  }}
+                >
+                  <Text style={styles.facilityIcon}>🏪</Text>
+                  <Text style={[styles.facilityName, convenienceSelected && styles.facilityNameActive]}>
+                    コンビニ
+                  </Text>
+                </TouchableOpacity>
+                <View style={styles.sliderSection}>
+                  <View style={styles.nearbySliderWrapper}>
+                    <Slider
+                      style={styles.nearbySlider}
+                      minimumValue={0}
+                      maximumValue={100}
+                      value={convenienceSlider}
+                      onValueChange={handleConvenienceSliderChange}
+                      minimumTrackTintColor={convenienceSelected ? Colors.primary : '#E0E0E0'}
+                      maximumTrackTintColor="#E0E0E0"
+                      thumbTintColor={convenienceSelected ? Colors.primary : '#999'}
+                      step={1}
+                      disabled={!convenienceSelected}
+                    />
+                    <View style={styles.sliderScaleLabels}>
+                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: 0 }]}>0</Text>
+                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: '35%' }]}>50m</Text>
+                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: '70%' }]}>100m</Text>
+                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', right: 0 }]}>1000m</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.radiusValue, !convenienceSelected && styles.radiusValueDisabled]}>
+                    {convenienceRadius}m
+                  </Text>
                 </View>
-                <Text style={styles.bigTime}>{entryDateTime.time}</Text>
-                <Text style={styles.dateText}>
-                  {entryDateTime.date} {entryDateTime.dayOfWeek}
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.searchButtonNearby}
+                  onPress={handleSearch}
+                >
+                  <Ionicons name="search" size={20} color={Colors.white} />
+                </TouchableOpacity>
+              </View>
               
-              <TouchableOpacity
-                style={styles.durationBlock}
-                onPress={() => handleTimeSelectorOpen('duration')}
-              >
-                <Ionicons name="time" size={24} color={Colors.primary} />
-                <Text style={styles.durationValue}>
-                  {searchFilter.parkingDuration.formattedDuration || '1時間'}
-                </Text>
-                <Text style={styles.durationLabel}>駐車時間</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.timeBlock}
-                onPress={() => handleTimeSelectorOpen('exit')}
-              >
-                <View style={styles.timeHeader}>
-                  <Ionicons name="log-out" size={20} color='#F44336' />
-                  <Text style={styles.timeLabel}>出庫</Text>
+              {/* 温泉 */}
+              <View style={styles.facilityRow}>
+                <TouchableOpacity
+                  style={[styles.facilityButton, hotspringSelected && styles.facilityButtonActive]}
+                  onPress={() => {
+                    const newSelected = !hotspringSelected;
+                    setHotspringSelected(newSelected);
+                    // 選択時にデフォルト500mを設定
+                    if (newSelected && hotspringRadius === 0) {
+                      setHotspringRadius(500);
+                      setHotspringSlider(radiusToSlider(500));
+                    }
+                  }}
+                >
+                  <Text style={styles.facilityIcon}>♨️</Text>
+                  <Text style={[styles.facilityName, hotspringSelected && styles.facilityNameActive]}>
+                    温泉
+                  </Text>
+                </TouchableOpacity>
+                <View style={styles.sliderSection}>
+                  <View style={styles.nearbySliderWrapper}>
+                    <Slider
+                      style={styles.nearbySlider}
+                      minimumValue={0}
+                      maximumValue={100}
+                      value={hotspringSlider}
+                      onValueChange={handleHotspringSliderChange}
+                      minimumTrackTintColor={hotspringSelected ? '#FF6B6B' : '#E0E0E0'}
+                      maximumTrackTintColor="#E0E0E0"
+                      thumbTintColor={hotspringSelected ? '#FF6B6B' : '#999'}
+                      step={1}
+                      disabled={!hotspringSelected}
+                    />
+                    <View style={styles.sliderScaleLabels}>
+                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: 0 }]}>0</Text>
+                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: '35%' }]}>50m</Text>
+                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: '70%' }]}>100m</Text>
+                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', right: 0 }]}>1000m</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.radiusValue, !hotspringSelected && styles.radiusValueDisabled]}>
+                    {hotspringRadius}m
+                  </Text>
                 </View>
-                <Text style={styles.bigTime}>{exitDateTime.time}</Text>
-                <Text style={styles.dateText}>
-                  {exitDateTime.date} {exitDateTime.dayOfWeek}
-                </Text>
-              </TouchableOpacity>
-            </>
-        )}
-        
-        {activeTab === 'elevation' && (
-          <View style={styles.elevationContent}>
+                <TouchableOpacity
+                  style={styles.searchButtonNearby}
+                  onPress={handleSearch}
+                >
+                  <Ionicons name="search" size={20} color={Colors.white} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+          
+          {/* 標高コンテンツ */}
+          <View style={[styles.elevationContent, styles.contentPage]}>
             <View style={styles.sliderContainer}>
               <View style={styles.sliderWrapper}>
                 <Slider
@@ -398,97 +542,15 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                 </Text>
               </View>
             </View>
+            
+            <TouchableOpacity
+              style={styles.searchButtonPremium}
+              onPress={handleSearch}
+            >
+              <Ionicons name="search" size={24} color={Colors.white} />
+            </TouchableOpacity>
           </View>
-        )}
-        
-        {activeTab === 'nearby' && (
-          <View style={styles.nearbyContent}>
-            <View style={styles.nearbyFacilities}>
-              {/* コンビニ */}
-              <View style={styles.facilityRow}>
-                <TouchableOpacity
-                  style={[styles.facilityButton, convenienceSelected && styles.facilityButtonActive]}
-                  onPress={() => {
-                    const newSelected = !convenienceSelected;
-                    setConvenienceSelected(newSelected);
-                    // 選択時にデフォルト30mを設定
-                    if (newSelected && convenienceRadius === 0) {
-                      setConvenienceRadius(30);
-                      setConvenienceSlider(radiusToSlider(30));
-                    }
-                  }}
-                >
-                  <Text style={styles.facilityIcon}>🏪</Text>
-                  <Text style={[styles.facilityName, convenienceSelected && styles.facilityNameActive]}>
-                    コンビニ
-                  </Text>
-                </TouchableOpacity>
-                <View style={styles.sliderSection}>
-                  <Slider
-                    style={styles.nearbySlider}
-                    minimumValue={0}
-                    maximumValue={100}
-                    value={convenienceSlider}
-                    onValueChange={handleConvenienceSliderChange}
-                    minimumTrackTintColor={convenienceSelected ? Colors.primary : '#E0E0E0'}
-                    maximumTrackTintColor="#E0E0E0"
-                    thumbTintColor={convenienceSelected ? Colors.primary : '#999'}
-                    step={1}
-                    disabled={!convenienceSelected}
-                  />
-                  <Text style={[styles.radiusValue, !convenienceSelected && styles.radiusValueDisabled]}>
-                    {convenienceRadius >= 10 ? `${convenienceRadius}m` : '10m'}
-                  </Text>
-                </View>
-              </View>
-              
-              {/* 温泉 */}
-              <View style={styles.facilityRow}>
-                <TouchableOpacity
-                  style={[styles.facilityButton, hotspringSelected && styles.facilityButtonActive]}
-                  onPress={() => {
-                    const newSelected = !hotspringSelected;
-                    setHotspringSelected(newSelected);
-                    // 選択時にデフォルト500mを設定
-                    if (newSelected && hotspringRadius === 0) {
-                      setHotspringRadius(500);
-                      setHotspringSlider(radiusToSlider(500));
-                    }
-                  }}
-                >
-                  <Text style={styles.facilityIcon}>♨️</Text>
-                  <Text style={[styles.facilityName, hotspringSelected && styles.facilityNameActive]}>
-                    温泉
-                  </Text>
-                </TouchableOpacity>
-                <View style={styles.sliderSection}>
-                  <Slider
-                    style={styles.nearbySlider}
-                    minimumValue={0}
-                    maximumValue={100}
-                    value={hotspringSlider}
-                    onValueChange={handleHotspringSliderChange}
-                    minimumTrackTintColor={hotspringSelected ? '#FF6B6B' : '#E0E0E0'}
-                    maximumTrackTintColor="#E0E0E0"
-                    thumbTintColor={hotspringSelected ? '#FF6B6B' : '#999'}
-                    step={1}
-                    disabled={!hotspringSelected}
-                  />
-                  <Text style={[styles.radiusValue, !hotspringSelected && styles.radiusValueDisabled]}>
-                    {hotspringRadius >= 10 ? `${hotspringRadius}m` : '10m'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-        
-        <TouchableOpacity
-          style={styles.searchButtonPremium}
-          onPress={handleSearch}
-        >
-          <Ionicons name="search" size={24} color={Colors.white} />
-        </TouchableOpacity>
+        </Animated.View>
       </View>
       
       <ParkingTimeModal
@@ -522,7 +584,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
         initialStartTime={searchFilter.parkingDuration.startDate}
         initialEndTime={searchFilter.parkingDuration.endDate}
       />
-    </Animated.View>
+    </View>
   );
 };
 
@@ -587,14 +649,25 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   
+  // コンテンツコンテナ
+  contentContainer: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  contentSlider: {
+    flexDirection: 'row',
+    width: SCREEN_WIDTH * 3, // 3つのタブ分の幅
+  },
+  contentPage: {
+    width: SCREEN_WIDTH,
+    paddingHorizontal: 12,
+    paddingTop: 4,
+  },
+  
   // 時間セクション
   premiumTimeSection: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingTop: 4, // 上の余白を削減（8→4）
-    paddingBottom: 0, // 下の余白を削除
     gap: 8,
   },
   timeBlock: {
@@ -663,12 +736,14 @@ const styles = StyleSheet.create({
   
   // 標高コンテンツ
   elevationContent: {
-    flex: 1,
-    paddingRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   sliderContainer: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start', // 上寄せにして全体バランスを調整
+    paddingTop: 8, // 上部に適度な余白
   },
   sliderWrapper: {
     position: 'relative',
@@ -681,42 +756,45 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 10,
     right: 10,
-    top: 38,
+    top: 40, // スライダーからの距離を最適化
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   scaleLabel: {
     position: 'absolute',
-    fontSize: 9,
-    color: '#999',
+    fontSize: 11, // フォントサイズを大きく（9→11）
+    color: '#666', // 色を少し濃く
+    fontWeight: '500',
   },
   tsunamiLabel: {
     color: '#FF6B6B',
     fontWeight: 'bold',
-    fontSize: 8,
+    fontSize: 10, // フォントサイズを大きく（8→10）
     backgroundColor: '#FFF',
     paddingHorizontal: 2,
   },
   elevationInfo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    marginTop: 20,
+    paddingHorizontal: 12,
+    marginTop: 25, // スライダーからの距離を下に調整
+    paddingBottom: 8, // 下部余白を追加
   },
   elevationValue: {
-    fontSize: 13,
+    fontSize: 16, // フォントサイズを大きく（13→16）
     fontWeight: 'bold',
-    color: '#333',
+    color: '#2C2C2C',
   },
   temperatureText: {
-    fontSize: 12,
+    fontSize: 15, // フォントサイズを大きく（12→15）
     color: '#007AFF',
+    fontWeight: '600',
   },
   
   // 周辺検索コンテンツ
   nearbyContent: {
     flex: 1,
-    paddingRight: 8,
+    justifyContent: 'center',
   },
   nearbyFacilities: {
     flex: 1,
@@ -731,11 +809,12 @@ const styles = StyleSheet.create({
   facilityButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 12, // より四角に近い形に
     backgroundColor: '#F5F5F5',
     gap: 4,
+    width: 90, // 幅を少し広げて文字が切れないように
   },
   facilityButtonActive: {
     backgroundColor: Colors.primary + '20',
@@ -746,7 +825,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   facilityName: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#666',
   },
@@ -757,20 +836,48 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
+    marginRight: -5, // スライダーを右に寄せる
+  },
+  nearbySliderWrapper: {
+    flex: 1,
+    position: 'relative',
   },
   nearbySlider: {
-    flex: 1,
+    width: '100%',
     height: 30,
   },
+  sliderScaleLabels: {
+    position: 'relative',
+    height: 15,
+    marginTop: -5,
+    paddingHorizontal: 10,
+  },
+  sliderScaleLabel: {
+    fontSize: 10,
+    color: '#999',
+  },
   radiusValue: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 'bold',
     color: '#333',
-    minWidth: 45,
-    textAlign: 'right',
+    minWidth: 40,
+    textAlign: 'center',
   },
   radiusValueDisabled: {
     color: '#999',
+  },
+  searchButtonNearby: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
   },
 });
