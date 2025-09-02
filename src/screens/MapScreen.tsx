@@ -37,6 +37,7 @@ import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { CustomMarker } from '@/components/Map/CustomMarker';
 import { CategoryButtons } from '@/components/Map/CategoryButtons';
 import { MapScale } from '@/components/Map/MapScale';
+import { MenuButton } from '@/components/Map/MenuButton';
 import { CompactBottomPanel } from '@/components/FilterPanel/CompactBottomPanel';
 import { SpotDetailBottomSheet } from '@/screens/SpotDetailBottomSheet';
 import { RankingListModal } from '@/screens/RankingListModal';
@@ -746,6 +747,17 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         {isMapReady && mapRegion && (
           <MapScale region={mapRegion} />
         )}
+        
+        {/* メニューボタン */}
+        <MenuButton 
+          onPress={() => {
+            Alert.alert(
+              'メニュー',
+              'ユーザー認証機能を実装中です',
+              [{ text: 'OK' }]
+            );
+          }}
+        />
         
         {/* 現在地ボタン */}
         <TouchableOpacity

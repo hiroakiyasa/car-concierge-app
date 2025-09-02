@@ -80,7 +80,7 @@ export const MapScale: React.FC<MapScaleProps> = ({ region }) => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 20, // 左上に配置
+    bottom: 100, // 左下に配置（ボトムパネルの上）
     left: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     paddingHorizontal: 8,
