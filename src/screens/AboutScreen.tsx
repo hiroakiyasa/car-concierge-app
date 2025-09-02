@@ -115,7 +115,7 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ navigation }) => {
           
           <TouchableOpacity 
             style={styles.linkItem}
-            onPress={() => openURL('https://example.com')}
+            onPress={() => openURL('https://trailfusionai.com/')}
           >
             <Ionicons name="globe-outline" size={20} color="#666" />
             <Text style={styles.linkText}>公式ウェブサイト</Text>
