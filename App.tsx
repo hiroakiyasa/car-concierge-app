@@ -27,6 +27,7 @@ import { MyReviewsScreen } from '@/screens/MyReviewsScreen';
 import { PremiumScreen } from '@/screens/PremiumScreen';
 import { TermsScreen } from '@/screens/TermsScreen';
 import { PrivacyScreen } from '@/screens/PrivacyScreen';
+import { GuideScreen } from '@/screens/GuideScreen';
 
 const Stack = createStackNavigator();
 const queryClient = new QueryClient({
@@ -73,6 +74,7 @@ export default function App() {
             <Stack.Screen name="Premium" component={PremiumScreen} />
             <Stack.Screen name="Terms" component={TermsScreen} />
             <Stack.Screen name="Privacy" component={PrivacyScreen} />
+            <Stack.Screen name="Guide" component={GuideScreen} />
             
             {/* Test Screens */}
             <Stack.Screen name="TestMap" component={TestMapBounds} />
