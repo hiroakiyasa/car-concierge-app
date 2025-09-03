@@ -20,15 +20,6 @@ interface GuideScreenProps {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// ガイド画像のプレースホルダー（実際の画像パスに置き換え）
-const guideImages = {
-  mainScreen: require('../assets/guide/main_screen.png'),
-  parkingFilter: require('../assets/guide/parking_filter.png'),
-  nearbySearch: require('../assets/guide/nearby_search.png'),
-  elevationFilter: require('../assets/guide/elevation_filter.png'),
-  ranking: require('../assets/guide/ranking.png'),
-};
-
 export const GuideScreen: React.FC<GuideScreenProps> = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [searchQuery, setSearchQuery] = useState('');
