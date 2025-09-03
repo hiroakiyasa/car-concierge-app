@@ -47,6 +47,19 @@ export const MenuModal: React.FC<MenuModalProps> = ({
                 </TouchableOpacity>
               </View>
 
+              {/* 使い方ガイドを最上部に配置 */}
+              <TouchableOpacity
+                style={[styles.menuItem, styles.guideItem]}
+                onPress={() => handleNavigate('Guide')}
+              >
+                <Ionicons name="book" size={20} color={Colors.primary} />
+                <Text style={[styles.menuText, { color: Colors.primary, fontWeight: '600' }]}>
+                  使い方ガイド
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.divider} />
+
               {isAuthenticated ? (
                 <>
                   <TouchableOpacity
@@ -117,14 +130,6 @@ export const MenuModal: React.FC<MenuModalProps> = ({
 
               <TouchableOpacity
                 style={styles.menuItem}
-                onPress={() => handleNavigate('Help')}
-              >
-                <Ionicons name="help-circle-outline" size={20} color="#333" />
-                <Text style={styles.menuText}>ヘルプ</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.menuItem}
                 onPress={() => handleNavigate('About')}
               >
                 <Ionicons name="information-circle-outline" size={20} color="#333" />
@@ -187,6 +192,9 @@ const styles = StyleSheet.create({
   },
   premiumItem: {
     backgroundColor: '#fff9e6',
+  },
+  guideItem: {
+    backgroundColor: '#f0f7ff',
   },
   divider: {
     height: 1,
