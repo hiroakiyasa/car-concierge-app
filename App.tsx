@@ -17,6 +17,7 @@ import TestParkingFeeAdvanced from '@/screens/TestParkingFeeAdvanced';
 import { LoginScreen } from '@/screens/auth/LoginScreen';
 import { SignUpScreen } from '@/screens/auth/SignUpScreen';
 import { ForgotPasswordScreen } from '@/screens/auth/ForgotPasswordScreen';
+import { TermsOfServiceScreen } from '@/screens/auth/TermsOfServiceScreen';
 // Main screens
 import { ProfileScreen } from '@/screens/ProfileScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
@@ -63,6 +64,7 @@ export default function App() {
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="SignUp" component={SignUpScreen} />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+            <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} />
             
             {/* Main Screens */}
             <Stack.Screen name="Profile" component={ProfileScreen} />

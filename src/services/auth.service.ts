@@ -1,5 +1,7 @@
 import { supabase } from '@/config/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
 
 export interface User {
   id: string;
@@ -194,6 +196,98 @@ export class AuthService {
     } catch (error) {
       console.error('Reset password error:', error);
       return { error: 'パスワードリセット中にエラーが発生しました' };
+    }
+  }
+
+  // Google Sign-In
+  static async signInWithGoogle(): Promise<{ user: User | null, error: string | null }> {
+    try {
+      WebBrowser.maybeCompleteAuthSession();
+      
+      // Supabaseのリダイレクトを使用（開発環境と本番環境で自動切り替え）
+      const redirectTo = AuthSession.makeRedirectUri({
+        scheme: 'car-concierge-app',
+        path: 'auth/callback',
+        preferLocalhost: false,
+        isTripleSlashed: false,
+      });
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true
+        }
+      });
+
+      if (error) {
+        return { user: null, error: error.message };
+      }
+
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectTo,
+          {
+            showInRecents: true,
+          }
+        );
+
+        if (result.type === 'success' && result.url) {
+          const params = new URLSearchParams(result.url.split('#')[1]);
+          const access_token = params.get('access_token');
+          const refresh_token = params.get('refresh_token');
+
+          if (access_token) {
+            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+              access_token,
+              refresh_token: refresh_token || '',
+            });
+
+            if (sessionError) {
+              return { user: null, error: sessionError.message };
+            }
+
+            if (sessionData.user) {
+              // プロフィールの作成または更新
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', sessionData.user.id)
+                .single();
+
+              if (!profileData) {
+                await supabase
+                  .from('profiles')
+                  .insert({
+                    id: sessionData.user.id,
+                    email: sessionData.user.email,
+                    name: sessionData.user.user_metadata?.full_name || sessionData.user.email?.split('@')[0],
+                    avatar_url: sessionData.user.user_metadata?.avatar_url,
+                    is_premium: false,
+                  });
+              }
+
+              const profile = await this.getProfile(sessionData.user.id);
+              
+              return {
+                user: profile || {
+                  id: sessionData.user.id,
+                  email: sessionData.user.email!,
+                  name: sessionData.user.user_metadata?.full_name,
+                  avatar_url: sessionData.user.user_metadata?.avatar_url,
+                },
+                error: null,
+              };
+            }
+          }
+        }
+      }
+
+      return { user: null, error: 'Google認証に失敗しました' };
+    } catch (error) {
+      console.error('Google sign in error:', error);
+      return { user: null, error: 'Google認証中にエラーが発生しました' };
     }
   }
 

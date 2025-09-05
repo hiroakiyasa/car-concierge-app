@@ -40,7 +40,7 @@ export class SupabaseService {
     const { data, error } = await query.limit(300);
     
     if (error) {
-      console.error('Error fetching parking spots:', error);
+      console.error('Error fetching parking spots:', JSON.stringify(error));
       return [];
     }
     
@@ -120,7 +120,7 @@ export class SupabaseService {
     console.log(`📊 近隣施設データ: コンビニ付き ${withConvenience}件, 温泉付き ${withHotspring}件`);
     
     // さらに詳細なデバッグ
-    if (results.length > 0) {
+    if (results && results.length > 0) {
       const sample = results[0];
       console.log('🔍 サンプルデータ構造:', {
         name: sample.name,
@@ -137,8 +137,8 @@ export class SupabaseService {
       // 距離の分布を確認
       const convenienceDistances = results
         .filter(p => p.nearestConvenienceStore && 
-                 ((p.nearestConvenienceStore as any).distance_m || p.nearestConvenienceStore.distance))
-        .map(p => (p.nearestConvenienceStore as any).distance_m || p.nearestConvenienceStore!.distance)
+                 ((p.nearestConvenienceStore as any).distance_m || (p.nearestConvenienceStore as any).distance))
+        .map(p => (p.nearestConvenienceStore as any).distance_m || (p.nearestConvenienceStore as any).distance)
         .sort((a, b) => a - b);
         
       if (convenienceDistances.length > 0) {

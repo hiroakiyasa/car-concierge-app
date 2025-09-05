@@ -10,6 +10,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,7 +31,7 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   
-  const { signUp } = useAuthStore();
+  const { signUp, signInWithGoogle } = useAuthStore();
 
   const handleSignUp = async () => {
     if (!name || !email || !password || !confirmPassword) {
@@ -65,6 +66,23 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
         'アカウントの登録が完了しました',
         [{ text: 'OK', onPress: () => navigation.navigate('Map') }]
       );
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    if (!agreedToTerms) {
+      Alert.alert('エラー', '利用規約に同意してください');
+      return;
+    }
+
+    setIsLoading(true);
+    const { error } = await signInWithGoogle();
+    setIsLoading(false);
+
+    if (error) {
+      Alert.alert('Google認証エラー', error);
+    } else {
+      navigation.navigate('Map');
     }
   };
 
@@ -161,20 +179,27 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
               </View>
             </View>
 
-            <TouchableOpacity
-              style={styles.termsContainer}
-              onPress={() => setAgreedToTerms(!agreedToTerms)}
-            >
-              <View style={[styles.checkbox, agreedToTerms && styles.checkedBox]}>
-                {agreedToTerms && (
-                  <Ionicons name="checkmark" size={16} color="white" />
-                )}
-              </View>
+            <View style={styles.termsContainer}>
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={() => setAgreedToTerms(!agreedToTerms)}
+              >
+                <View style={[styles.checkbox, agreedToTerms && styles.checkedBox]}>
+                  {agreedToTerms && (
+                    <Ionicons name="checkmark" size={16} color="white" />
+                  )}
+                </View>
+              </TouchableOpacity>
               <Text style={styles.termsText}>
-                <Text style={styles.termsLink}>利用規約</Text>
+                <TouchableOpacity 
+                  onPress={() => navigation.navigate('TermsOfService')}
+                  style={styles.termsLinkContainer}
+                >
+                  <Text style={styles.termsLink}>利用規約</Text>
+                </TouchableOpacity>
                 に同意します
               </Text>
-            </TouchableOpacity>
+            </View>
 
             <TouchableOpacity
               style={[styles.signupButton, isLoading && styles.disabledButton]}
@@ -193,6 +218,24 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
               <Text style={styles.dividerText}>または</Text>
               <View style={styles.dividerLine} />
             </View>
+
+            <TouchableOpacity
+              style={[styles.googleButton, isLoading && styles.disabledButton]}
+              onPress={handleGoogleSignUp}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#4285F4" />
+              ) : (
+                <View style={styles.googleButtonContent}>
+                  <Image
+                    source={{ uri: 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
+                    style={styles.googleIcon}
+                  />
+                  <Text style={styles.googleButtonText}>Googleで登録</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.loginButton}
@@ -274,8 +317,12 @@ const styles = StyleSheet.create({
   },
   termsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 24,
+  },
+  checkboxContainer: {
+    marginRight: 8,
+    marginTop: 2,
   },
   checkbox: {
     width: 20,
@@ -283,7 +330,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
     borderRadius: 4,
-    marginRight: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -294,10 +340,16 @@ const styles = StyleSheet.create({
   termsText: {
     fontSize: 14,
     color: '#666',
+    flex: 1,
+    lineHeight: 20,
+  },
+  termsLinkContainer: {
+    marginVertical: -2,
   },
   termsLink: {
     color: Colors.primary,
     textDecorationLine: 'underline',
+    fontSize: 14,
   },
   signupButton: {
     backgroundColor: Colors.primary,
@@ -328,6 +380,34 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     fontSize: 14,
     color: '#666',
+  },
+  googleButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  googleButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 12,
+  },
+  googleButtonText: {
+    color: '#3c4043',
+    fontSize: 16,
+    fontWeight: '600',
   },
   loginButton: {
     borderWidth: 1,

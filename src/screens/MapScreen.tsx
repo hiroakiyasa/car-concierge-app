@@ -199,12 +199,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         minElevation
       );
       
+      // spotsがnullまたはundefinedの場合は空配列として処理
+      const validSpots = spots || [];
+      
       // カテゴリー別に処理
       let displaySpots: Spot[] = [];
       
       if (selectedCategories.has('コインパーキング')) {
         // 駐車場のみをフィルタリング（標高フィルタリングは既にSupabaseで実行済み）
-        let parkingSpots = spots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
+        let parkingSpots = validSpots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
         
         console.log(`🅿️ 検索された駐車場: ${parkingSpots.length}件`);
         
@@ -363,7 +366,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           
           // コンビニを表示に追加
           if (convenienceIds.size > 0) {
-            const relatedStores = spots.filter(spot => {
+            const relatedStores = validSpots.filter(spot => {
               if (spot.category !== 'コンビニ') return false;
               
               // IDマッチングのバリエーションを試す
@@ -371,7 +374,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
               const spotIdString = (spot as any).idString;
               
               // デバッグ用
-              if (spots.filter(s => s.category === 'コンビニ').indexOf(spot) < 3) {
+              if (validSpots.filter(s => s.category === 'コンビニ').indexOf(spot) < 3) {
                 console.log(`🏪 コンビニマッチング試行: spot.id=${spotId}, idString=${spotIdString}, 検索対象IDs:`, Array.from(convenienceIds));
               }
               
@@ -387,7 +390,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
             
             if (relatedStores.length === 0 && convenienceIds.size > 0) {
               console.log('⚠️ コンビニIDマッチ失敗。検索対象:', Array.from(convenienceIds));
-              console.log('利用可能なコンビニ:', spots.filter(s => s.category === 'コンビニ').slice(0, 5).map(s => ({ id: s.id, idString: (s as any).idString })));
+              console.log('利用可能なコンビニ:', validSpots.filter(s => s.category === 'コンビニ').slice(0, 5).map(s => ({ id: s.id, idString: (s as any).idString })));
             }
             
             displaySpots.push(...relatedStores);
@@ -396,13 +399,13 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           
           // 温泉を表示に追加
           if (hotspringIds.size > 0) {
-            const relatedSprings = spots.filter(spot => {
+            const relatedSprings = validSpots.filter(spot => {
               if (spot.category !== '温泉') return false;
               
               const spotId = spot.id;
               
               // デバッグ用
-              if (spots.filter(s => s.category === '温泉').indexOf(spot) < 3) {
+              if (validSpots.filter(s => s.category === '温泉').indexOf(spot) < 3) {
                 console.log(`♨️ 温泉マッチング試行: spot.id=${spotId}, 検索対象IDs:`, Array.from(hotspringIds));
               }
               
@@ -415,7 +418,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
             
             if (relatedSprings.length === 0 && hotspringIds.size > 0) {
               console.log('⚠️ 温泉IDマッチ失敗。検索対象:', Array.from(hotspringIds));
-              console.log('利用可能な温泉:', spots.filter(s => s.category === '温泉').slice(0, 5).map(s => ({ id: s.id })));
+              console.log('利用可能な温泉:', validSpots.filter(s => s.category === '温泉').slice(0, 5).map(s => ({ id: s.id })));
             }
             
             displaySpots.push(...relatedSprings);
@@ -429,28 +432,28 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         let nonParkingSpots: Spot[] = [];
         
         if (selectedCategories.has('コンビニ')) {
-          const convenienceStores = spots.filter(spot => spot.category === 'コンビニ');
+          const convenienceStores = validSpots.filter(spot => spot.category === 'コンビニ');
           nonParkingSpots.push(...convenienceStores);
           displaySpots.push(...convenienceStores);
           console.log(`🏂 コンビニ: ${convenienceStores.length}件`);
         }
         
         if (selectedCategories.has('ガソリンスタンド')) {
-          const gasStations = spots.filter(spot => spot.category === 'ガソリンスタンド');
+          const gasStations = validSpots.filter(spot => spot.category === 'ガソリンスタンド');
           nonParkingSpots.push(...gasStations);
           displaySpots.push(...gasStations);
           console.log(`⛽ ガソリンスタンド: ${gasStations.length}件`);
         }
         
         if (selectedCategories.has('温泉')) {
-          const hotSprings = spots.filter(spot => spot.category === '温泉');
+          const hotSprings = validSpots.filter(spot => spot.category === '温泉');
           nonParkingSpots.push(...hotSprings);
           displaySpots.push(...hotSprings);
           console.log(`♨️ 温泉: ${hotSprings.length}件`);
         }
         
         if (selectedCategories.has('お祭り・花火大会')) {
-          const festivals = spots.filter(spot => spot.category === 'お祭り・花火大会');
+          const festivals = validSpots.filter(spot => spot.category === 'お祭り・花火大会');
           nonParkingSpots.push(...festivals);
           displaySpots.push(...festivals);
           console.log(`🎆 お祭り・花火大会: ${festivals.length}件`);
@@ -483,7 +486,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       setSearchResults(displaySpots);
     } catch (error) {
       console.error('Search error:', error);
-      Alert.alert('エラー', '検索中にエラーが発生しました');
+      Alert.alert(
+        'ネットワークエラー', 
+        'データを取得できませんでした。インターネット接続を確認してください。',
+        [{ text: 'OK', style: 'default' }]
+      );
     } finally {
       setIsLoading(false);
     }

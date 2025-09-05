@@ -10,10 +10,12 @@ interface AuthStore {
   // Actions
   signUp: (email: string, password: string, name?: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   checkAuth: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<{ error: string | null }>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
+  setUser: (user: User | null) => void;
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
@@ -109,5 +111,30 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   resetPassword: async (email: string) => {
     return await AuthService.resetPassword(email);
+  },
+
+  signInWithGoogle: async () => {
+    set({ isLoading: true });
+    
+    const { user, error } = await AuthService.signInWithGoogle();
+    
+    if (user) {
+      set({ user, isAuthenticated: true, isLoading: false });
+      await AsyncStorage.setItem('user', JSON.stringify(user));
+    } else {
+      set({ isLoading: false });
+    }
+    
+    return { error };
+  },
+
+  setUser: (user: User | null) => {
+    if (user) {
+      set({ user, isAuthenticated: true });
+      AsyncStorage.setItem('user', JSON.stringify(user));
+    } else {
+      set({ user: null, isAuthenticated: false });
+      AsyncStorage.removeItem('user');
+    }
   },
 }));

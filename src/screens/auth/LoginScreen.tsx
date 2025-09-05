@@ -10,6 +10,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +27,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  const { signIn } = useAuthStore();
+  const { signIn, signInWithGoogle } = useAuthStore();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -40,6 +41,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
 
     if (error) {
       Alert.alert('ログインエラー', error);
+    } else {
+      navigation.navigate('Map');
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    const { error } = await signInWithGoogle();
+    setIsLoading(false);
+
+    if (error) {
+      Alert.alert('Google認証エラー', error);
     } else {
       navigation.navigate('Map');
     }
@@ -127,6 +140,24 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               <Text style={styles.dividerText}>または</Text>
               <View style={styles.dividerLine} />
             </View>
+
+            <TouchableOpacity
+              style={[styles.googleButton, isLoading && styles.disabledButton]}
+              onPress={handleGoogleLogin}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#4285F4" />
+              ) : (
+                <View style={styles.googleButtonContent}>
+                  <Image
+                    source={{ uri: 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
+                    style={styles.googleIcon}
+                  />
+                  <Text style={styles.googleButtonText}>Googleでログイン</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.signupButton}
@@ -243,6 +274,34 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     fontSize: 14,
     color: '#666',
+  },
+  googleButton: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  googleButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 12,
+  },
+  googleButtonText: {
+    color: '#3c4043',
+    fontSize: 16,
+    fontWeight: '600',
   },
   signupButton: {
     borderWidth: 1,
