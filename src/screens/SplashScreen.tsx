@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Dimensions, Text, Image } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { VideoView, useVideoPlayer, VideoViewProps } from 'expo-video';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/utils/constants';
 
@@ -13,8 +13,13 @@ interface SplashScreenProps {
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
   const [showVideo, setShowVideo] = useState(true);
   const [videoError, setVideoError] = useState(false);
-  const videoRef = useRef<Video>(null);
   const timeoutRef = useRef<NodeJS.Timeout>();
+
+  const player = useVideoPlayer(require('../../assets/flush_movie.mp4'), (player) => {
+    player.loop = false;
+    player.muted = false;
+    player.play();
+  });
 
   useEffect(() => {
     console.log('スプラッシュスクリーン開始');
@@ -25,36 +30,26 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
       onComplete();
     }, 2000);
 
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, [onComplete]);
-
-  const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-    if (status.isLoaded) {
-      // 動画が2秒に達したら遷移
-      if (status.positionMillis && status.positionMillis >= 2000) {
+    // プレイヤーの状態監視
+    const subscription = player.addListener('playbackStatusUpdate', (status) => {
+      if (status.currentTime && status.currentTime >= 2000) {
         console.log('動画2秒経過 - 遷移');
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current);
         }
         onComplete();
       }
-      
-      // 動画が終了した場合も遷移
-      if (status.didJustFinish) {
-        console.log('動画再生完了 - 遷移');
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-        }
-        onComplete();
-      }
-    }
-  };
+    });
 
-  const handleError = (error: string) => {
+    return () => {
+      subscription.remove();
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [onComplete, player]);
+
+  const handleError = (error: any) => {
     console.error('動画再生エラー:', error);
     setVideoError(true);
     setShowVideo(false);
@@ -67,25 +62,12 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
         {/* 動画の影を演出 */}
         <View style={styles.videoShadow}>
           <View style={styles.videoWrapper}>
-            <Video
-              ref={videoRef}
-              // MP4ファイルを使用（全プラットフォーム対応）
-              source={require('../../assets/flush_movie.mp4')}
+            <VideoView
               style={styles.videoSquare}
-              resizeMode={ResizeMode.CONTAIN}
-              shouldPlay
-              isLooping={false}
-              onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-              onError={handleError}
-              volume={1.0}
-              isMuted={false}
-              useNativeControls={false}
-              onLoad={(status) => {
-                console.log('動画ロード成功');
-              }}
-              onLoadStart={() => {
-                console.log('動画ロード開始');
-              }}
+              player={player}
+              contentFit="contain"
+              allowsFullscreen={false}
+              allowsPictureInPicture={false}
             />
           </View>
         </View>

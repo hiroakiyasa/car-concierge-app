@@ -87,132 +87,105 @@ export const GuideScreen: React.FC<GuideScreenProps> = ({ navigation }) => {
 
   const renderOverviewContent = () => (
     <View style={styles.sectionContent}>
-      {/* Main App Screenshot with Beautiful Japanese Landscape */}
-      <View style={styles.landscapeCard}>
-        <ImageBackground
-          source={JAPAN_IMAGES.discover[1].source}
-          style={styles.landscapeBackground}
-          imageStyle={styles.landscapeImage}
-        >
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.7)']}
-            style={styles.landscapeGradient}
-          >
-            <View style={styles.appScreenshotContainer}>
-              <View style={styles.phoneFrame}>
-                <Image
-                  source={require('../../assets/guide.png')}
-                  style={styles.appScreenshot}
-                  resizeMode="contain"
-                />
-              </View>
-              <View style={styles.landscapeContent}>
-                <Text style={styles.landscapeTitle}>CAR Concierge</Text>
-                <Text style={styles.landscapeSubtitle}>
-                  日本全国の駐車場を瞬時に検索
-                </Text>
-                <Text style={styles.landscapeDescription}>
-                  美しい風景とともに、最適な駐車場を見つけましょう
-                </Text>
-              </View>
-            </View>
-          </LinearGradient>
-        </ImageBackground>
-      </View>
-
-      {/* Feature Overview Cards */}
-      <View style={styles.featureOverviewGrid}>
-        <View style={styles.overviewCard}>
-          <LinearGradient
-            colors={[COLORS.accent, '#1e88e5']}
-            style={styles.overviewIconContainer}
-          >
-            <Ionicons name="trophy" size={24} color={COLORS.white} />
-          </LinearGradient>
-          <Text style={styles.overviewCardTitle}>料金TOP3</Text>
-          <Text style={styles.overviewCardDesc}>金・銀・銅マーカーで最安値を表示</Text>
+      {/* Premium App Screenshot */}
+      <View style={styles.premiumScreenshotSection}>
+        <View style={styles.premiumHeader}>
+          <View style={styles.brandContainer}>
+            <Text style={styles.brandTitle}>CAR CONCIERGE</Text>
+            <Text style={styles.brandSubtitle}>駐車場検索アプリ</Text>
+          </View>
         </View>
-
-        <View style={styles.overviewCard}>
-          <LinearGradient
-            colors={[COLORS.greenAccent, '#059669']}
-            style={styles.overviewIconContainer}
-          >
-            <Ionicons name="location" size={24} color={COLORS.white} />
-          </LinearGradient>
-          <Text style={styles.overviewCardTitle}>周辺検索</Text>
-          <Text style={styles.overviewCardDesc}>温泉・GSとの距離で絞込</Text>
-        </View>
-
-        <View style={styles.overviewCard}>
-          <LinearGradient
-            colors={[COLORS.orangeAccent, '#d97706']}
-            style={styles.overviewIconContainer}
-          >
-            <Ionicons name="time" size={24} color={COLORS.white} />
-          </LinearGradient>
-          <Text style={styles.overviewCardTitle}>自動計算</Text>
-          <Text style={styles.overviewCardDesc}>駐車時間で料金を自動算出</Text>
-        </View>
-
-        <View style={styles.overviewCard}>
-          <LinearGradient
-            colors={[COLORS.redAccent, '#dc2626']}
-            style={styles.overviewIconContainer}
-          >
-            <Ionicons name="shield-checkmark" size={24} color={COLORS.white} />
-          </LinearGradient>
-          <Text style={styles.overviewCardTitle}>津波対策</Text>
-          <Text style={styles.overviewCardDesc}>標高30m以上でマーク表示</Text>
+        <View style={styles.premiumScreenshotContainer}>
+          <View style={styles.phoneFrame}>
+            <Image
+              source={require('../../assets/guide.png')}
+              style={styles.premiumScreenshot}
+              resizeMode="contain"
+            />
+          </View>
+          <View style={styles.premiumGlow} />
         </View>
       </View>
 
-      {/* Detailed App Usage Guide */}
-      <View style={styles.stepsSection}>
-        <Text style={styles.stepsSectionTitle}>🚗 アプリの基本操作</Text>
+      {/* Detailed Map Button Explanations */}
+      <View style={styles.explanationCard}>
+        <Text style={styles.explanationTitle}>🗺️ 地図上のボタンとマーカーの説明</Text>
         
         <View style={styles.detailedInstructions}>
           <View style={styles.instructionRow}>
             <View style={styles.stepIndicator}>
+              <Ionicons name="location" size={12} color={COLORS.white} />
+            </View>
+            <View style={styles.instructionContent}>
+              <Text style={styles.instructionTitle}>現在地ボタン（右下）</Text>
+              <Text style={styles.instructionDesc}>タップすると現在位置に地図を移動し、周辺の駐車場を検索表示します</Text>
+            </View>
+          </View>
+
+          <View style={styles.instructionRow}>
+            <View style={styles.stepIndicator}>
+              <Ionicons name="list" size={12} color={COLORS.white} />
+            </View>
+            <View style={styles.instructionContent}>
+              <Text style={styles.instructionTitle}>ランキングボタン（右下）</Text>
+              <Text style={styles.instructionDesc}>現在の地図エリア内で料金の安い駐車場TOP20をリスト表示します</Text>
+            </View>
+          </View>
+
+          <View style={styles.instructionRow}>
+            <View style={styles.stepIndicator}>
+              <Text style={styles.stepIndicatorText}>P</Text>
+            </View>
+            <View style={styles.instructionContent}>
+              <Text style={styles.instructionTitle}>駐車場マーカー（青色）</Text>
+              <Text style={styles.instructionDesc}>コインパーキングの場所を示し、1回目タップで基本情報、2回目で詳細表示</Text>
+            </View>
+          </View>
+
+          <View style={styles.instructionRow}>
+            <View style={[styles.stepIndicator, { backgroundColor: COLORS.gold }]}>
               <Text style={styles.stepIndicatorText}>1</Text>
             </View>
             <View style={styles.instructionContent}>
-              <Text style={styles.instructionTitle}>地図の操作方法</Text>
-              <Text style={styles.instructionDesc}>指でスワイプして地図を移動、ピンチイン・アウトで拡大縮小します</Text>
+              <Text style={styles.instructionTitle}>金・銀・銅マーカー</Text>
+              <Text style={styles.instructionDesc}>設定した時間での料金計算結果で最安値TOP3を金・銀・銅色で表示</Text>
             </View>
           </View>
 
           <View style={styles.instructionRow}>
-            <View style={styles.stepIndicator}>
-              <Text style={styles.stepIndicatorText}>2</Text>
+            <View style={[styles.stepIndicator, { backgroundColor: COLORS.greenAccent }]}>
+              <Ionicons name="storefront" size={12} color={COLORS.white} />
             </View>
             <View style={styles.instructionContent}>
-              <Text style={styles.instructionTitle}>マーカーの見方</Text>
-              <Text style={styles.instructionDesc}>金・銀・銅マーカーが料金TOP3、色分けアイコンが周辺施設を表示</Text>
+              <Text style={styles.instructionTitle}>周辺施設マーカー</Text>
+              <Text style={styles.instructionDesc}>温泉（赤）・ガソリンスタンド（オレンジ）などの周辺施設を色分け表示</Text>
             </View>
           </View>
 
           <View style={styles.instructionRow}>
-            <View style={styles.stepIndicator}>
-              <Text style={styles.stepIndicatorText}>3</Text>
+            <View style={[styles.stepIndicator, { backgroundColor: COLORS.redAccent }]}>
+              <Ionicons name="warning" size={12} color={COLORS.white} />
             </View>
             <View style={styles.instructionContent}>
-              <Text style={styles.instructionTitle}>情報の確認方法</Text>
-              <Text style={styles.instructionDesc}>1回目のタップで基本情報、2回目のタップで詳細情報を表示します</Text>
-            </View>
-          </View>
-
-          <View style={styles.instructionRow}>
-            <View style={styles.stepIndicator}>
-              <Text style={styles.stepIndicatorText}>4</Text>
-            </View>
-            <View style={styles.instructionContent}>
-              <Text style={styles.instructionTitle}>フィルター機能</Text>
-              <Text style={styles.instructionDesc}>画面下部のパネルから料金計算・周辺検索・標高フィルターを利用できます</Text>
+              <Text style={styles.instructionTitle}>津波警告マーク</Text>
+              <Text style={styles.instructionDesc}>標高30m以上の高台にある駐車場に表示される安全性指標です</Text>
             </View>
           </View>
         </View>
 
+        <View style={styles.mapControlsSection}>
+          <Text style={styles.mapControlsTitle}>📱 地図の基本操作</Text>
+          <View style={styles.mapControlsRow}>
+            <View style={styles.mapControlItem}>
+              <Ionicons name="move" size={16} color={COLORS.accent} />
+              <Text style={styles.mapControlText}>スワイプで移動</Text>
+            </View>
+            <View style={styles.mapControlItem}>
+              <Ionicons name="resize" size={16} color={COLORS.accent} />
+              <Text style={styles.mapControlText}>ピンチで拡大縮小</Text>
+            </View>
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -1005,6 +978,106 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.darkText,
     textAlign: 'center',
+  },
+  
+  // Map Controls Section
+  mapControlsSection: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 12,
+  },
+  mapControlsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.darkText,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  mapControlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  mapControlItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  mapControlText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.darkText,
+    marginLeft: 6,
+  },
+
+  // Premium Screenshot Section
+  premiumScreenshotSection: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 24,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.2,
+    shadowRadius: 32,
+    elevation: 20,
+  },
+  premiumHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  brandContainer: {
+    alignItems: 'center',
+  },
+  brandTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: COLORS.darkText,
+    letterSpacing: 2,
+    marginBottom: 4,
+  },
+  brandSubtitle: {
+    fontSize: 14,
+    color: COLORS.lightText,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
+  premiumScreenshotContainer: {
+    alignItems: 'center',
+    position: 'relative',
+  },
+  phoneFrame: {
+    backgroundColor: COLORS.darkText,
+    borderRadius: 28,
+    padding: 6,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 24 },
+    shadowOpacity: 0.4,
+    shadowRadius: 48,
+    elevation: 30,
+  },
+  premiumScreenshot: {
+    width: SCREEN_WIDTH - 120,
+    height: (SCREEN_WIDTH - 120) * 1.8,
+    borderRadius: 22,
+    backgroundColor: COLORS.white,
+  },
+  premiumGlow: {
+    position: 'absolute',
+    top: -20,
+    left: -20,
+    right: -20,
+    bottom: -20,
+    borderRadius: 48,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(43, 125, 255, 0.1)',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 40,
+    elevation: 0,
   },
   // Compact Styles
   compactStepsGrid: {
