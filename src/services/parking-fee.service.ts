@@ -12,7 +12,9 @@ export class ParkingFeeCalculator {
    */
   static calculateFee(parking: CoinParking, duration: ParkingDuration): number {
     if (!parking.rates || parking.rates.length === 0) {
-      return 0;
+      // ratesがない場合、デフォルト料金を設定（15分100円）
+      console.warn(`⚠️ ${parking.name}に料金データがありません。デフォルト料金を適用します。`);
+      return Math.ceil(duration.durationInMinutes / 15) * 100;
     }
 
     const startTime = duration.startDate;
