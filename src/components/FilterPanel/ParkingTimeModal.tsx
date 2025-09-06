@@ -132,7 +132,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   };
 
   // 指定インデックスへスクロール（中央配置用）
-  const scrollToIndex = (ref: React.RefObject<ScrollView>, index: number) => {
+  const scrollToIndex = (ref: React.RefObject<ScrollView | null>, index: number) => {
     if (ref.current) {
       // 2つのパディングアイテムがあるので、中央に配置するための計算
       const offset = (index - 2) * ITEM_HEIGHT;
@@ -149,7 +149,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
     setter(clampedIndex);
   };
 
-  const handleScrollEnd = (event: any, ref: React.RefObject<ScrollView>, setter: (value: number) => void, maxIndex: number) => {
+  const handleScrollEnd = (event: any, ref: React.RefObject<ScrollView | null>, setter: (value: number) => void, maxIndex: number) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     // 中央のアイテムのインデックスを計算
     const index = Math.round(offsetY / ITEM_HEIGHT + 2);
