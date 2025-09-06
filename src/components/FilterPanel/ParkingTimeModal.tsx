@@ -130,10 +130,11 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   // 指定インデックスへスクロール
   const scrollToIndex = (ref: React.RefObject<ScrollView | null>, index: number) => {
     if (ref.current) {
-      // 選択したアイテムを中央に配置するためのオフセット計算
-      // パディングが2アイテム分あるため、-2のオフセットを適用
-      const offset = (index - 2) * ITEM_HEIGHT;
-      ref.current.scrollTo({ y: Math.max(0, offset), animated: true });
+      // 選択したアイテムを中央（灰色ハイライト）に配置するためのオフセット計算
+      // パディングが2アイテム分あるため、インデックスがNの場合、
+      // スクロール位置は (N-2)*ITEM_HEIGHT となる
+      const offset = Math.max(-2 * ITEM_HEIGHT, (index - 2) * ITEM_HEIGHT);
+      ref.current.scrollTo({ y: offset, animated: true });
     }
   };
 
@@ -141,18 +142,21 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   const handleScroll = (event: any, setter: (value: number) => void, maxIndex: number) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     // 灰色ハイライトの位置にあるアイテムのインデックスを計算
-    // パディングが2アイテム分あるので、+2のオフセットを追加
-    const index = Math.round(offsetY / ITEM_HEIGHT) + 2;
-    if (index >= 0 && index <= maxIndex) {
-      setter(index);
+    // offsetY / ITEM_HEIGHT で何番目の位置か計算し、
+    // パディング2個分を考慮して+2する
+    const index = Math.round(offsetY / ITEM_HEIGHT + 2);
+    const clampedIndex = Math.max(0, Math.min(index, maxIndex));
+    if (clampedIndex >= 0 && clampedIndex <= maxIndex) {
+      setter(clampedIndex);
     }
   };
 
   const handleScrollEnd = (event: any, ref: React.RefObject<ScrollView | null>, setter: (value: number) => void, maxIndex: number) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     // 灰色ハイライトの位置にあるアイテムのインデックスを計算
-    // パディングが2アイテム分あるので、+2のオフセットを追加
-    const index = Math.round(offsetY / ITEM_HEIGHT) + 2;
+    // offsetY / ITEM_HEIGHT で何番目の位置か計算し、
+    // パディング2個分を考慮して+2する
+    const index = Math.round(offsetY / ITEM_HEIGHT + 2);
     const clampedIndex = Math.max(0, Math.min(index, maxIndex));
     setter(clampedIndex);
     scrollToIndex(ref, clampedIndex);
