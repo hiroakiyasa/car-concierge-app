@@ -29,10 +29,11 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   const [activeTab, setActiveTab] = useState<'entry' | 'duration'>('duration');
   const [selectedDurationIndex, setSelectedDurationIndex] = useState(2); // デフォルト30分
   
-  // 入庫日時の独立した状態
+  // 入庫日時の独立した状態 - 現在時刻をデフォルトに
+  const now = new Date();
   const [selectedDateIndex, setSelectedDateIndex] = useState(0);
-  const [selectedHourIndex, setSelectedHourIndex] = useState(11); // 11時
-  const [selectedMinuteIndex, setSelectedMinuteIndex] = useState(0); // 00分
+  const [selectedHourIndex, setSelectedHourIndex] = useState(now.getHours());
+  const [selectedMinuteIndex, setSelectedMinuteIndex] = useState(now.getMinutes());
   
   const durationScrollRef = useRef<ScrollView>(null);
   const dateScrollRef = useRef<ScrollView>(null);
@@ -154,9 +155,9 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   const minutes = Array.from({ length: 60 }, (_, i) => i);
 
   const calculateEndTime = (durationMinutes: number) => {
-    const now = new Date();
-    now.setHours(11, 0, 0, 0); // 基準時刻を11:00に設定
-    const endTime = new Date(now.getTime() + durationMinutes * 60000);
+    const startTime = new Date();
+    // 現在時刻を基準にする
+    const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
     
     const month = endTime.getMonth() + 1;
     const day = endTime.getDate();
@@ -200,33 +201,76 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
       setSelectedDurationIndex(index);
     }
   };
+  
+  const handleDurationScrollEnd = (event: any) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
+    if (index >= 0 && index < durations.length && durationScrollRef.current) {
+      // 正確な位置にスナップ
+      durationScrollRef.current.scrollTo({
+        y: Math.max(0, (index - 1.5) * ITEM_HEIGHT),
+        animated: true
+      });
+      setSelectedDurationIndex(index);
+    }
+  };
 
   const handleDateScroll = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    // Calculate which item is at the center of the gray highlight
-    // Since we have 1.5 padding, the center item is at offsetY/ITEM_HEIGHT + 1.5
     const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
     if (index >= 0 && index < dates.length) {
+      setSelectedDateIndex(index);
+    }
+  };
+  
+  const handleDateScrollEnd = (event: any) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
+    if (index >= 0 && index < dates.length && dateScrollRef.current) {
+      dateScrollRef.current.scrollTo({
+        y: Math.max(0, (index - 1.5) * ITEM_HEIGHT),
+        animated: true
+      });
       setSelectedDateIndex(index);
     }
   };
 
   const handleHourScroll = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    // Calculate which item is at the center of the gray highlight
-    // Since we have 1.5 padding, the center item is at offsetY/ITEM_HEIGHT + 1.5
     const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
     if (index >= 0 && index < hours.length) {
+      setSelectedHourIndex(index);
+    }
+  };
+  
+  const handleHourScrollEnd = (event: any) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
+    if (index >= 0 && index < hours.length && hourScrollRef.current) {
+      hourScrollRef.current.scrollTo({
+        y: Math.max(0, (index - 1.5) * ITEM_HEIGHT),
+        animated: true
+      });
       setSelectedHourIndex(index);
     }
   };
 
   const handleMinuteScroll = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    // Calculate which item is at the center of the gray highlight
-    // Since we have 1.5 padding, the center item is at offsetY/ITEM_HEIGHT + 1.5
     const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
     if (index >= 0 && index < minutes.length) {
+      setSelectedMinuteIndex(index);
+    }
+  };
+  
+  const handleMinuteScrollEnd = (event: any) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
+    if (index >= 0 && index < minutes.length && minuteScrollRef.current) {
+      minuteScrollRef.current.scrollTo({
+        y: Math.max(0, (index - 1.5) * ITEM_HEIGHT),
+        animated: true
+      });
       setSelectedMinuteIndex(index);
     }
   };
@@ -251,6 +295,14 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
 
   useEffect(() => {
     if (visible) {
+      // 初回表示時に現在時刻を設定
+      if (activeTab === 'entry') {
+        const currentTime = new Date();
+        setSelectedDateIndex(0);
+        setSelectedHourIndex(currentTime.getHours());
+        setSelectedMinuteIndex(currentTime.getMinutes());
+      }
+      
       setTimeout(() => {
         if (activeTab === 'duration' && durationScrollRef.current) {
           // Scroll so the selected item appears at center
@@ -357,7 +409,9 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
                 showsVerticalScrollIndicator={false}
                 snapToInterval={ITEM_HEIGHT}
                 decelerationRate="fast"
-                onMomentumScrollEnd={handleDurationScroll}
+                onScroll={handleDurationScroll}
+                onMomentumScrollEnd={handleDurationScrollEnd}
+                scrollEventThrottle={16}
               >
                 <View style={{ height: ITEM_HEIGHT * 1.5 }} />
                 {durations.map((item, index) => (
@@ -399,7 +453,9 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
                     showsVerticalScrollIndicator={false}
                     snapToInterval={ITEM_HEIGHT}
                     decelerationRate="fast"
-                    onMomentumScrollEnd={handleDateScroll}
+                    onScroll={handleDateScroll}
+                    onMomentumScrollEnd={handleDateScrollEnd}
+                    scrollEventThrottle={16}
                   >
                     <View style={{ height: ITEM_HEIGHT * 1.5 }} />
                     {dates.map((item, index) => (
@@ -424,7 +480,9 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
                     showsVerticalScrollIndicator={false}
                     snapToInterval={ITEM_HEIGHT}
                     decelerationRate="fast"
-                    onMomentumScrollEnd={handleHourScroll}
+                    onScroll={handleHourScroll}
+                    onMomentumScrollEnd={handleHourScrollEnd}
+                    scrollEventThrottle={16}
                   >
                     <View style={{ height: ITEM_HEIGHT * 1.5 }} />
                     {hours.map((hour, index) => (
@@ -454,7 +512,9 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
                     showsVerticalScrollIndicator={false}
                     snapToInterval={ITEM_HEIGHT}
                     decelerationRate="fast"
-                    onMomentumScrollEnd={handleMinuteScroll}
+                    onScroll={handleMinuteScroll}
+                    onMomentumScrollEnd={handleMinuteScrollEnd}
+                    scrollEventThrottle={16}
                   >
                     <View style={{ height: ITEM_HEIGHT * 1.5 }} />
                     {minutes.map((minute, index) => (
@@ -616,10 +676,12 @@ const styles = StyleSheet.create({
     left: 10,
     right: 10,
     height: ITEM_HEIGHT,
-    backgroundColor: '#E8E8ED',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
     borderRadius: 10,
     marginTop: -ITEM_HEIGHT / 2,
-    zIndex: 0,
+    zIndex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
   },
   
   // Duration tab styles
@@ -641,7 +703,8 @@ const styles = StyleSheet.create({
   },
   selectedText: {
     color: '#000000',
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 18,
   },
   selectedTime: {
     color: '#FF3B30',
@@ -666,7 +729,8 @@ const styles = StyleSheet.create({
   },
   selectedTimeText: {
     color: '#000000',
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 24,
   },
   timeItemContainer: {
     flexDirection: 'row',
