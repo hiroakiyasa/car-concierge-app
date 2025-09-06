@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.carconciege.app",
-      "buildNumber": "10",
+      "buildNumber": "11",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
