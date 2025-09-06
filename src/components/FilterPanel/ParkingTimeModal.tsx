@@ -11,8 +11,7 @@ import {
 import { BlurView } from 'expo-blur';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const ITEM_HEIGHT = 40;
-const PANEL_HEIGHT = SCREEN_HEIGHT * 0.3;
+const ITEM_HEIGHT = 44;
 
 interface ParkingTimeModalProps {
   visible: boolean;
@@ -109,7 +108,12 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
     const hour = endTime.getHours();
     const minute = endTime.getMinutes();
     
-    return `〜${month}月${day}日 ${weekday} ${hour}:${minute.toString().padStart(2, '0')}`;
+    // 日付を含めて表示
+    if (endTime.getDate() !== startTime.getDate()) {
+      return `〜${month}月${day}日 ${weekday} ${hour}:${minute.toString().padStart(2, '0')}`;
+    } else {
+      return `〜${month}月${day}日 ${weekday} ${hour}:${minute.toString().padStart(2, '0')}`;
+    }
   };
 
   // 現在時刻へ設定
@@ -127,68 +131,31 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
     }, 100);
   };
 
-  // 指定インデックスへスクロール
-  const scrollToIndex = (ref: React.RefObject<ScrollView | null>, index: number, isBottomHighlight: boolean = false) => {
+  // 指定インデックスへスクロール（中央配置用）
+  const scrollToIndex = (ref: React.RefObject<ScrollView>, index: number) => {
     if (ref.current) {
-      let offset;
-      if (isBottomHighlight) {
-        // 一番下のハイライトの場合
-        // 選択したアイテムが一番下に来るようにスクロール
-        // contentHeight - layoutHeight + 60 の位置にアイテムが来る
-        const totalItems = 17; // durations.length
-        const contentHeight = (totalItems + 4) * ITEM_HEIGHT; // +4 for padding
-        const layoutHeight = PANEL_HEIGHT - 80; // panel height - header height
-        offset = index * ITEM_HEIGHT - layoutHeight + 60;
-      } else {
-        // 中央のハイライトの場合
-        offset = Math.max(-2 * ITEM_HEIGHT, (index - 2) * ITEM_HEIGHT);
-      }
+      // 2つのパディングアイテムがあるので、中央に配置するための計算
+      const offset = (index - 2) * ITEM_HEIGHT;
       ref.current.scrollTo({ y: Math.max(0, offset), animated: true });
     }
   };
 
   // スクロールハンドラー
-  const handleScroll = (event: any, setter: (value: number) => void, maxIndex: number, isBottomHighlight: boolean = false) => {
+  const handleScroll = (event: any, setter: (value: number) => void, maxIndex: number) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const contentHeight = event.nativeEvent.contentSize.height;
-    const layoutHeight = event.nativeEvent.layoutMeasurement.height;
-    
-    // 灰色ハイライトの位置にあるアイテムのインデックスを計算
-    let index;
-    if (isBottomHighlight) {
-      // 一番下のハイライトの場合
-      const bottomOffset = offsetY + layoutHeight - 60; // 60 = bottom padding (20) + item height (40)
-      index = Math.round(bottomOffset / ITEM_HEIGHT);
-    } else {
-      // 中央のハイライトの場合（入庫日時タブ）
-      index = Math.round(offsetY / ITEM_HEIGHT + 2);
-    }
-    
-    const clampedIndex = Math.max(0, Math.min(index, maxIndex));
-    if (clampedIndex >= 0 && clampedIndex <= maxIndex) {
-      setter(clampedIndex);
-    }
-  };
-
-  const handleScrollEnd = (event: any, ref: React.RefObject<ScrollView | null>, setter: (value: number) => void, maxIndex: number, isBottomHighlight: boolean = false) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
-    const contentHeight = event.nativeEvent.contentSize.height;
-    const layoutHeight = event.nativeEvent.layoutMeasurement.height;
-    
-    // 灰色ハイライトの位置にあるアイテムのインデックスを計算
-    let index;
-    if (isBottomHighlight) {
-      // 一番下のハイライトの場合
-      const bottomOffset = offsetY + layoutHeight - 60; // 60 = bottom padding (20) + item height (40)
-      index = Math.round(bottomOffset / ITEM_HEIGHT);
-    } else {
-      // 中央のハイライトの場合（入庫日時タブ）
-      index = Math.round(offsetY / ITEM_HEIGHT + 2);
-    }
-    
+    // 中央のアイテムのインデックスを計算（2つのパディング考慮）
+    const index = Math.round(offsetY / ITEM_HEIGHT + 2);
     const clampedIndex = Math.max(0, Math.min(index, maxIndex));
     setter(clampedIndex);
-    scrollToIndex(ref, clampedIndex, isBottomHighlight);
+  };
+
+  const handleScrollEnd = (event: any, ref: React.RefObject<ScrollView>, setter: (value: number) => void, maxIndex: number) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    // 中央のアイテムのインデックスを計算
+    const index = Math.round(offsetY / ITEM_HEIGHT + 2);
+    const clampedIndex = Math.max(0, Math.min(index, maxIndex));
+    setter(clampedIndex);
+    scrollToIndex(ref, clampedIndex);
   };
 
   const handleConfirm = () => {
@@ -214,9 +181,10 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
       const newTab = getInitialTab();
       setActiveTab(newTab);
       
+      // 初期スクロール位置を設定
       setTimeout(() => {
         if (newTab === 'duration') {
-          scrollToIndex(durationScrollRef, selectedDurationIndex, true);
+          scrollToIndex(durationScrollRef, selectedDurationIndex);
         } else {
           scrollToIndex(dateScrollRef, selectedDateIndex);
           scrollToIndex(hourScrollRef, selectedHourIndex);
@@ -284,7 +252,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
           // 駐車時間タブ
           <View style={styles.content}>
             <View style={styles.pickerContainer}>
-              {/* Selection highlight */}
+              {/* Selection highlight - 中央に配置 */}
               <View style={styles.selectionHighlight} />
               
               <ScrollView
@@ -293,8 +261,8 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
                 showsVerticalScrollIndicator={false}
                 snapToInterval={ITEM_HEIGHT}
                 decelerationRate="fast"
-                onScroll={(e) => handleScroll(e, setSelectedDurationIndex, durations.length - 1, true)}
-                onMomentumScrollEnd={(e) => handleScrollEnd(e, durationScrollRef, setSelectedDurationIndex, durations.length - 1, true)}
+                onScroll={(e) => handleScroll(e, setSelectedDurationIndex, durations.length - 1)}
+                onMomentumScrollEnd={(e) => handleScrollEnd(e, durationScrollRef, setSelectedDurationIndex, durations.length - 1)}
                 scrollEventThrottle={16}
               >
                 <View style={{ height: ITEM_HEIGHT * 2 }} />
@@ -328,8 +296,15 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
         ) : (
           // 入庫日時タブ
           <View style={styles.content}>
+            <TouchableOpacity 
+              style={styles.currentTimeLink} 
+              onPress={setToCurrentTime}
+            >
+              <Text style={styles.currentTimeLinkText}>現時刻へ・・・</Text>
+            </TouchableOpacity>
+            
             <View style={styles.entryPickerContainer}>
-              {/* Selection highlight */}
+              {/* Selection highlight - 中央に配置 */}
               <View style={styles.selectionHighlight} />
               
               <View style={styles.pickersRow}>
@@ -393,7 +368,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
                           styles.entryTimeText,
                           index === selectedHourIndex && styles.selectedTimeText
                         ]}>
-                          {hour.toString().padStart(2, '0')}
+                          {hour}
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -462,7 +437,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: PANEL_HEIGHT,
+    height: SCREEN_HEIGHT * 0.3,
   },
   header: {
     flexDirection: 'row',
@@ -485,7 +460,7 @@ const styles = StyleSheet.create({
   },
   confirmButton: {
     padding: 4,
-    width: 40,
+    minWidth: 40,
     alignItems: 'flex-end',
   },
   confirmText: {
@@ -528,7 +503,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   
-  // Current time button
+  // Current time button/link
   currentTimeButton: {
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -541,6 +516,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
   },
+  currentTimeLink: {
+    position: 'absolute',
+    top: 16,
+    alignSelf: 'center',
+    zIndex: 10,
+  },
+  currentTimeLinkText: {
+    fontSize: 15,
+    color: '#8E8E93',
+  },
   
   // Picker styles
   pickerContainer: {
@@ -550,6 +535,7 @@ const styles = StyleSheet.create({
   entryPickerContainer: {
     flex: 1,
     position: 'relative',
+    marginTop: 40,
   },
   pickersRow: {
     flexDirection: 'row',
@@ -566,12 +552,13 @@ const styles = StyleSheet.create({
   },
   selectionHighlight: {
     position: 'absolute',
-    bottom: 20, // 一番下に配置
+    top: '50%',
     left: 20,
     right: 20,
     height: ITEM_HEIGHT,
     backgroundColor: 'rgba(0, 0, 0, 0.05)',
     borderRadius: 12,
+    marginTop: -ITEM_HEIGHT / 2,
     zIndex: 1,
   },
   
