@@ -19,14 +19,23 @@ interface ParkingTimeModalProps {
   onConfirm: (startTime: Date, endTime: Date) => void;
   initialStartTime?: Date;
   initialEndTime?: Date;
+  mode?: 'entry' | 'duration' | 'exit';
 }
 
 export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   visible,
   onClose,
   onConfirm,
+  mode = 'duration',
 }) => {
-  const [activeTab, setActiveTab] = useState<'entry' | 'duration'>('duration');
+  // モードに応じて適切なタブを初期値に設定
+  const getInitialTab = () => {
+    if (mode === 'entry') return 'entry';
+    if (mode === 'exit' || mode === 'duration') return 'duration';
+    return 'duration';
+  };
+  
+  const [activeTab, setActiveTab] = useState<'entry' | 'duration'>(getInitialTab());
   const [selectedDurationIndex, setSelectedDurationIndex] = useState(2); // デフォルト30分
   
   // 入庫日時の独立した状態 - 現在時刻をデフォルトに
@@ -178,25 +187,31 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
     setSelectedMinuteIndex(now.getMinutes());
     
     // スクロール位置を更新 - 選択したアイテムを中央に配置
-    if (dateScrollRef.current) {
-      // Index 0 を中央に配置
-      dateScrollRef.current.scrollTo({ y: 0, animated: true });
-    }
-    if (hourScrollRef.current) {
-      // 選択した時間を中央に配置
-      hourScrollRef.current.scrollTo({ y: Math.max(0, (now.getHours() - 1.5) * ITEM_HEIGHT), animated: true });
-    }
-    if (minuteScrollRef.current) {
-      // 選択した分を中央に配置
-      minuteScrollRef.current.scrollTo({ y: Math.max(0, (now.getMinutes() - 1.5) * ITEM_HEIGHT), animated: true });
-    }
+    // 灰色のハイライトは画面中央にあるので、選択したアイテムを中央に持ってくる
+    // scrollY = (index * ITEM_HEIGHT) - (中央までのオフセット)
+    // 中央までのオフセット = 1.5 * ITEM_HEIGHT (上のパディング分)
+    setTimeout(() => {
+      if (dateScrollRef.current) {
+        // Index 0 を中央に配置（最初のアイテムなので特別処理）
+        dateScrollRef.current.scrollTo({ y: 0, animated: true });
+      }
+      if (hourScrollRef.current) {
+        // 選択した時間を中央に配置
+        const hourOffset = now.getHours() * ITEM_HEIGHT - 1.5 * ITEM_HEIGHT;
+        hourScrollRef.current.scrollTo({ y: Math.max(0, hourOffset), animated: true });
+      }
+      if (minuteScrollRef.current) {
+        // 選択した分を中央に配置
+        const minuteOffset = now.getMinutes() * ITEM_HEIGHT - 1.5 * ITEM_HEIGHT;
+        minuteScrollRef.current.scrollTo({ y: Math.max(0, minuteOffset), animated: true });
+      }
+    }, 50);
   };
 
   const handleDurationScroll = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     // Calculate which item is at the center of the gray highlight
-    // Since we have 1.5 padding, the center item is at offsetY/ITEM_HEIGHT + 1.5
-    const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
+    const index = Math.round((offsetY + 1.5 * ITEM_HEIGHT) / ITEM_HEIGHT);
     if (index >= 0 && index < durations.length) {
       setSelectedDurationIndex(index);
     }
@@ -204,11 +219,11 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   
   const handleDurationScrollEnd = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
+    const index = Math.round((offsetY + 1.5 * ITEM_HEIGHT) / ITEM_HEIGHT);
     if (index >= 0 && index < durations.length && durationScrollRef.current) {
       // 正確な位置にスナップ
       durationScrollRef.current.scrollTo({
-        y: Math.max(0, (index - 1.5) * ITEM_HEIGHT),
+        y: Math.max(0, index * ITEM_HEIGHT - 1.5 * ITEM_HEIGHT),
         animated: true
       });
       setSelectedDurationIndex(index);
@@ -217,7 +232,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
 
   const handleDateScroll = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
+    const index = Math.round((offsetY + 1.5 * ITEM_HEIGHT) / ITEM_HEIGHT);
     if (index >= 0 && index < dates.length) {
       setSelectedDateIndex(index);
     }
@@ -225,10 +240,10 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   
   const handleDateScrollEnd = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
+    const index = Math.round((offsetY + 1.5 * ITEM_HEIGHT) / ITEM_HEIGHT);
     if (index >= 0 && index < dates.length && dateScrollRef.current) {
       dateScrollRef.current.scrollTo({
-        y: Math.max(0, (index - 1.5) * ITEM_HEIGHT),
+        y: Math.max(0, index * ITEM_HEIGHT - 1.5 * ITEM_HEIGHT),
         animated: true
       });
       setSelectedDateIndex(index);
@@ -237,7 +252,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
 
   const handleHourScroll = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
+    const index = Math.round((offsetY + 1.5 * ITEM_HEIGHT) / ITEM_HEIGHT);
     if (index >= 0 && index < hours.length) {
       setSelectedHourIndex(index);
     }
@@ -245,10 +260,10 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   
   const handleHourScrollEnd = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
+    const index = Math.round((offsetY + 1.5 * ITEM_HEIGHT) / ITEM_HEIGHT);
     if (index >= 0 && index < hours.length && hourScrollRef.current) {
       hourScrollRef.current.scrollTo({
-        y: Math.max(0, (index - 1.5) * ITEM_HEIGHT),
+        y: Math.max(0, index * ITEM_HEIGHT - 1.5 * ITEM_HEIGHT),
         animated: true
       });
       setSelectedHourIndex(index);
@@ -257,7 +272,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
 
   const handleMinuteScroll = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
+    const index = Math.round((offsetY + 1.5 * ITEM_HEIGHT) / ITEM_HEIGHT);
     if (index >= 0 && index < minutes.length) {
       setSelectedMinuteIndex(index);
     }
@@ -265,10 +280,10 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   
   const handleMinuteScrollEnd = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const index = Math.round(offsetY / ITEM_HEIGHT + 1.5);
+    const index = Math.round((offsetY + 1.5 * ITEM_HEIGHT) / ITEM_HEIGHT);
     if (index >= 0 && index < minutes.length && minuteScrollRef.current) {
       minuteScrollRef.current.scrollTo({
-        y: Math.max(0, (index - 1.5) * ITEM_HEIGHT),
+        y: Math.max(0, index * ITEM_HEIGHT - 1.5 * ITEM_HEIGHT),
         animated: true
       });
       setSelectedMinuteIndex(index);
@@ -295,8 +310,12 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
 
   useEffect(() => {
     if (visible) {
+      // モードに応じて適切なタブを設定
+      const newTab = getInitialTab();
+      setActiveTab(newTab);
+      
       // 初回表示時に現在時刻を設定
-      if (activeTab === 'entry') {
+      if (newTab === 'entry') {
         const currentTime = new Date();
         setSelectedDateIndex(0);
         setSelectedHourIndex(currentTime.getHours());
@@ -304,42 +323,42 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
       }
       
       setTimeout(() => {
-        if (activeTab === 'duration' && durationScrollRef.current) {
-          // Scroll so the selected item appears at center
-          // To center item at index i with 1.5 padding: scrollY = (i - 1.5) * ITEM_HEIGHT
+        if (newTab === 'duration' && durationScrollRef.current) {
+          // 選択したアイテムを中央に配置
+          const offset = selectedDurationIndex * ITEM_HEIGHT - 1.5 * ITEM_HEIGHT;
           durationScrollRef.current.scrollTo({ 
-            y: Math.max(0, (selectedDurationIndex - 1.5) * ITEM_HEIGHT), 
+            y: Math.max(0, offset), 
             animated: false 
           });
-        } else if (activeTab === 'entry') {
+        } else if (newTab === 'entry') {
           if (dateScrollRef.current) {
-            // Scroll so the selected item appears at center
-            // To center item at index i with 1.5 padding: scrollY = (i - 1.5) * ITEM_HEIGHT
+            // 選択したアイテムを中央に配置
+            const offset = selectedDateIndex * ITEM_HEIGHT - 1.5 * ITEM_HEIGHT;
             dateScrollRef.current.scrollTo({ 
-              y: Math.max(0, (selectedDateIndex - 1.5) * ITEM_HEIGHT), 
+              y: Math.max(0, offset), 
               animated: false 
             });
           }
           if (hourScrollRef.current) {
-            // Scroll so the selected item appears at center
-            // To center item at index i with 1.5 padding: scrollY = (i - 1.5) * ITEM_HEIGHT
+            // 選択したアイテムを中央に配置
+            const offset = selectedHourIndex * ITEM_HEIGHT - 1.5 * ITEM_HEIGHT;
             hourScrollRef.current.scrollTo({ 
-              y: Math.max(0, (selectedHourIndex - 1.5) * ITEM_HEIGHT), 
+              y: Math.max(0, offset), 
               animated: false 
             });
           }
           if (minuteScrollRef.current) {
-            // Scroll so the selected item appears at center
-            // To center item at index i with 1.5 padding: scrollY = (i - 1.5) * ITEM_HEIGHT
+            // 選択したアイテムを中央に配置
+            const offset = selectedMinuteIndex * ITEM_HEIGHT - 1.5 * ITEM_HEIGHT;
             minuteScrollRef.current.scrollTo({ 
-              y: Math.max(0, (selectedMinuteIndex - 1.5) * ITEM_HEIGHT), 
+              y: Math.max(0, offset), 
               animated: false 
             });
           }
         }
       }, 100);
     }
-  }, [visible, activeTab]);
+  }, [visible, mode]);
 
   return (
     <Modal

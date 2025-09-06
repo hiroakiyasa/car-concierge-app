@@ -555,6 +555,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
       
       <ParkingTimeModal
         visible={showTimeSelector}
+        mode={timeSelectorMode}
         onClose={() => setShowTimeSelector(false)}
         onConfirm={(startTime, endTime) => {
           const duration = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
