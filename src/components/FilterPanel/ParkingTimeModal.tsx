@@ -11,7 +11,8 @@ import {
 import { BlurView } from 'expo-blur';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const ITEM_HEIGHT = 44;
+const ITEM_HEIGHT = 40;
+const PANEL_HEIGHT = SCREEN_HEIGHT * 0.3;
 
 interface ParkingTimeModalProps {
   visible: boolean;
@@ -129,15 +130,18 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   // 指定インデックスへスクロール
   const scrollToIndex = (ref: React.RefObject<ScrollView | null>, index: number) => {
     if (ref.current) {
-      const offset = index * ITEM_HEIGHT;
-      ref.current.scrollTo({ y: offset, animated: true });
+      // 選択したアイテムを中央に配置するためのオフセット計算
+      // パディング2 * ITEM_HEIGHT を考慮
+      const offset = (index * ITEM_HEIGHT) - (2 * ITEM_HEIGHT);
+      ref.current.scrollTo({ y: Math.max(-2 * ITEM_HEIGHT, offset), animated: true });
     }
   };
 
   // スクロールハンドラー
   const handleScroll = (event: any, setter: (value: number) => void, maxIndex: number) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const index = Math.round(offsetY / ITEM_HEIGHT);
+    // パディング分を考慮して中央のアイテムを計算
+    const index = Math.round((offsetY + 2 * ITEM_HEIGHT) / ITEM_HEIGHT);
     if (index >= 0 && index <= maxIndex) {
       setter(index);
     }
@@ -145,7 +149,8 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
 
   const handleScrollEnd = (event: any, ref: React.RefObject<ScrollView | null>, setter: (value: number) => void, maxIndex: number) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    const index = Math.round(offsetY / ITEM_HEIGHT);
+    // パディング分を考慮して中央のアイテムを計算
+    const index = Math.round((offsetY + 2 * ITEM_HEIGHT) / ITEM_HEIGHT);
     const clampedIndex = Math.max(0, Math.min(index, maxIndex));
     setter(clampedIndex);
     scrollToIndex(ref, clampedIndex);
@@ -228,6 +233,12 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
             </TouchableOpacity>
           </View>
           
+          {activeTab === 'entry' && (
+            <TouchableOpacity onPress={setToCurrentTime} style={styles.currentTimeButton}>
+              <Text style={styles.currentTimeButtonText}>現時刻</Text>
+            </TouchableOpacity>
+          )}
+          
           <TouchableOpacity onPress={handleConfirm} style={styles.confirmButton}>
             <Text style={styles.confirmText}>設定</Text>
           </TouchableOpacity>
@@ -282,13 +293,6 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
         ) : (
           // 入庫日時タブ
           <View style={styles.content}>
-            <TouchableOpacity 
-              style={styles.currentTimeLink} 
-              onPress={setToCurrentTime}
-            >
-              <Text style={styles.currentTimeLinkText}>現時刻へ・・・</Text>
-            </TouchableOpacity>
-            
             <View style={styles.entryPickerContainer}>
               {/* Selection highlight */}
               <View style={styles.selectionHighlight} />
@@ -423,7 +427,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: SCREEN_HEIGHT * 0.4,
+    height: PANEL_HEIGHT,
   },
   header: {
     flexDirection: 'row',
@@ -489,16 +493,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   
-  // Current time link
-  currentTimeLink: {
-    position: 'absolute',
-    top: 16,
-    alignSelf: 'center',
-    zIndex: 10,
+  // Current time button
+  currentTimeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    backgroundColor: '#007AFF',
+    borderRadius: 14,
+    marginRight: 8,
   },
-  currentTimeLinkText: {
-    fontSize: 15,
-    color: '#8E8E93',
+  currentTimeButtonText: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   
   // Picker styles
@@ -509,7 +515,6 @@ const styles = StyleSheet.create({
   entryPickerContainer: {
     flex: 1,
     position: 'relative',
-    marginTop: 40,
   },
   pickersRow: {
     flexDirection: 'row',
