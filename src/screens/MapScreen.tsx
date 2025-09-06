@@ -5,8 +5,6 @@ import {
   Alert,
   Platform,
   ActivityIndicator,
-  Text,
-  TouchableOpacity,
 } from 'react-native';
 
 // プラットフォームに応じてマップコンポーネントを条件付きインポート
@@ -32,33 +30,30 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMainStore } from '@/stores/useMainStore';
 import { LocationService } from '@/services/location.service';
 import { SupabaseService } from '@/services/supabase.service';
-import { SearchService } from '@/services/search.service';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { CustomMarker } from '@/components/Map/CustomMarker';
 import { CategoryButtons } from '@/components/Map/CategoryButtons';
 import { MapScale } from '@/components/Map/MapScale';
-import { MenuButton } from '@/components/Map/MenuButton';
+import { PremiumMapControls } from '@/components/Map/PremiumMapControls';
 import { MenuModal } from '@/components/MenuModal';
 import { CompactBottomPanel } from '@/components/FilterPanel/CompactBottomPanel';
 import { SpotDetailBottomSheet } from '@/screens/SpotDetailBottomSheet';
 import { RankingListModal } from '@/screens/RankingListModal';
 import { Colors } from '@/utils/constants';
 import { Region, Spot, CoinParking } from '@/types';
-import { Ionicons } from '@expo/vector-icons';
 
 interface MapScreenProps {
   navigation: any;
 }
 
 export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
   const [showDetailSheet, setShowDetailSheet] = useState(false);
   const [showRankingModal, setShowRankingModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [searchStatus, setSearchStatus] = useState<'idle' | 'searching' | 'complete'>('idle');
   const [shouldReopenRanking, setShouldReopenRanking] = useState(false);
-  const [bottomPanelHeight, setBottomPanelHeight] = useState(100);
-  const [isPanelExpanded, setIsPanelExpanded] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [nearbyFacilities, setNearbyFacilities] = useState<Spot[]>([]);
   
@@ -67,7 +62,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
     setMapRegion,
     searchResults,
     setSearchResults,
-    userLocation,
     setUserLocation,
     isLoading,
     setIsLoading,
@@ -126,6 +120,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   
   const handleSearch = async (isExpanded?: boolean) => {
     setIsLoading(true);
+    setSearchStatus('searching');
     try {
       // onRegionChangeCompleteで保存された最新のregionを使用
       const fullScreenRegion = { ...mapRegion };
@@ -141,27 +136,77 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         return;
       }
       
-      // パネルの状態に応じて検索範囲を計算
+      // UI要素を考慮した検索範囲を計算
       let searchRegion = { ...fullScreenRegion };
       
-      // パネルが展開されている場合、表示範囲を調整
+      // ラベルサイズを考慮したマージン設定
+      const labelWidthRatio = 0.06; // ラベル1個分の幅（画面の6%）
+      const labelHeightRatio = 0.05; // ラベル1個分の高さ（画面の5%）
+      const bottomLabelMargin = 0; // 下側はパネル境界まで（変更なし）
+      const topInset = labelHeightRatio; // 上側は画面上端から1ラベル分内側に制限
+      const upwardOffset = labelHeightRatio * 2; // 全体を2ラベル分上にオフセット
+      
+      // パネルが展開されている場合
       if (isExpanded) {
         // 画面の1/3がパネルで隠れている
-        const visibleRatio = 0.67; // 2/3が見える
-        // 南端を調整（北側にシフト）
-        const adjustedLatitudeDelta = fullScreenRegion.latitudeDelta * visibleRatio;
-        const centerShift = (fullScreenRegion.latitudeDelta - adjustedLatitudeDelta) / 2;
+        const bottomPanelRatio = 0.33; // パネルが占める割合
+        const bottomExclusionRatio = bottomPanelRatio + bottomLabelMargin; // パネル境界まで
+        const leftMargin = labelWidthRatio; // 左側はラベル1個分内側（範囲を1ラベル分拡張）
+        const rightMargin = labelWidthRatio + 0.05; // 右側はラベル1個分内側
+        
+        // 境界を計算
+        // 上側：画面上端から1ラベル分内側（画面内に制限）
+        // 下側：パネル境界まで（変更なし）
+        const visibleTopRatio = 1 - topInset; // 上側は画面から1ラベル分内側まで（画面外には出ない）
+        const visibleBottomRatio = 1 - bottomExclusionRatio; // 下側はパネル境界まで
+        
+        // 緯度の調整（上下）
+        const adjustedLatitudeDelta = fullScreenRegion.latitudeDelta * (visibleTopRatio - bottomExclusionRatio);
+        
+        // 経度の調整（左右）
+        const adjustedLongitudeDelta = fullScreenRegion.longitudeDelta * (1 - leftMargin - rightMargin);
+        
+        // 検索範囲の中心を計算（上にシフト + 境界調整）
+        const centerLatitudeShift = fullScreenRegion.latitudeDelta * ((upwardOffset + bottomExclusionRatio - topInset) / 2);
         
         searchRegion = {
-          latitude: fullScreenRegion.latitude + centerShift,
-          longitude: fullScreenRegion.longitude,
+          latitude: fullScreenRegion.latitude + centerLatitudeShift,
+          longitude: fullScreenRegion.longitude - (fullScreenRegion.longitudeDelta * rightMargin * 0.3),
           latitudeDelta: adjustedLatitudeDelta,
-          longitudeDelta: fullScreenRegion.longitudeDelta,
+          longitudeDelta: adjustedLongitudeDelta,
         };
         
-        console.log('📦 パネル展開時の検索範囲調整（画面の2/3）');
+        console.log('📦 パネル展開時: 下側=パネル境界、上側=画面上端から1ラベル分内側（' + (bottomExclusionRatio * 100).toFixed(0) + '%除外）');
       } else {
-        console.log('📦 パネル最小時の検索範囲（全体）');
+        // パネル最小時でも約100pxは隠れている
+        const bottomPanelRatio = 0.15; // 最小パネルが占める割合
+        const bottomExclusionRatio = bottomPanelRatio + bottomLabelMargin; // パネル境界まで
+        const leftMargin = labelWidthRatio; // 左側はラベル1個分内側（範囲を1ラベル分拡張）
+        const rightMargin = labelWidthRatio + 0.05; // 右側はラベル1個分内側
+        
+        // 境界を計算
+        // 上側：画面上端から1ラベル分内側（画面内に制限）
+        // 下側：パネル境界まで（変更なし）
+        const visibleTopRatio = 1 - topInset; // 上側は画面から1ラベル分内側まで（画面外には出ない）
+        const visibleBottomRatio = 1 - bottomExclusionRatio; // 下側はパネル境界まで
+        
+        // 緯度の調整（上下）
+        const adjustedLatitudeDelta = fullScreenRegion.latitudeDelta * (visibleTopRatio - bottomExclusionRatio);
+        
+        // 経度の調整（左右）
+        const adjustedLongitudeDelta = fullScreenRegion.longitudeDelta * (1 - leftMargin - rightMargin);
+        
+        // 検索範囲の中心を計算（上にシフト + 境界調整）
+        const centerLatitudeShift = fullScreenRegion.latitudeDelta * ((upwardOffset + bottomExclusionRatio - topInset) / 2);
+        
+        searchRegion = {
+          latitude: fullScreenRegion.latitude + centerLatitudeShift,
+          longitude: fullScreenRegion.longitude - (fullScreenRegion.longitudeDelta * rightMargin * 0.3),
+          latitudeDelta: adjustedLatitudeDelta,
+          longitudeDelta: adjustedLongitudeDelta,
+        };
+        
+        console.log('📦 パネル最小時: 下側=パネル境界、上側=画面上端から1ラベル分内側（' + (bottomExclusionRatio * 100).toFixed(0) + '%除外）');
       }
       
       console.log('🎯 検索にSupabaseに送るregion:', {
@@ -169,6 +214,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         中心経度: searchRegion.longitude.toFixed(6),
         緯度幅: searchRegion.latitudeDelta.toFixed(6),
         経度幅: searchRegion.longitudeDelta.toFixed(6),
+        北端: (searchRegion.latitude + searchRegion.latitudeDelta/2).toFixed(6),
+        南端: (searchRegion.latitude - searchRegion.latitudeDelta/2).toFixed(6),
+        東端: (searchRegion.longitude + searchRegion.longitudeDelta/2).toFixed(6),
+        西端: (searchRegion.longitude - searchRegion.longitudeDelta/2).toFixed(6),
       });
       
       // 選択されたカテゴリーを検索
@@ -344,7 +393,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
               const convenienceStore = parking.nearestConvenienceStore;
               const id = convenienceStore.id || (convenienceStore as any).store_id;
               const distance = (convenienceStore as any).distance_m || convenienceStore.distance;
-              const name = convenienceStore.name || (convenienceStore as any).store_name || 'Unknown';
               
               if (id) {
                 convenienceIds.add(id);
@@ -355,7 +403,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
               const hotspring = parking.nearestHotspring;
               const id = hotspring.id || (hotspring as any).spring_id;
               const distance = (hotspring as any).distance_m || hotspring.distance;
-              const name = hotspring.name || (hotspring as any).spring_name || 'Unknown';
               
               if (id) {
                 hotspringIds.add(id);
@@ -484,6 +531,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       
       console.log(`🗺️ 合計${displaySpots.length}件を地図に表示`);
       setSearchResults(displaySpots);
+      setSearchStatus('complete');
+      // 3秒後に状態をリセット
+      setTimeout(() => setSearchStatus('idle'), 3000);
     } catch (error) {
       console.error('Search error:', error);
       Alert.alert(
@@ -493,6 +543,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       );
     } finally {
       setIsLoading(false);
+      if (searchStatus === 'searching') {
+        setSearchStatus('idle');
+      }
     }
   };
   
@@ -546,7 +599,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       // 最寄りのコンビニを取得して地図に追加
       if (parkingSpot.nearestConvenienceStore) {
         const convenienceId = parkingSpot.nearestConvenienceStore.id || 
-                              parkingSpot.nearestConvenienceStore.store_id ||
+                              (parkingSpot.nearestConvenienceStore as any).store_id ||
                               (parkingSpot.nearestConvenienceStore as any).facility_id;
         
         console.log('🏪 コンビニID:', convenienceId);
@@ -569,7 +622,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       // 最寄りの温泉を取得して地図に追加
       if (parkingSpot.nearestHotspring) {
         const hotspringId = parkingSpot.nearestHotspring.id || 
-                           parkingSpot.nearestHotspring.spring_id ||
+                           (parkingSpot.nearestHotspring as any).spring_id ||
                            (parkingSpot.nearestHotspring as any).facility_id;
         
         console.log('♨️ 温泉ID:', hotspringId);
@@ -667,9 +720,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const renderMarkers = () => {
     const markers = [];
     
-    // 1. まず通常の検索結果を追加（選択されていない駐車場）
+    // 1. まず通常の検索結果を追加（ランキング4位以下と選択されていない駐車場）
     searchResults.forEach((spot) => {
-      if (selectedSpot?.id !== spot.id) {
+      if (selectedSpot?.id !== spot.id && (!spot.rank || spot.rank > 3)) {
         markers.push(
           <CustomMarker
             key={spot.id}
@@ -700,7 +753,52 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       });
     }
     
-    // 3. 最後に選択された駐車場を追加（最前面に表示）
+    // 3. ランキング3位を追加（前面に表示）
+    const rank3 = searchResults.find(spot => spot.rank === 3 && selectedSpot?.id !== spot.id);
+    if (rank3) {
+      markers.push(
+        <CustomMarker
+          key={`rank3-${rank3.id}`}
+          spot={rank3}
+          rank={3}
+          calculatedFee={(rank3 as any).calculatedFee}
+          onPress={() => handleMarkerPress(rank3)}
+          isSelected={false}
+        />
+      );
+    }
+    
+    // 4. ランキング2位を追加（さらに前面に表示）
+    const rank2 = searchResults.find(spot => spot.rank === 2 && selectedSpot?.id !== spot.id);
+    if (rank2) {
+      markers.push(
+        <CustomMarker
+          key={`rank2-${rank2.id}`}
+          spot={rank2}
+          rank={2}
+          calculatedFee={(rank2 as any).calculatedFee}
+          onPress={() => handleMarkerPress(rank2)}
+          isSelected={false}
+        />
+      );
+    }
+    
+    // 5. ランキング1位を追加（さらに前面に表示）
+    const rank1 = searchResults.find(spot => spot.rank === 1 && selectedSpot?.id !== spot.id);
+    if (rank1) {
+      markers.push(
+        <CustomMarker
+          key={`rank1-${rank1.id}`}
+          spot={rank1}
+          rank={1}
+          calculatedFee={(rank1 as any).calculatedFee}
+          onPress={() => handleMarkerPress(rank1)}
+          isSelected={false}
+        />
+      );
+    }
+    
+    // 6. 最後に選択された駐車場を追加（最前面に表示）
     if (selectedSpot) {
       markers.push(
         <CustomMarker
@@ -752,41 +850,20 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         
         <CategoryButtons />
         
-        {/* 縮尺バー */}
+        {/* プレミアムマップコントロール */}
+        <PremiumMapControls
+          onMenuPress={() => setShowMenuModal(true)}
+          onLocationPress={handleLocationPress}
+          onRankingPress={() => setShowRankingModal(true)}
+          searchStatus={searchStatus}
+          resultCount={searchResults.filter(s => s.category === 'コインパーキング').length}
+        />
+        
+        {/* 縮尺バー - パネルの少し上に配置 */}
         {isMapReady && mapRegion && (
           <MapScale region={mapRegion} />
         )}
         
-        {/* メニューボタン */}
-        <MenuButton 
-          onPress={() => setShowMenuModal(true)}
-        />
-        
-        {/* 現在地ボタン */}
-        <TouchableOpacity
-          style={styles.locationButton}
-          onPress={handleLocationPress}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="navigate-circle" size={32} color={Colors.primary} />
-        </TouchableOpacity>
-        
-        {/* ランキングボタン */}
-        <TouchableOpacity
-          style={styles.rankingButton}
-          onPress={() => setShowRankingModal(true)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="trophy" size={24} color={Colors.white} />
-        </TouchableOpacity>
-        
-        {searchResults.length > 0 && (
-          <View style={styles.resultContainer}>
-            <Text style={styles.resultText}>
-              上位{searchResults.length}件を表示中
-            </Text>
-          </View>
-        )}
         
         {isLoading && (
           <View style={styles.loadingOverlay}>
@@ -797,10 +874,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       
       <CompactBottomPanel 
         navigation={navigation} 
-        onHeightChange={(height, isExpanded) => {
-          setBottomPanelHeight(height);
-          setIsPanelExpanded(isExpanded);
-        }}
+        onHeightChange={() => {}}
         onSearch={(isExpanded) => handleSearch(isExpanded)}
       />
       
@@ -817,7 +891,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           
           if (spot.nearestConvenienceStore) {
             const convenienceId = spot.nearestConvenienceStore.id || 
-                                  spot.nearestConvenienceStore.store_id ||
+                                  (spot.nearestConvenienceStore as any).store_id ||
                                   (spot.nearestConvenienceStore as any).facility_id;
             
             if (convenienceId) {
@@ -834,7 +908,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           
           if (spot.nearestHotspring) {
             const hotspringId = spot.nearestHotspring.id || 
-                               spot.nearestHotspring.spring_id ||
+                               (spot.nearestHotspring as any).spring_id ||
                                (spot.nearestHotspring as any).facility_id;
             
             if (hotspringId) {
@@ -958,37 +1032,5 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  locationButton: {
-    position: 'absolute',
-    bottom: 190,
-    right: 16,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  rankingButton: {
-    position: 'absolute',
-    bottom: 130,
-    right: 16,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.warning,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
   },
 });
