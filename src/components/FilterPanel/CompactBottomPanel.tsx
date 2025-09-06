@@ -188,15 +188,15 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   };
   
   // 周辺検索用のスライダー変換関数（対数的スケール）
-  // 0-70%: 0-100m (より細かい粒度)
+  // 0-70%: 10-100m (より細かい粒度、最小10m)
   // 70-100%: 100-1000m
   const sliderToRadius = (value: number): number => {
-    if (value <= 0) return 0;
+    if (value <= 0) return 10; // 最小値を10mに
     if (value >= 100) return 1000;
     
-    // 0-70の範囲で0-100mをマッピング
+    // 0-70の範囲で10-100mをマッピング
     if (value <= 70) {
-      return Math.round((value / 70) * 100);
+      return Math.round(10 + (value / 70) * 90); // 10mから始まる
     }
     
     // 70-100の範囲で100-1000mをマッピング
@@ -205,12 +205,12 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   };
   
   const radiusToSlider = (radius: number): number => {
-    if (radius <= 0) return 0;
+    if (radius <= 10) return 0; // 10m以下は0に
     if (radius >= 1000) return 100;
     
-    // 0-100mは0-70%にマッピング
+    // 10-100mは0-70%にマッピング
     if (radius <= 100) {
-      return Math.round((radius / 100) * 70);
+      return Math.round(((radius - 10) / 90) * 70);
     }
     
     // 100-1000mは70-100%にマッピング
@@ -400,16 +400,17 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
           
           {/* 周辺検索コンテンツ */}
           <View style={[styles.nearbyContent, styles.contentPage]}>
-            <View style={styles.nearbyFacilities}>
-              {/* コンビニ */}
-              <View style={styles.facilityRow}>
+            <View style={styles.nearbyContentRow}>
+              <View style={styles.nearbyFacilities}>
+                {/* コンビニ */}
+                <View style={styles.facilityRow}>
                 <TouchableOpacity
                   style={[styles.facilityButton, convenienceSelected && styles.facilityButtonActive]}
                   onPress={() => {
                     const newSelected = !convenienceSelected;
                     setConvenienceSelected(newSelected);
                     // 選択時にデフォルト100mを設定
-                    if (newSelected && convenienceRadius === 0) {
+                    if (newSelected && convenienceRadius < 10) {
                       setConvenienceRadius(100);
                       setConvenienceSlider(radiusToSlider(100));
                     }
@@ -435,7 +436,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                       disabled={!convenienceSelected}
                     />
                     <View style={styles.sliderScaleLabels}>
-                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: 0 }]}>0</Text>
+                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: 0 }]}>10m</Text>
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: '35%' }]}>50m</Text>
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: '70%' }]}>100m</Text>
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', right: 0 }]}>1000m</Text>
@@ -445,12 +446,6 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                     {convenienceRadius}m
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.searchButtonNearby}
-                  onPress={handleSearch}
-                >
-                  <Ionicons name="search" size={20} color={Colors.white} />
-                </TouchableOpacity>
               </View>
               
               {/* 温泉 */}
@@ -461,7 +456,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                     const newSelected = !hotspringSelected;
                     setHotspringSelected(newSelected);
                     // 選択時にデフォルト500mを設定
-                    if (newSelected && hotspringRadius === 0) {
+                    if (newSelected && hotspringRadius < 10) {
                       setHotspringRadius(500);
                       setHotspringSlider(radiusToSlider(500));
                     }
@@ -487,7 +482,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                       disabled={!hotspringSelected}
                     />
                     <View style={styles.sliderScaleLabels}>
-                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: 0 }]}>0</Text>
+                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: 0 }]}>10m</Text>
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: '35%' }]}>50m</Text>
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: '70%' }]}>100m</Text>
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', right: 0 }]}>1000m</Text>
@@ -497,13 +492,18 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                     {hotspringRadius}m
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.searchButtonNearby}
-                  onPress={handleSearch}
-                >
-                  <Ionicons name="search" size={20} color={Colors.white} />
-                </TouchableOpacity>
               </View>
+              </View>
+              
+              {/* 統合検索ボタン - 右側に配置 */}
+              <TouchableOpacity
+                style={[styles.nearbySearchButtonLarge, 
+                  (!convenienceSelected && !hotspringSelected) && styles.nearbySearchButtonLargeDisabled]}
+                onPress={handleSearch}
+                disabled={!convenienceSelected && !hotspringSelected}
+              >
+                <Ionicons name="search" size={28} color={Colors.white} />
+              </TouchableOpacity>
             </View>
           </View>
           
@@ -796,6 +796,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
+  nearbyContentRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 10,
+  },
   nearbyFacilities: {
     flex: 1,
     justifyContent: 'center',
@@ -837,11 +844,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginRight: -5, // スライダーを右に寄せる
+    marginRight: 8, // 大きな検索ボタンのためのスペース
   },
   nearbySliderWrapper: {
     flex: 1,
     position: 'relative',
+    maxWidth: '80%', // スライダーを短くして検索ボタンのスペースを確保
   },
   nearbySlider: {
     width: '100%',
@@ -879,5 +887,48 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 5,
+  },
+  nearbySearchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    marginTop: 15,
+    marginHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  nearbySearchButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  nearbySearchButtonText: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  nearbySearchButtonLarge: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  nearbySearchButtonLargeDisabled: {
+    backgroundColor: '#ccc',
+    shadowOpacity: 0.1,
+    elevation: 2,
   },
 });
