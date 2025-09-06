@@ -128,38 +128,67 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   };
 
   // 指定インデックスへスクロール
-  const scrollToIndex = (ref: React.RefObject<ScrollView | null>, index: number) => {
+  const scrollToIndex = (ref: React.RefObject<ScrollView | null>, index: number, isBottomHighlight: boolean = false) => {
     if (ref.current) {
-      // 選択したアイテムを中央（灰色ハイライト）に配置するためのオフセット計算
-      // パディングが2アイテム分あるため、インデックスがNの場合、
-      // スクロール位置は (N-2)*ITEM_HEIGHT となる
-      const offset = Math.max(-2 * ITEM_HEIGHT, (index - 2) * ITEM_HEIGHT);
-      ref.current.scrollTo({ y: offset, animated: true });
+      let offset;
+      if (isBottomHighlight) {
+        // 一番下のハイライトの場合
+        // 選択したアイテムが一番下に来るようにスクロール
+        // contentHeight - layoutHeight + 60 の位置にアイテムが来る
+        const totalItems = 17; // durations.length
+        const contentHeight = (totalItems + 4) * ITEM_HEIGHT; // +4 for padding
+        const layoutHeight = PANEL_HEIGHT - 80; // panel height - header height
+        offset = index * ITEM_HEIGHT - layoutHeight + 60;
+      } else {
+        // 中央のハイライトの場合
+        offset = Math.max(-2 * ITEM_HEIGHT, (index - 2) * ITEM_HEIGHT);
+      }
+      ref.current.scrollTo({ y: Math.max(0, offset), animated: true });
     }
   };
 
   // スクロールハンドラー
-  const handleScroll = (event: any, setter: (value: number) => void, maxIndex: number) => {
+  const handleScroll = (event: any, setter: (value: number) => void, maxIndex: number, isBottomHighlight: boolean = false) => {
     const offsetY = event.nativeEvent.contentOffset.y;
+    const contentHeight = event.nativeEvent.contentSize.height;
+    const layoutHeight = event.nativeEvent.layoutMeasurement.height;
+    
     // 灰色ハイライトの位置にあるアイテムのインデックスを計算
-    // offsetY / ITEM_HEIGHT で何番目の位置か計算し、
-    // パディング2個分を考慮して+2する
-    const index = Math.round(offsetY / ITEM_HEIGHT + 2);
+    let index;
+    if (isBottomHighlight) {
+      // 一番下のハイライトの場合
+      const bottomOffset = offsetY + layoutHeight - 60; // 60 = bottom padding (20) + item height (40)
+      index = Math.round(bottomOffset / ITEM_HEIGHT);
+    } else {
+      // 中央のハイライトの場合（入庫日時タブ）
+      index = Math.round(offsetY / ITEM_HEIGHT + 2);
+    }
+    
     const clampedIndex = Math.max(0, Math.min(index, maxIndex));
     if (clampedIndex >= 0 && clampedIndex <= maxIndex) {
       setter(clampedIndex);
     }
   };
 
-  const handleScrollEnd = (event: any, ref: React.RefObject<ScrollView | null>, setter: (value: number) => void, maxIndex: number) => {
+  const handleScrollEnd = (event: any, ref: React.RefObject<ScrollView | null>, setter: (value: number) => void, maxIndex: number, isBottomHighlight: boolean = false) => {
     const offsetY = event.nativeEvent.contentOffset.y;
+    const contentHeight = event.nativeEvent.contentSize.height;
+    const layoutHeight = event.nativeEvent.layoutMeasurement.height;
+    
     // 灰色ハイライトの位置にあるアイテムのインデックスを計算
-    // offsetY / ITEM_HEIGHT で何番目の位置か計算し、
-    // パディング2個分を考慮して+2する
-    const index = Math.round(offsetY / ITEM_HEIGHT + 2);
+    let index;
+    if (isBottomHighlight) {
+      // 一番下のハイライトの場合
+      const bottomOffset = offsetY + layoutHeight - 60; // 60 = bottom padding (20) + item height (40)
+      index = Math.round(bottomOffset / ITEM_HEIGHT);
+    } else {
+      // 中央のハイライトの場合（入庫日時タブ）
+      index = Math.round(offsetY / ITEM_HEIGHT + 2);
+    }
+    
     const clampedIndex = Math.max(0, Math.min(index, maxIndex));
     setter(clampedIndex);
-    scrollToIndex(ref, clampedIndex);
+    scrollToIndex(ref, clampedIndex, isBottomHighlight);
   };
 
   const handleConfirm = () => {
@@ -187,7 +216,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
       
       setTimeout(() => {
         if (newTab === 'duration') {
-          scrollToIndex(durationScrollRef, selectedDurationIndex);
+          scrollToIndex(durationScrollRef, selectedDurationIndex, true);
         } else {
           scrollToIndex(dateScrollRef, selectedDateIndex);
           scrollToIndex(hourScrollRef, selectedHourIndex);
@@ -264,8 +293,8 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
                 showsVerticalScrollIndicator={false}
                 snapToInterval={ITEM_HEIGHT}
                 decelerationRate="fast"
-                onScroll={(e) => handleScroll(e, setSelectedDurationIndex, durations.length - 1)}
-                onMomentumScrollEnd={(e) => handleScrollEnd(e, durationScrollRef, setSelectedDurationIndex, durations.length - 1)}
+                onScroll={(e) => handleScroll(e, setSelectedDurationIndex, durations.length - 1, true)}
+                onMomentumScrollEnd={(e) => handleScrollEnd(e, durationScrollRef, setSelectedDurationIndex, durations.length - 1, true)}
                 scrollEventThrottle={16}
               >
                 <View style={{ height: ITEM_HEIGHT * 2 }} />
@@ -537,13 +566,12 @@ const styles = StyleSheet.create({
   },
   selectionHighlight: {
     position: 'absolute',
-    top: '50%',
+    bottom: 20, // 一番下に配置
     left: 20,
     right: 20,
     height: ITEM_HEIGHT,
     backgroundColor: 'rgba(0, 0, 0, 0.05)',
     borderRadius: 12,
-    marginTop: -ITEM_HEIGHT / 2,
     zIndex: 1,
   },
   
