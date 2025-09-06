@@ -718,30 +718,47 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   };
   
   const renderMarkers = () => {
-    const markers = [];
+    const markers: React.ReactElement[] = [];
     
-    // 1. まず通常の検索結果を追加（ランキング4位以下と選択されていない駐車場）
+    // データの有効性を確認
+    if (!searchResults || !Array.isArray(searchResults)) {
+      console.log('⚠️ searchResults is invalid');
+      return markers;
+    }
+    
+    // 1. まずコインパーキング以外のカテゴリーを追加（後ろに表示）
     searchResults.forEach((spot) => {
-      if (selectedSpot?.id !== spot.id && (!spot.rank || spot.rank > 3)) {
-        markers.push(
+      // スポットのデータ検証
+      if (!spot || !spot.id || spot.lat == null || spot.lng == null) {
+        console.log('⚠️ Invalid spot data:', spot);
+        return;
+      }
+      
+      if (spot.category !== 'コインパーキング') {
+        const marker = (
           <CustomMarker
-            key={spot.id}
+            key={`other-${spot.id}`}
             spot={spot}
-            rank={spot.rank}
-            calculatedFee={(spot as any).calculatedFee}
             onPress={() => handleMarkerPress(spot)}
             isSelected={false}
           />
         );
+        if (marker) markers.push(marker);
       }
     });
     
     // 2. 最寄り施設を追加（コンビニと温泉）
-    if (nearbyFacilities.length > 0) {
+    if (nearbyFacilities && nearbyFacilities.length > 0) {
       console.log('🗺️ 最寄り施設をマーカーに追加:', nearbyFacilities.length, '件');
       nearbyFacilities.forEach((facility) => {
+        // 施設のデータ検証
+        if (!facility || !facility.id || facility.lat == null || facility.lng == null) {
+          console.log('⚠️ Invalid facility data:', facility);
+          return;
+        }
+        
         console.log(`  - ${facility.category}: ${facility.name} (${facility.lat}, ${facility.lng})`);
-        markers.push(
+        const marker = (
           <CustomMarker
             key={`nearby-${facility.id}`}
             spot={facility}
@@ -750,13 +767,38 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
             isNearbyFacility={true} // 最寄り施設フラグを追加
           />
         );
+        if (marker) markers.push(marker);
       });
     }
     
-    // 3. ランキング3位を追加（前面に表示）
-    const rank3 = searchResults.find(spot => spot.rank === 3 && selectedSpot?.id !== spot.id);
-    if (rank3) {
-      markers.push(
+    // 3. コインパーキング（ランキング4位以下）を追加（前面に表示）
+    searchResults.forEach((spot) => {
+      // スポットのデータ検証
+      if (!spot || !spot.id || spot.lat == null || spot.lng == null) {
+        return;
+      }
+      
+      if (spot.category === 'コインパーキング' && selectedSpot?.id !== spot.id && (!spot.rank || spot.rank > 3)) {
+        const marker = (
+          <CustomMarker
+            key={`parking-${spot.id}`}
+            spot={spot}
+            rank={spot.rank}
+            calculatedFee={(spot as any).calculatedFee}
+            onPress={() => handleMarkerPress(spot)}
+            isSelected={false}
+          />
+        );
+        if (marker) markers.push(marker);
+      }
+    });
+    
+    // 4. ランキング3位を追加（さらに前面に表示）
+    const rank3 = searchResults.find(spot => 
+      spot && spot.rank === 3 && selectedSpot?.id !== spot.id
+    );
+    if (rank3 && rank3.id && rank3.lat != null && rank3.lng != null) {
+      const marker = (
         <CustomMarker
           key={`rank3-${rank3.id}`}
           spot={rank3}
@@ -766,12 +808,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           isSelected={false}
         />
       );
+      if (marker) markers.push(marker);
     }
     
-    // 4. ランキング2位を追加（さらに前面に表示）
-    const rank2 = searchResults.find(spot => spot.rank === 2 && selectedSpot?.id !== spot.id);
-    if (rank2) {
-      markers.push(
+    // 5. ランキング2位を追加（さらに前面に表示）
+    const rank2 = searchResults.find(spot => 
+      spot && spot.rank === 2 && selectedSpot?.id !== spot.id
+    );
+    if (rank2 && rank2.id && rank2.lat != null && rank2.lng != null) {
+      const marker = (
         <CustomMarker
           key={`rank2-${rank2.id}`}
           spot={rank2}
@@ -781,12 +826,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           isSelected={false}
         />
       );
+      if (marker) markers.push(marker);
     }
     
-    // 5. ランキング1位を追加（さらに前面に表示）
-    const rank1 = searchResults.find(spot => spot.rank === 1 && selectedSpot?.id !== spot.id);
-    if (rank1) {
-      markers.push(
+    // 6. ランキング1位を追加（さらに前面に表示）
+    const rank1 = searchResults.find(spot => 
+      spot && spot.rank === 1 && selectedSpot?.id !== spot.id
+    );
+    if (rank1 && rank1.id && rank1.lat != null && rank1.lng != null) {
+      const marker = (
         <CustomMarker
           key={`rank1-${rank1.id}`}
           spot={rank1}
@@ -796,11 +844,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           isSelected={false}
         />
       );
+      if (marker) markers.push(marker);
     }
     
-    // 6. 最後に選択された駐車場を追加（最前面に表示）
-    if (selectedSpot) {
-      markers.push(
+    // 7. 最後に選択された駐車場を追加（最前面に表示）
+    if (selectedSpot && selectedSpot.id && selectedSpot.lat != null && selectedSpot.lng != null) {
+      const marker = (
         <CustomMarker
           key={`selected-${selectedSpot.id}`}
           spot={selectedSpot}
@@ -810,6 +859,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           isSelected={true}
         />
       );
+      if (marker) markers.push(marker);
     }
     
     return markers;
@@ -977,6 +1027,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           setShowDetailSheet(false);
           // 最寄り施設を地図から削除
           setNearbyFacilities([]);
+          // 選択状態もクリア
+          selectSpot(null);
           // 詳細を閉じた後、必要に応じてランキングを再表示
           if (shouldReopenRanking) {
             setTimeout(() => {
