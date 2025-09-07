@@ -11,7 +11,8 @@ import {
 import { BlurView } from 'expo-blur';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const ITEM_HEIGHT = 44;
+const ITEM_HEIGHT = 50;
+const PANEL_HEIGHT = SCREEN_HEIGHT * 0.3;
 
 interface ParkingTimeModalProps {
   visible: boolean;
@@ -43,8 +44,15 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   const now = new Date();
   const [selectedDateIndex, setSelectedDateIndex] = useState(0);
   const [selectedHourIndex, setSelectedHourIndex] = useState(now.getHours());
-  const [selectedMinuteIndex, setSelectedMinuteIndex] = useState(Math.floor(now.getMinutes() / 10) * 10);
-  
+  // Fix: Calculate initial minute index without using the minutes array
+  const getInitialMinuteIndex = () => {
+    const currentMinute = now.getMinutes();
+    const roundedMinute = Math.floor(currentMinute / 10) * 10;
+    // Map to index: 0->0, 10->1, 20->2, 30->3, 40->4, 50->5
+    return Math.floor(roundedMinute / 10);
+  };
+  const [selectedMinuteIndex, setSelectedMinuteIndex] = useState(getInitialMinuteIndex());
+
   const durationScrollRef = useRef<ScrollView>(null);
   const dateScrollRef = useRef<ScrollView>(null);
   const hourScrollRef = useRef<ScrollView>(null);
@@ -77,7 +85,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
     const today = new Date();
     const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
     
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 30; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
       const month = date.getMonth() + 1;
@@ -94,7 +102,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
 
   const dates = generateDates();
   const hours = Array.from({ length: 24 }, (_, i) => i);
-  const minutes = Array.from({ length: 60 }, (_, i) => i);
+  const minutes = Array.from({ length: 6 }, (_, i) => i * 10); // 0, 10, 20, 30, 40, 50
 
   // 終了時刻の計算
   const calculateEndTime = (durationMinutes: number) => {
@@ -108,72 +116,107 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
     const hour = endTime.getHours();
     const minute = endTime.getMinutes();
     
-    // 日付を含めて表示
-    if (endTime.getDate() !== startTime.getDate()) {
-      return `〜${month}月${day}日 ${weekday} ${hour}:${minute.toString().padStart(2, '0')}`;
-    } else {
-      return `〜${month}月${day}日 ${weekday} ${hour}:${minute.toString().padStart(2, '0')}`;
-    }
+    return `〜${month}月${day}日 ${weekday} ${hour}:${minute.toString().padStart(2, '0')}`;
   };
 
   // 現在時刻へ設定
   const setToCurrentTime = () => {
-    const now = new Date();
-    setSelectedDateIndex(0);
-    setSelectedHourIndex(now.getHours());
-    setSelectedMinuteIndex(Math.floor(now.getMinutes() / 10) * 10);
-    
-    // スクロール位置を更新
-    setTimeout(() => {
-      scrollToIndex(dateScrollRef, 0);
-      scrollToIndex(hourScrollRef, now.getHours());
-      scrollToIndex(minuteScrollRef, Math.floor(now.getMinutes() / 10) * 10);
-    }, 100);
+    try {
+      const now = new Date();
+      setSelectedDateIndex(0);
+      setSelectedHourIndex(now.getHours());
+      
+      // Find the closest minute value
+      const currentMinute = now.getMinutes();
+      const roundedMinute = Math.round(currentMinute / 10) * 10;
+      // Ensure it's within 0-50 range
+      const clampedMinute = Math.min(50, Math.max(0, roundedMinute));
+      // Convert to index: 0->0, 10->1, 20->2, 30->3, 40->4, 50->5
+      const adjustedIndex = clampedMinute / 10;
+      
+      setSelectedMinuteIndex(adjustedIndex);
+      
+      // スクロール位置を更新
+      setTimeout(() => {
+        scrollToIndex(dateScrollRef, 0);
+        scrollToIndex(hourScrollRef, now.getHours());
+        scrollToIndex(minuteScrollRef, adjustedIndex);
+      }, 100);
+    } catch (error) {
+      console.error('Error in setToCurrentTime:', error);
+    }
   };
 
   // 指定インデックスへスクロール（中央配置用）
   const scrollToIndex = (ref: React.RefObject<ScrollView | null>, index: number) => {
     if (ref.current) {
-      // 2つのパディングアイテムがあるので、中央に配置するための計算
-      const offset = (index - 2) * ITEM_HEIGHT;
-      ref.current.scrollTo({ y: Math.max(0, offset), animated: true });
+      const offset = index * ITEM_HEIGHT;
+      ref.current.scrollTo({ y: offset, animated: true });
     }
   };
 
   // スクロールハンドラー
   const handleScroll = (event: any, setter: (value: number) => void, maxIndex: number) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    // 中央のアイテムのインデックスを計算（2つのパディング考慮）
-    const index = Math.round(offsetY / ITEM_HEIGHT + 2);
+    const index = Math.round(offsetY / ITEM_HEIGHT);
     const clampedIndex = Math.max(0, Math.min(index, maxIndex));
     setter(clampedIndex);
   };
 
   const handleScrollEnd = (event: any, ref: React.RefObject<ScrollView | null>, setter: (value: number) => void, maxIndex: number) => {
     const offsetY = event.nativeEvent.contentOffset.y;
-    // 中央のアイテムのインデックスを計算
-    const index = Math.round(offsetY / ITEM_HEIGHT + 2);
+    const index = Math.round(offsetY / ITEM_HEIGHT);
     const clampedIndex = Math.max(0, Math.min(index, maxIndex));
     setter(clampedIndex);
     scrollToIndex(ref, clampedIndex);
   };
 
   const handleConfirm = () => {
-    let startTime: Date;
-    
-    if (activeTab === 'entry') {
-      const selectedDate = dates[selectedDateIndex].date;
-      startTime = new Date(selectedDate);
-      startTime.setHours(hours[selectedHourIndex]);
-      startTime.setMinutes(minutes[selectedMinuteIndex]);
-    } else {
-      startTime = new Date();
+    try {
+      let startTime: Date;
+      
+      if (activeTab === 'entry') {
+        const selectedDate = dates[selectedDateIndex].date;
+        startTime = new Date(selectedDate);
+        startTime.setHours(hours[selectedHourIndex]);
+        // Fix: minutes array already contains actual minute values (0, 10, 20, etc.)
+        startTime.setMinutes(minutes[selectedMinuteIndex]);
+        startTime.setSeconds(0);
+        startTime.setMilliseconds(0);
+      } else {
+        // For duration mode, use current time
+        startTime = new Date();
+        startTime.setSeconds(0);
+        startTime.setMilliseconds(0);
+      }
+      
+      const selectedDuration = durations[selectedDurationIndex].minutes;
+      const endTime = new Date(startTime.getTime() + selectedDuration * 60000);
+      
+      // Validate times
+      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+        console.error('Invalid date calculation:', {
+          startTime: startTime.toString(),
+          endTime: endTime.toString(),
+          selectedDateIndex,
+          selectedHourIndex,
+          selectedMinuteIndex,
+          selectedDurationIndex
+        });
+        return;
+      }
+      
+      console.log('Time confirmed:', {
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        duration: selectedDuration
+      })
+      
+      onConfirm(startTime, endTime);
+      onClose();
+    } catch (error) {
+      console.error('Error in handleConfirm:', error);
     }
-    
-    const selectedDuration = durations[selectedDurationIndex].minutes;
-    const endTime = new Date(startTime.getTime() + selectedDuration * 60000);
-    onConfirm(startTime, endTime);
-    onClose();
   };
 
   useEffect(() => {
@@ -238,7 +281,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
           
           {activeTab === 'entry' && (
             <TouchableOpacity onPress={setToCurrentTime} style={styles.currentTimeButton}>
-              <Text style={styles.currentTimeButtonText}>現時刻</Text>
+              <Text style={styles.currentTimeText}>現在時刻</Text>
             </TouchableOpacity>
           )}
           
@@ -251,13 +294,14 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
         {activeTab === 'duration' ? (
           // 駐車時間タブ
           <View style={styles.content}>
-            <View style={styles.pickerContainer}>
-              {/* Selection highlight - 中央に配置 */}
+            <View style={styles.pickerWrapper}>
+              {/* Selection highlight */}
               <View style={styles.selectionHighlight} />
               
               <ScrollView
                 ref={durationScrollRef}
                 style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
                 snapToInterval={ITEM_HEIGHT}
                 decelerationRate="fast"
@@ -265,7 +309,6 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
                 onMomentumScrollEnd={(e) => handleScrollEnd(e, durationScrollRef, setSelectedDurationIndex, durations.length - 1)}
                 scrollEventThrottle={16}
               >
-                <View style={{ height: ITEM_HEIGHT * 2 }} />
                 {durations.map((item, index) => (
                   <TouchableOpacity
                     key={item.minutes}
@@ -277,42 +320,35 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
                   >
                     <Text style={[
                       styles.durationLabel,
-                      index === selectedDurationIndex && styles.selectedText
+                      index === selectedDurationIndex && styles.selectedDurationLabel
                     ]}>
                       {item.label}
                     </Text>
                     <Text style={[
                       styles.durationTime,
-                      index === selectedDurationIndex && styles.selectedTime
+                      index === selectedDurationIndex && styles.selectedDurationTime
                     ]}>
                       {calculateEndTime(item.minutes)}
                     </Text>
                   </TouchableOpacity>
                 ))}
-                <View style={{ height: ITEM_HEIGHT * 2 }} />
               </ScrollView>
             </View>
           </View>
         ) : (
           // 入庫日時タブ
           <View style={styles.content}>
-            <TouchableOpacity 
-              style={styles.currentTimeLink} 
-              onPress={setToCurrentTime}
-            >
-              <Text style={styles.currentTimeLinkText}>現時刻へ・・・</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.entryPickerContainer}>
-              {/* Selection highlight - 中央に配置 */}
+            <View style={styles.entryPickerWrapper}>
+              {/* Selection highlight */}
               <View style={styles.selectionHighlight} />
               
               <View style={styles.pickersRow}>
                 {/* Date Picker */}
-                <View style={styles.pickerColumn}>
+                <View style={styles.datePickerColumn}>
                   <ScrollView
                     ref={dateScrollRef}
                     style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                     snapToInterval={ITEM_HEIGHT}
                     decelerationRate="fast"
@@ -320,25 +356,23 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
                     onMomentumScrollEnd={(e) => handleScrollEnd(e, dateScrollRef, setSelectedDateIndex, dates.length - 1)}
                     scrollEventThrottle={16}
                   >
-                    <View style={{ height: ITEM_HEIGHT * 2 }} />
                     {dates.map((item, index) => (
                       <TouchableOpacity
                         key={index}
-                        style={styles.entryItem}
+                        style={styles.dateItem}
                         onPress={() => {
                           setSelectedDateIndex(index);
                           scrollToIndex(dateScrollRef, index);
                         }}
                       >
                         <Text style={[
-                          styles.entryDateText,
+                          styles.dateText,
                           index === selectedDateIndex && styles.selectedDateText
                         ]}>
                           {item.label}
                         </Text>
                       </TouchableOpacity>
                     ))}
-                    <View style={{ height: ITEM_HEIGHT * 2 }} />
                   </ScrollView>
                 </View>
                 
@@ -347,32 +381,31 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
                   <ScrollView
                     ref={hourScrollRef}
                     style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                     snapToInterval={ITEM_HEIGHT}
                     decelerationRate="fast"
-                    onScroll={(e) => handleScroll(e, setSelectedHourIndex, 23)}
-                    onMomentumScrollEnd={(e) => handleScrollEnd(e, hourScrollRef, setSelectedHourIndex, 23)}
+                    onScroll={(e) => handleScroll(e, setSelectedHourIndex, hours.length - 1)}
+                    onMomentumScrollEnd={(e) => handleScrollEnd(e, hourScrollRef, setSelectedHourIndex, hours.length - 1)}
                     scrollEventThrottle={16}
                   >
-                    <View style={{ height: ITEM_HEIGHT * 2 }} />
                     {hours.map((hour, index) => (
                       <TouchableOpacity
                         key={index}
-                        style={styles.entryItem}
+                        style={styles.timeItem}
                         onPress={() => {
                           setSelectedHourIndex(index);
                           scrollToIndex(hourScrollRef, index);
                         }}
                       >
                         <Text style={[
-                          styles.entryTimeText,
+                          styles.timeText,
                           index === selectedHourIndex && styles.selectedTimeText
                         ]}>
                           {hour}
                         </Text>
                       </TouchableOpacity>
                     ))}
-                    <View style={{ height: ITEM_HEIGHT * 2 }} />
                   </ScrollView>
                 </View>
                 
@@ -381,32 +414,31 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
                   <ScrollView
                     ref={minuteScrollRef}
                     style={styles.scrollView}
+                    contentContainerStyle={styles.scrollContent}
                     showsVerticalScrollIndicator={false}
                     snapToInterval={ITEM_HEIGHT}
                     decelerationRate="fast"
-                    onScroll={(e) => handleScroll(e, setSelectedMinuteIndex, 59)}
-                    onMomentumScrollEnd={(e) => handleScrollEnd(e, minuteScrollRef, setSelectedMinuteIndex, 59)}
+                    onScroll={(e) => handleScroll(e, setSelectedMinuteIndex, minutes.length - 1)}
+                    onMomentumScrollEnd={(e) => handleScrollEnd(e, minuteScrollRef, setSelectedMinuteIndex, minutes.length - 1)}
                     scrollEventThrottle={16}
                   >
-                    <View style={{ height: ITEM_HEIGHT * 2 }} />
                     {minutes.map((minute, index) => (
                       <TouchableOpacity
                         key={index}
-                        style={styles.entryItem}
+                        style={styles.timeItem}
                         onPress={() => {
                           setSelectedMinuteIndex(index);
                           scrollToIndex(minuteScrollRef, index);
                         }}
                       >
                         <Text style={[
-                          styles.entryTimeText,
+                          styles.timeText,
                           index === selectedMinuteIndex && styles.selectedTimeText
                         ]}>
                           {minute.toString().padStart(2, '0')}
                         </Text>
                       </TouchableOpacity>
                     ))}
-                    <View style={{ height: ITEM_HEIGHT * 2 }} />
                   </ScrollView>
                 </View>
               </View>
@@ -437,7 +469,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: SCREEN_HEIGHT * 0.3,
+    height: PANEL_HEIGHT,
   },
   header: {
     flexDirection: 'row',
@@ -457,6 +489,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#007AFF',
     fontWeight: '300',
+  },
+  currentTimeButton: {
+    padding: 4,
+    marginRight: 8,
+  },
+  currentTimeText: {
+    fontSize: 15,
+    color: '#007AFF',
   },
   confirmButton: {
     padding: 4,
@@ -503,53 +543,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   
-  // Current time button/link
-  currentTimeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    backgroundColor: '#007AFF',
-    borderRadius: 14,
-    marginRight: 8,
+  // Picker wrapper
+  pickerWrapper: {
+    flex: 1,
+    position: 'relative',
+    paddingVertical: 20,
   },
-  currentTimeButtonText: {
-    fontSize: 13,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  currentTimeLink: {
-    position: 'absolute',
-    top: 16,
-    alignSelf: 'center',
-    zIndex: 10,
-  },
-  currentTimeLinkText: {
-    fontSize: 15,
-    color: '#8E8E93',
+  entryPickerWrapper: {
+    flex: 1,
+    position: 'relative',
+    paddingVertical: 20,
   },
   
-  // Picker styles
-  pickerContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  entryPickerContainer: {
-    flex: 1,
-    position: 'relative',
-    marginTop: 40,
-  },
-  pickersRow: {
-    flexDirection: 'row',
-    flex: 1,
-  },
-  pickerColumn: {
-    flex: 3,
-  },
-  timePickerColumn: {
-    flex: 1.5,
-  },
-  scrollView: {
-    flex: 1,
-  },
+  // Selection highlight
   selectionHighlight: {
     position: 'absolute',
     top: '50%',
@@ -558,44 +564,66 @@ const styles = StyleSheet.create({
     height: ITEM_HEIGHT,
     backgroundColor: 'rgba(0, 0, 0, 0.05)',
     borderRadius: 12,
-    marginTop: -ITEM_HEIGHT / 2,
+    marginTop: -ITEM_HEIGHT / 2 + 18,
     zIndex: 1,
+    pointerEvents: 'none' as 'none',
   },
   
-  // Duration tab styles
+  // Scroll views
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingVertical: (PANEL_HEIGHT - 100) / 2 - ITEM_HEIGHT / 2,
+  },
+  
+  // Picker columns
+  pickersRow: {
+    flexDirection: 'row',
+    flex: 1,
+  },
+  datePickerColumn: {
+    flex: 2.5,
+  },
+  timePickerColumn: {
+    flex: 1,
+  },
+  
+  // Duration items
   itemContainer: {
     height: ITEM_HEIGHT,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 30,
   },
   durationLabel: {
     fontSize: 17,
     color: '#8E8E93',
     fontWeight: '400',
   },
+  selectedDurationLabel: {
+    fontSize: 18,
+    color: '#000000',
+    fontWeight: '600',
+  },
   durationTime: {
     fontSize: 14,
     color: '#C7C7CC',
   },
-  selectedText: {
-    color: '#000000',
-    fontWeight: '600',
-    fontSize: 18,
-  },
-  selectedTime: {
+  selectedDurationTime: {
+    fontSize: 15,
     color: '#FF3B30',
     fontWeight: '500',
   },
   
-  // Entry time tab styles
-  entryItem: {
+  // Entry date/time items
+  dateItem: {
     height: ITEM_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  entryDateText: {
+  dateText: {
     fontSize: 15,
     color: '#8E8E93',
     fontWeight: '400',
@@ -605,13 +633,18 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontWeight: '600',
   },
-  entryTimeText: {
-    fontSize: 22,
+  timeItem: {
+    height: ITEM_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timeText: {
+    fontSize: 20,
     color: '#8E8E93',
     fontWeight: '400',
   },
   selectedTimeText: {
-    fontSize: 24,
+    fontSize: 22,
     color: '#000000',
     fontWeight: '600',
   },
