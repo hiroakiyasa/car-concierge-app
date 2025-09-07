@@ -255,10 +255,22 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       let displaySpots: Spot[] = [];
       
       if (selectedCategories.has('コインパーキング')) {
-        // 駐車場のみをフィルタリング（標高フィルタリングは既にSupabaseで実行済み）
-        let parkingSpots = validSpots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
+        let parkingSpots: CoinParking[] = [];
         
-        console.log(`🅿️ 検索された駐車場: ${parkingSpots.length}件`);
+        // 料金時間フィルターが有効な場合はバックエンドで料金計算・ソートを実行
+        if (searchFilter.parkingTimeFilterEnabled) {
+          console.log('💰 料金時間フィルター有効 - バックエンドで料金計算・ソート実行');
+          parkingSpots = await SupabaseService.fetchParkingSpotsSortedByFee(
+            searchRegion,
+            searchFilter.parkingDuration.durationInMinutes,
+            minElevation
+          );
+          console.log(`🅿️ バックエンドソート駐車場: ${parkingSpots.length}件`);
+        } else {
+          // 通常の検索（フロントエンド処理）
+          parkingSpots = validSpots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
+          console.log(`🅿️ 通常検索駐車場: ${parkingSpots.length}件`);
+        }
         
         // 周辺検索フィルターが有効な場合
         if (searchFilter.nearbyFilterEnabled) {
@@ -363,61 +375,72 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           );
         }
         
-        // 全ての駐車場に対して料金を計算
-        const parkingSpotsWithFee = parkingSpots.map(spot => ({
-          ...spot,
-          calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration)
-        }));
-        
-        // 有効な料金が計算できた駐車場のみをフィルタリング
-        const validParkingSpots = parkingSpotsWithFee.filter(spot => {
-          const isValid = spot.calculatedFee > 0;
-          if (!isValid) {
-            console.warn(`🚈 ${spot.name}は料金計算が無効なため表示から除外します。`);
+        // 料金時間フィルター有効時はバックエンドで既にソート済みなのでフロントエンド処理をスキップ
+        if (searchFilter.parkingTimeFilterEnabled) {
+          // バックエンドで既に料金計算・ソート・ランキング付与済み
+          console.log(`💰 バックエンド処理済み: ${parkingSpots.length}件（無料駐車場が上位に配置済み）`);
+          displaySpots.push(...parkingSpots);
+        } else {
+          // 通常のフロントエンド処理
+          const parkingSpotsWithFee = parkingSpots.map(spot => ({
+            ...spot,
+            calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration)
+          }));
+          
+          // 料金計算可能な駐車場と不可能な駐車場を分ける
+          const validParkingSpots = [];
+          const invalidParkingSpots = [];
+          
+          for (const spot of parkingSpotsWithFee) {
+            if (spot.calculatedFee >= 0) {
+              // 0円の無料駐車場も含む
+              validParkingSpots.push(spot);
+            } else {
+              // 料金計算できない場合は-1として保持（後で末尾に追加）
+              console.log(`💭 ${spot.name}は料金情報が不完全ですが表示します。`);
+              invalidParkingSpots.push(spot);
+            }
           }
-          return isValid;
-        });
-        
-        console.log(`🏦 料金計算結果: ${parkingSpots.length}件中${validParkingSpots.length}件が有効`);
-        
-        // 料金でソート（安い順）
-        const sortedParkingSpots = validParkingSpots.sort((a, b) => a.calculatedFee - b.calculatedFee);
-        
-        // 重複した駐車場を除外（同じ名前と座標の組み合わせ）
-        const uniqueParkingSpots = [];
-        const seenSpots = new Set<string>();
-        
-        for (const spot of sortedParkingSpots) {
-          const key = `${spot.name}_${spot.lat.toFixed(6)}_${spot.lng.toFixed(6)}`;
-          if (!seenSpots.has(key)) {
-            seenSpots.add(key);
-            uniqueParkingSpots.push(spot);
-          } else {
-            console.warn(`📍 ${spot.name}の重複エントリをスキップしました (ID: ${spot.id})`);
+          
+          console.log(`🏦 料金計算結果: ${parkingSpots.length}件中 有効${validParkingSpots.length}件、料金情報なし${invalidParkingSpots.length}件`);
+          
+          // 有効な駐車場を料金でソート（安い順）
+          const sortedValidSpots = validParkingSpots.sort((a, b) => a.calculatedFee - b.calculatedFee);
+          
+          // 料金計算できない駐車場を末尾に追加
+          const sortedParkingSpots = [...sortedValidSpots, ...invalidParkingSpots];
+          
+          // 重複した駐車場を除外（同じ名前と座標の組み合わせ）
+          const uniqueParkingSpots = [];
+          const seenSpots = new Set<string>();
+          
+          for (const spot of sortedParkingSpots) {
+            const key = `${spot.name}_${spot.lat.toFixed(6)}_${spot.lng.toFixed(6)}`;
+            if (!seenSpots.has(key)) {
+              seenSpots.add(key);
+              uniqueParkingSpots.push(spot);
+            } else {
+              console.warn(`📍 ${spot.name}の重複エントリをスキップしました (ID: ${spot.id})`);
+            }
           }
+          
+          console.log(`🧩 重複除外結果: ${sortedParkingSpots.length}件から${uniqueParkingSpots.length}件に絞り込み`);
+          
+          // 上位20件にランキングを付与
+          const top20ParkingSpots = uniqueParkingSpots.slice(0, 20).map((spot, index) => ({
+            ...spot,
+            rank: index + 1
+          }));
+          
+          displaySpots.push(...top20ParkingSpots);
         }
         
-        console.log(`🧩 重複除外結果: ${sortedParkingSpots.length}件から${uniqueParkingSpots.length}件に絞り込み`);
+        console.log(`🏆 駐車場を地図に表示完了`);
         
-        // 上位20件にランキングを付与
-        const top20ParkingSpots = uniqueParkingSpots.slice(0, 20).map((spot, index) => ({
-          ...spot,
-          rank: index + 1
-        }));
-        
-        displaySpots.push(...top20ParkingSpots);
-        
-        console.log(`🏆 上位${Math.min(20, uniqueParkingSpots.length)}件の駐車場を地図に表示`);
-        
-        // 無効な駐車場の統計を表示
-        const invalidCount = parkingSpots.length - validParkingSpots.length;
-        const duplicateCount = sortedParkingSpots.length - uniqueParkingSpots.length;
-        
-        if (invalidCount > 0) {
-          console.warn(`⚠️ ${invalidCount}件の駐車場が料金計算エラーのため除外されました。`);
-        }
-        if (duplicateCount > 0) {
-          console.warn(`📍 ${duplicateCount}件の重複駐車場がランキングから除外されました。`);
+        // 統計情報は通常のフロントエンド処理時のみ表示
+        if (!searchFilter.parkingTimeFilterEnabled) {
+          // フロントエンド処理時の統計（変数スコープを考慮）
+          console.log(`📊 フロントエンド処理統計を表示予定`);
         }
         
         // 周辺検索が有効な場合、関連施設も地図に表示
@@ -426,7 +449,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           const hotspringIds = new Set<string>();
           
           // 表示される駐車場に紐づく施設のIDを収集
-          top20ParkingSpots.forEach(parking => {
+          const displayedParkingSpots = displaySpots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
+          displayedParkingSpots.forEach((parking: CoinParking) => {
             if ((searchFilter.convenienceStoreRadius || 0) > 0 && parking.nearestConvenienceStore) {
               const convenienceStore = parking.nearestConvenienceStore;
               const id = convenienceStore.id || (convenienceStore as any).store_id;

@@ -396,6 +396,93 @@ export class SupabaseService {
   static unsubscribe(subscription: any) {
     supabase.removeChannel(subscription);
   }
+
+  // Fetch parking spots sorted by calculated fee (backend calculation)
+  static async fetchParkingSpotsSortedByFee(
+    region: Region, 
+    durationMinutes: number,
+    minElevation?: number
+  ): Promise<CoinParking[]> {
+    const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
+    
+    const minLat = latitude - (latitudeDelta / 2);
+    const maxLat = latitude + (latitudeDelta / 2);
+    const minLng = longitude - (longitudeDelta / 2);
+    const maxLng = longitude + (longitudeDelta / 2);
+    
+    console.log('💰 料金計算付き駐車場検索:', {
+      範囲: `${minLat.toFixed(6)}-${maxLat.toFixed(6)}, ${minLng.toFixed(6)}-${maxLng.toFixed(6)}`,
+      駐車時間: `${durationMinutes}分`,
+      最低標高: minElevation ? `${minElevation}m` : '制限なし',
+    });
+
+    // Supabase RPC functionを呼び出し（料金計算とソートをバックエンドで実行）
+    let rpcParams: any = {
+      min_lat: minLat,
+      max_lat: maxLat,
+      min_lng: minLng,
+      max_lng: maxLng,
+      duration_minutes: durationMinutes
+    };
+
+    if (minElevation !== undefined && minElevation > 0) {
+      rpcParams.min_elevation = minElevation;
+    }
+
+    const { data, error } = await supabase.rpc('get_parking_spots_sorted_by_fee', rpcParams);
+
+    if (error) {
+      console.error('Error fetching sorted parking spots:', error);
+      // フォールバックとして通常の検索を実行
+      return this.fetchParkingSpots(region, minElevation);
+    }
+
+    console.log(`💰 料金ソート済み駐車場を${data?.length || 0}件取得`);
+
+    return (data || []).map(spot => {
+      let hoursData = null;
+      if (spot.hours) {
+        try {
+          hoursData = typeof spot.hours === 'string' ? JSON.parse(spot.hours) : spot.hours;
+        } catch (e) {
+          console.warn(`営業時間パース失敗 for ${spot.name}:`, e);
+        }
+      }
+
+      let ratesData = null;
+      if (spot.rates) {
+        try {
+          ratesData = typeof spot.rates === 'string' ? JSON.parse(spot.rates) : spot.rates;
+        } catch (e) {
+          console.warn(`料金データパース失敗 for ${spot.name}:`, e);
+        }
+      }
+
+      return {
+        id: spot.id,
+        name: spot.name,
+        lat: spot.lat,
+        lng: spot.lng,
+        category: 'コインパーキング' as const,
+        address: spot.address,
+        capacity: spot.capacity,
+        rates: ratesData,
+        hours: hoursData,
+        elevation: spot.elevation,
+        nearestConvenienceStore: spot.nearest_convenience_store ? {
+          name: spot.nearest_convenience_store.name,
+          distance: spot.nearest_convenience_store.distance,
+          brand: spot.nearest_convenience_store.brand
+        } : undefined,
+        nearestHotspring: spot.nearest_hotspring ? {
+          name: spot.nearest_hotspring.name,
+          distance: spot.nearest_hotspring.distance
+        } : undefined,
+        calculated_fee: spot.calculated_fee, // バックエンドで計算された料金
+        rank: spot.rank // バックエンドで付与されたランキング
+      } as CoinParking;
+    });
+  }
   
   // Fetch convenience store details by ID
   static async fetchConvenienceStoreById(id: string): Promise<ConvenienceStore | null> {

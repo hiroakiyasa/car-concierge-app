@@ -143,14 +143,14 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
     // 料金をフォーマット
     const formatPrice = () => {
       // calculatedFeeが渡されている場合（ランキング表示時）
-      if (calculatedFee !== undefined && calculatedFee !== null && calculatedFee > 0) {
-        return `¥${calculatedFee.toLocaleString()}`;
+      if (calculatedFee !== undefined && calculatedFee !== null && calculatedFee >= 0) {
+        return calculatedFee === 0 ? '無料' : `¥${calculatedFee.toLocaleString()}`;
       }
       
       // spotにcalculatedFeeが含まれている場合
       const parking = spot as CoinParking;
-      if (parking.calculatedFee !== undefined && parking.calculatedFee !== null && parking.calculatedFee > 0) {
-        return `¥${parking.calculatedFee.toLocaleString()}`;
+      if (parking.calculatedFee !== undefined && parking.calculatedFee !== null && parking.calculatedFee >= 0) {
+        return parking.calculatedFee === 0 ? '無料' : `¥${parking.calculatedFee.toLocaleString()}`;
       }
       
       // hourly_priceがある場合（レガシーフィールド）

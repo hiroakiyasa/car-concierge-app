@@ -93,9 +93,17 @@ export const RankingListModal: React.FC<RankingListModalProps> = ({
 
   const formatPrice = (spot: CoinParking): string => {
     if (spot.calculatedFee !== undefined && spot.calculatedFee !== null) {
+      // -1の場合は料金情報なし
+      if (spot.calculatedFee === -1) {
+        return '料金情報なし';
+      }
+      // 0円の場合は無料と表示
+      if (spot.calculatedFee === 0) {
+        return '無料';
+      }
       return `¥${spot.calculatedFee.toLocaleString()}`;
     }
-    return '---';
+    return '料金情報なし';
   };
 
   const renderItem = ({ item, index }: { item: CoinParking; index: number }) => {

@@ -19,8 +19,34 @@ export class ParkingFeeCalculator {
     
     // 料金データのバリデーション
     const baseRate = parking.rates.find(r => r.type === 'base');
-    if (!baseRate || !baseRate.price || !baseRate.minutes) {
+    const maxRate = parking.rates.find(r => r.type === 'max');
+    
+    // base料金がない場合
+    if (!baseRate || baseRate.price === undefined || baseRate.price === null) {
+      // max料金のみの場合をチェック
+      if (maxRate && maxRate.price !== undefined && maxRate.price !== null) {
+        // max料金が0円の場合は無料駐車場
+        if (maxRate.price === 0) {
+          console.log(`✅ ${parking.name}は最大料金0円の無料駐車場です。`);
+          return 0;
+        }
+        // max料金のみで有料の場合は、その料金を返す
+        console.log(`💰 ${parking.name}は最大料金のみ: ¥${maxRate.price}`);
+        return maxRate.price;
+      }
       console.warn(`⚠️ ${parking.name}の基本料金データが無効です。`, baseRate);
+      return -1;
+    }
+    
+    // 無料駐車場の特別処理（price=0かつminutes=0の場合）
+    if (baseRate.price === 0 && baseRate.minutes === 0) {
+      console.log(`✅ ${parking.name}は完全無料駐車場です。`);
+      return 0;
+    }
+    
+    // minutes が 0 の場合は無効（無料駐車場以外）
+    if (!baseRate.minutes) {
+      console.warn(`⚠️ ${parking.name}の基本料金データが無効です（minutes=0）。`, baseRate);
       return -1;
     }
 
@@ -52,9 +78,17 @@ export class ParkingFeeCalculator {
     }
 
     // 最終料金のバリデーション
+    // 無料駐車場（0円）は有効なので、-1は返さない
     if (totalFee === 0) {
-      console.warn(`⚠️ ${parking.name}の料金計算結果が0円です。料金データ:`, parking.rates);
-      return -1;
+      // 無料駐車場かどうかを確認
+      const isFreeParking = parking.rates.some(r => r.price === 0 && (r.type === 'base' || r.type === 'max'));
+      if (isFreeParking) {
+        console.log(`✅ ${parking.name}は無料駐車場です。`);
+        return 0; // 無料駐車場として0円を返す
+      } else {
+        console.warn(`⚠️ ${parking.name}の料金計算結果が0円ですが、料金データが不正です:`, parking.rates);
+        return -1;
+      }
     }
     
     return totalFee;

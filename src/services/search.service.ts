@@ -139,7 +139,7 @@ export class SearchService {
         
         const parking = spot as CoinParking;
         const fee = ParkingFeeCalculator.calculateFee(parking, filter.parkingDuration);
-        return fee > 0; // 有効な料金のみ通す
+        return fee >= 0; // 有効な料金のみ通す（0円の無料駐車場も含む）
       });
       
       // 有効な駐車場を料金でソート
