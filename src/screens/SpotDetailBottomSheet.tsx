@@ -175,27 +175,77 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     return '---';
   };
   
-  const formatRateStructure = (): string => {
+  const formatRateStructure = (): React.ReactNode => {
     if (!isParking || !parkingSpot.rates || parkingSpot.rates.length === 0) {
-      return '料金情報なし';
+      return <Text style={styles.rateStructureText}>料金情報なし</Text>;
     }
     
     const rates = parkingSpot.rates;
-    const baseRates = rates.filter(r => r.type === 'base').sort((a, b) => a.minutes - b.minutes);
-    const maxRate = rates.find(r => r.type === 'max');
     
-    let priceText = '';
-    if (baseRates.length > 0) {
-      const firstRate = baseRates[0];
-      priceText = `${firstRate.minutes}分¥${firstRate.price}`;
-    }
+    // 料金タイプ別に分類
+    const baseRates = rates.filter(r => r.type === 'base');
+    const maxRates = rates.filter(r => r.type === 'max');
+    const conditionalFreeRates = rates.filter(r => r.type === 'conditional_free');
     
-    if (maxRate) {
-      if (priceText) priceText += ' / ';
-      priceText += `最大¥${maxRate.price}`;
-    }
+    const formatTimeRange = (timeRange?: string) => {
+      if (!timeRange || timeRange === 'not_specified') return '';
+      return ` (${timeRange})`;
+    };
     
-    return priceText || '料金情報なし';
+    const formatDayType = (dayType?: string) => {
+      if (!dayType) return '';
+      return `【${dayType}】`;
+    };
+    
+    return (
+      <View style={styles.rateStructureContainer}>
+        {/* 条件付き無料 */}
+        {conditionalFreeRates.length > 0 && (
+          <View style={styles.rateSection}>
+            <Text style={styles.rateSectionTitle}>🆓 無料時間</Text>
+            {conditionalFreeRates.map((rate, index) => (
+              <Text key={index} style={styles.rateItem}>
+                {formatDayType(rate.day_type)}最初{rate.minutes}分無料{formatTimeRange(rate.time_range)}
+              </Text>
+            ))}
+          </View>
+        )}
+        
+        {/* 基本料金 */}
+        {baseRates.length > 0 && (
+          <View style={styles.rateSection}>
+            <Text style={styles.rateSectionTitle}>💰 通常料金</Text>
+            {baseRates.map((rate, index) => (
+              <Text key={index} style={styles.rateItem}>
+                {formatDayType(rate.day_type)}{rate.minutes}分毎 ¥{rate.price?.toLocaleString()}{formatTimeRange(rate.time_range)}
+              </Text>
+            ))}
+          </View>
+        )}
+        
+        {/* 最大料金 */}
+        {maxRates.length > 0 && (
+          <View style={styles.rateSection}>
+            <Text style={styles.rateSectionTitle}>🔝 最大料金</Text>
+            {maxRates.map((rate, index) => (
+              <Text key={index} style={styles.rateItem}>
+                {formatDayType(rate.day_type)}最大¥{rate.price?.toLocaleString()}
+                {rate.minutes && rate.minutes < 1440 && ` (${Math.floor(rate.minutes/60)}時間)`}
+                {formatTimeRange(rate.time_range)}
+              </Text>
+            ))}
+          </View>
+        )}
+        
+        {/* 元の料金表記（参考） */}
+        {(parkingSpot as any).original_fees && (
+          <View style={styles.rateSection}>
+            <Text style={styles.rateSectionTitle}>📋 元の表記</Text>
+            <Text style={styles.originalFeesText}>{(parkingSpot as any).original_fees}</Text>
+          </View>
+        )}
+      </View>
+    );
   };
   
   const formatOperatingHours = (): string => {
@@ -452,9 +502,11 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                   <Text style={styles.pricingMainValue}>{formatPrice()}</Text>
                 </View>
                 <View style={styles.pricingDivider} />
-                <View style={styles.pricingRow}>
+                <View style={styles.detailedRateRow}>
                   <Text style={styles.pricingSubLabel}>料金体系</Text>
-                  <Text style={styles.pricingSubValue}>{formatRateStructure()}</Text>
+                  <View style={styles.detailedRateContent}>
+                    {formatRateStructure()}
+                  </View>
                 </View>
               </View>
             </View>
@@ -709,6 +761,46 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: '#333',
+  },
+  detailedRateRow: {
+    flexDirection: 'column',
+    gap: 8,
+  },
+  detailedRateContent: {
+    marginTop: 4,
+  },
+  rateStructureContainer: {
+    gap: 12,
+  },
+  rateStructureText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#333',
+  },
+  rateSection: {
+    gap: 4,
+  },
+  rateSectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4CAF50',
+    marginBottom: 4,
+  },
+  rateItem: {
+    fontSize: 12,
+    color: '#555',
+    lineHeight: 18,
+    paddingLeft: 8,
+  },
+  originalFeesText: {
+    fontSize: 11,
+    color: '#777',
+    fontStyle: 'italic',
+    lineHeight: 16,
+    paddingLeft: 8,
+    backgroundColor: '#F5F5F5',
+    padding: 8,
+    borderRadius: 6,
   },
   infoGrid: {
     flexDirection: 'row',
