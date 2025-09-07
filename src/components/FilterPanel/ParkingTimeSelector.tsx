@@ -35,15 +35,12 @@ export const ParkingTimeSelector: React.FC<ParkingTimeSelectorProps> = ({
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [activeMode, setActiveMode] = useState(mode);
 
-  const quickTimeOptions = [
-    { label: '30分', hours: 0, minutes: 30 },
-    { label: '1時間', hours: 1, minutes: 0 },
-    { label: '2時間', hours: 2, minutes: 0 },
-    { label: '3時間', hours: 3, minutes: 0 },
-    { label: '6時間', hours: 6, minutes: 0 },
-    { label: '12時間', hours: 12, minutes: 0 },
-    { label: '24時間', hours: 24, minutes: 0 },
-  ];
+  // 1時間〜24時間まで1時間おきの選択肢を生成
+  const quickTimeOptions = Array.from({ length: 24 }, (_, i) => ({
+    label: `${i + 1}時間`,
+    hours: i + 1,
+    minutes: 0
+  }));
 
   const handleQuickTimeSelect = (hours: number, minutes: number) => {
     updateFromDuration(hours, minutes);
