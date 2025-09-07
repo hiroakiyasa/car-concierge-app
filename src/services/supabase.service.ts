@@ -429,17 +429,36 @@ export class SupabaseService {
       rpcParams.min_elevation = minElevation;
     }
 
+    console.log('🚀 RPC呼び出し実行:', { function: 'get_parking_spots_sorted_by_fee', params: rpcParams });
+    
     const { data, error } = await supabase.rpc('get_parking_spots_sorted_by_fee', rpcParams);
 
+    console.log('📡 RPC呼び出し結果:', { 
+      dataCount: data?.length || 0, 
+      hasError: !!error,
+      errorDetails: error ? { message: error.message, details: error.details, hint: error.hint } : null 
+    });
+
     if (error) {
-      console.error('Error fetching sorted parking spots:', error);
+      console.error('❌ Error fetching sorted parking spots:', error);
+      console.error('🔄 フォールバックとして通常の検索を実行');
       // フォールバックとして通常の検索を実行
       return this.fetchParkingSpots(region, minElevation);
     }
 
     console.log(`💰 料金ソート済み駐車場を${data?.length || 0}件取得`);
 
-    return (data || []).map(spot => {
+    return (data || []).map((spot, index) => {
+      // デバッグ用に最初の3件のデータ構造をログ出力
+      if (index < 3) {
+        console.log(`🔍 スポット[${index}] データ詳細:`, {
+          name: spot.name,
+          calculated_fee: spot.calculated_fee,
+          rank: spot.rank,
+          raw_spot: spot
+        });
+      }
+
       let hoursData = null;
       if (spot.hours) {
         try {
@@ -458,7 +477,7 @@ export class SupabaseService {
         }
       }
 
-      return {
+      const result = {
         id: spot.id,
         name: spot.name,
         lat: spot.lat,
@@ -478,9 +497,20 @@ export class SupabaseService {
           name: spot.nearest_hotspring.name,
           distance: spot.nearest_hotspring.distance
         } : undefined,
-        calculated_fee: spot.calculated_fee, // バックエンドで計算された料金
+        calculatedFee: spot.calculated_fee, // バックエンドで計算された料金  
         rank: spot.rank // バックエンドで付与されたランキング
       } as CoinParking;
+
+      // デバッグ用に最初の3件の結果をログ出力
+      if (index < 3) {
+        console.log(`✅ 変換後スポット[${index}]:`, {
+          name: result.name,
+          calculatedFee: result.calculatedFee,
+          rank: result.rank
+        });
+      }
+
+      return result;
     });
   }
   
