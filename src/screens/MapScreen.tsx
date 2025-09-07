@@ -383,20 +383,41 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         // 料金でソート（安い順）
         const sortedParkingSpots = validParkingSpots.sort((a, b) => a.calculatedFee - b.calculatedFee);
         
+        // 重複した駐車場を除外（同じ名前と座標の組み合わせ）
+        const uniqueParkingSpots = [];
+        const seenSpots = new Set<string>();
+        
+        for (const spot of sortedParkingSpots) {
+          const key = `${spot.name}_${spot.lat.toFixed(6)}_${spot.lng.toFixed(6)}`;
+          if (!seenSpots.has(key)) {
+            seenSpots.add(key);
+            uniqueParkingSpots.push(spot);
+          } else {
+            console.warn(`📍 ${spot.name}の重複エントリをスキップしました (ID: ${spot.id})`);
+          }
+        }
+        
+        console.log(`🧩 重複除外結果: ${sortedParkingSpots.length}件から${uniqueParkingSpots.length}件に絞り込み`);
+        
         // 上位20件にランキングを付与
-        const top20ParkingSpots = sortedParkingSpots.slice(0, 20).map((spot, index) => ({
+        const top20ParkingSpots = uniqueParkingSpots.slice(0, 20).map((spot, index) => ({
           ...spot,
           rank: index + 1
         }));
         
         displaySpots.push(...top20ParkingSpots);
         
-        console.log(`🏆 上位${Math.min(20, sortedParkingSpots.length)}件の駐車場を地図に表示`);
+        console.log(`🏆 上位${Math.min(20, uniqueParkingSpots.length)}件の駐車場を地図に表示`);
         
         // 無効な駐車場の統計を表示
         const invalidCount = parkingSpots.length - validParkingSpots.length;
+        const duplicateCount = sortedParkingSpots.length - uniqueParkingSpots.length;
+        
         if (invalidCount > 0) {
           console.warn(`⚠️ ${invalidCount}件の駐車場が料金計算エラーのため除外されました。`);
+        }
+        if (duplicateCount > 0) {
+          console.warn(`📍 ${duplicateCount}件の重複駐車場がランキングから除外されました。`);
         }
         
         // 周辺検索が有効な場合、関連施設も地図に表示
