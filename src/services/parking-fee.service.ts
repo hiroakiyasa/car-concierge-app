@@ -12,19 +12,27 @@ export class ParkingFeeCalculator {
    */
   static calculateFee(parking: CoinParking, duration: ParkingDuration): number {
     if (!parking.rates || parking.rates.length === 0) {
-      // ratesがない場合、デフォルト料金を設定（15分100円）
-      console.warn(`⚠️ ${parking.name}に料金データがありません。デフォルト料金を適用します。`);
-      return Math.ceil(duration.durationInMinutes / 15) * 100;
+      console.warn(`⚠️ ${parking.name}に料金データがありません。`, parking.rates);
+      // ratesがない場合は無効として-1を返す
+      return -1;
+    }
+    
+    // 料金データのバリデーション
+    const baseRate = parking.rates.find(r => r.type === 'base');
+    if (!baseRate || !baseRate.price || !baseRate.minutes) {
+      console.warn(`⚠️ ${parking.name}の基本料金データが無効です。`, baseRate);
+      return -1;
     }
 
     const startTime = duration.startDate;
     const endTime = duration.endDate;
     const durationInMinutes = duration.durationInMinutes;
 
-    // 条件付き無料の判定
+    // 条件付き無料の判定 - これも無効として除外する
     const conditionalFreeRate = parking.rates.find(r => r.type === 'conditional_free');
     if (conditionalFreeRate && durationInMinutes <= conditionalFreeRate.minutes) {
-      return 0;
+      console.warn(`⚠️ ${parking.name}は条件付き無料ですが、料金表示から除外します。`);
+      return -1;
     }
 
     // 駐車時間を時間帯別セグメントに分割
@@ -43,6 +51,12 @@ export class ParkingFeeCalculator {
       remainingMaxTime = segmentFee.remainingMaxTime;
     }
 
+    // 最終料金のバリデーション
+    if (totalFee === 0) {
+      console.warn(`⚠️ ${parking.name}の料金計算結果が0円です。料金データ:`, parking.rates);
+      return -1;
+    }
+    
     return totalFee;
   }
 

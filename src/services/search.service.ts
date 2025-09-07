@@ -133,7 +133,17 @@ export class SearchService {
 
     // 駐車料金でソート（駐車時間が設定されている場合）
     if (filter.parkingTimeFilterEnabled) {
-      sortedSpots.sort((a, b) => {
+      // まず有効な料金が計算できる駐車場をフィルタリング
+      const validParkingSpots = sortedSpots.filter(spot => {
+        if (spot.category !== 'コインパーキング') return true;
+        
+        const parking = spot as CoinParking;
+        const fee = ParkingFeeCalculator.calculateFee(parking, filter.parkingDuration);
+        return fee > 0; // 有効な料金のみ通す
+      });
+      
+      // 有効な駐車場を料金でソート
+      validParkingSpots.sort((a, b) => {
         if (a.category !== 'コインパーキング' || b.category !== 'コインパーキング') {
           return 0;
         }
@@ -146,6 +156,8 @@ export class SearchService {
 
         return feeA - feeB;
       });
+      
+      return validParkingSpots;
     } 
     // 距離でソート（ユーザー位置がある場合）
     else if (userLocation) {

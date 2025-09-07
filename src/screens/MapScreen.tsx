@@ -369,8 +369,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration)
         }));
         
+        // 有効な料金が計算できた駐車場のみをフィルタリング
+        const validParkingSpots = parkingSpotsWithFee.filter(spot => {
+          const isValid = spot.calculatedFee > 0;
+          if (!isValid) {
+            console.warn(`🚈 ${spot.name}は料金計算が無効なため表示から除外します。`);
+          }
+          return isValid;
+        });
+        
+        console.log(`🏦 料金計算結果: ${parkingSpots.length}件中${validParkingSpots.length}件が有効`);
+        
         // 料金でソート（安い順）
-        const sortedParkingSpots = parkingSpotsWithFee.sort((a, b) => a.calculatedFee - b.calculatedFee);
+        const sortedParkingSpots = validParkingSpots.sort((a, b) => a.calculatedFee - b.calculatedFee);
         
         // 上位20件にランキングを付与
         const top20ParkingSpots = sortedParkingSpots.slice(0, 20).map((spot, index) => ({
@@ -380,7 +391,13 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         
         displaySpots.push(...top20ParkingSpots);
         
-        console.log(`🏆 上位20件の駐車場を地図に表示`);
+        console.log(`🏆 上位${Math.min(20, sortedParkingSpots.length)}件の駐車場を地図に表示`);
+        
+        // 無効な駐車場の統計を表示
+        const invalidCount = parkingSpots.length - validParkingSpots.length;
+        if (invalidCount > 0) {
+          console.warn(`⚠️ ${invalidCount}件の駐車場が料金計算エラーのため除外されました。`);
+        }
         
         // 周辺検索が有効な場合、関連施設も地図に表示
         if (searchFilter.nearbyFilterEnabled) {
