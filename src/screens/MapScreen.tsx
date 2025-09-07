@@ -780,151 +780,240 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   };
   
   const renderMarkers = () => {
-    const markers: React.ReactElement[] = [];
-    
-    // データの有効性を確認
-    if (!searchResults || !Array.isArray(searchResults)) {
-      console.log('⚠️ searchResults is invalid');
-      return markers;
-    }
-    
-    // 1. まずコインパーキング以外のカテゴリーを追加（後ろに表示）
-    searchResults.forEach((spot) => {
-      // スポットのデータ検証
-      if (!spot || !spot.id || spot.lat == null || spot.lng == null) {
-        console.log('⚠️ Invalid spot data:', spot);
-        return;
+    try {
+      const markers: React.ReactElement[] = [];
+      
+      // データの有効性を確認
+      if (!searchResults || !Array.isArray(searchResults)) {
+        console.log('⚠️ searchResults is invalid');
+        return [];
       }
       
-      if (spot.category !== 'コインパーキング') {
-        const marker = (
-          <CustomMarker
-            key={`other-${spot.id}`}
-            spot={spot}
-            onPress={() => handleMarkerPress(spot)}
-            isSelected={false}
-          />
-        );
-        if (marker) markers.push(marker);
-      }
-    });
-    
-    // 2. 最寄り施設を追加（コンビニと温泉）
-    if (nearbyFacilities && nearbyFacilities.length > 0) {
-      console.log('🗺️ 最寄り施設をマーカーに追加:', nearbyFacilities.length, '件');
-      nearbyFacilities.forEach((facility) => {
-        // 施設のデータ検証
-        if (!facility || !facility.id || facility.lat == null || facility.lng == null) {
-          console.log('⚠️ Invalid facility data:', facility);
-          return;
+      // 1. まずコインパーキング以外のカテゴリーを追加（後ろに表示）
+      searchResults.forEach((spot) => {
+        try {
+          // スポットのデータ検証を強化
+          if (!spot || 
+              !spot.id || 
+              typeof spot.id !== 'string' && typeof spot.id !== 'number' ||
+              spot.lat == null || 
+              spot.lng == null ||
+              typeof spot.lat !== 'number' ||
+              typeof spot.lng !== 'number' ||
+              !spot.category) {
+            console.log('⚠️ Invalid spot data skipped:', {
+              hasSpot: !!spot,
+              hasId: spot?.id,
+              hasLat: spot?.lat,
+              hasLng: spot?.lng,
+              hasCategory: spot?.category,
+              latType: typeof spot?.lat,
+              lngType: typeof spot?.lng
+            });
+            return;
+          }
+          
+          if (spot.category !== 'コインパーキング') {
+            const marker = (
+              <CustomMarker
+                key={`other-${spot.id}`}
+                spot={spot}
+                onPress={() => handleMarkerPress(spot)}
+                isSelected={false}
+              />
+            );
+            
+            // マーカーがnullでないことを確認してから追加
+            if (marker && React.isValidElement(marker)) {
+              markers.push(marker);
+            } else {
+              console.log('⚠️ Invalid marker element created for spot:', spot.id);
+            }
+          }
+        } catch (spotError) {
+          console.error('⚠️ Error processing spot for marker:', spotError, spot);
         }
-        
-        console.log(`  - ${facility.category}: ${facility.name} (${facility.lat}, ${facility.lng})`);
-        const marker = (
-          <CustomMarker
-            key={`nearby-${facility.id}`}
-            spot={facility}
-            onPress={() => {}} // 最寄り施設はタップ無効
-            isSelected={false}
-            isNearbyFacility={true} // 最寄り施設フラグを追加
-          />
-        );
-        if (marker) markers.push(marker);
       });
-    }
     
-    // 3. コインパーキング（ランキング4位以下）を追加（前面に表示）
-    searchResults.forEach((spot) => {
-      // スポットのデータ検証
-      if (!spot || !spot.id || spot.lat == null || spot.lng == null) {
-        return;
+      // 2. 最寄り施設を追加（コンビニと温泉）
+      if (nearbyFacilities && nearbyFacilities.length > 0) {
+        console.log('🗺️ 最寄り施設をマーカーに追加:', nearbyFacilities.length, '件');
+        nearbyFacilities.forEach((facility) => {
+          try {
+            // 施設のデータ検証を強化
+            if (!facility || 
+                !facility.id || 
+                typeof facility.id !== 'string' && typeof facility.id !== 'number' ||
+                facility.lat == null || 
+                facility.lng == null ||
+                typeof facility.lat !== 'number' ||
+                typeof facility.lng !== 'number' ||
+                !facility.category) {
+              console.log('⚠️ Invalid facility data skipped:', facility);
+              return;
+            }
+            
+            console.log(`  - ${facility.category}: ${facility.name} (${facility.lat}, ${facility.lng})`);
+            const marker = (
+              <CustomMarker
+                key={`nearby-${facility.id}`}
+                spot={facility}
+                onPress={() => {}} // 最寄り施設はタップ無効
+                isSelected={false}
+                isNearbyFacility={true} // 最寄り施設フラグを追加
+              />
+            );
+            
+            // マーカーがnullでないことを確認してから追加
+            if (marker && React.isValidElement(marker)) {
+              markers.push(marker);
+            } else {
+              console.log('⚠️ Invalid facility marker element created for:', facility.id);
+            }
+          } catch (facilityError) {
+            console.error('⚠️ Error processing facility for marker:', facilityError, facility);
+          }
+        });
+      }
+    
+      // 3. コインパーキング（ランキング4位以下）を追加（前面に表示）
+      searchResults.forEach((spot) => {
+        try {
+          // スポットのデータ検証を強化
+          if (!spot || 
+              !spot.id || 
+              typeof spot.id !== 'string' && typeof spot.id !== 'number' ||
+              spot.lat == null || 
+              spot.lng == null ||
+              typeof spot.lat !== 'number' ||
+              typeof spot.lng !== 'number') {
+            return;
+          }
+          
+          if (spot.category === 'コインパーキング' && selectedSpot?.id !== spot.id && (!spot.rank || spot.rank > 3)) {
+            const marker = (
+              <CustomMarker
+                key={`parking-${spot.id}`}
+                spot={spot}
+                rank={spot.rank}
+                calculatedFee={(spot as any).calculatedFee}
+                onPress={() => handleMarkerPress(spot)}
+                isSelected={false}
+              />
+            );
+            
+            // マーカーがnullでないことを確認してから追加
+            if (marker && React.isValidElement(marker)) {
+              markers.push(marker);
+            } else {
+              console.log('⚠️ Invalid parking marker element created for spot:', spot.id);
+            }
+          }
+        } catch (parkingError) {
+          console.error('⚠️ Error processing parking spot for marker:', parkingError, spot);
+        }
+      });
+    
+      // 4. ランキング3位を追加（さらに前面に表示）
+      try {
+        const rank3 = searchResults.find(spot => 
+          spot && spot.rank === 3 && selectedSpot?.id !== spot.id
+        );
+        if (rank3 && rank3.id && rank3.lat != null && rank3.lng != null) {
+          const marker = (
+            <CustomMarker
+              key={`rank3-${rank3.id}`}
+              spot={rank3}
+              rank={3}
+              calculatedFee={(rank3 as any).calculatedFee}
+              onPress={() => handleMarkerPress(rank3)}
+              isSelected={false}
+            />
+          );
+          if (marker && React.isValidElement(marker)) {
+            markers.push(marker);
+          }
+        }
+      } catch (rank3Error) {
+        console.error('⚠️ Error processing rank 3 marker:', rank3Error);
       }
       
-      if (spot.category === 'コインパーキング' && selectedSpot?.id !== spot.id && (!spot.rank || spot.rank > 3)) {
-        const marker = (
-          <CustomMarker
-            key={`parking-${spot.id}`}
-            spot={spot}
-            rank={spot.rank}
-            calculatedFee={(spot as any).calculatedFee}
-            onPress={() => handleMarkerPress(spot)}
-            isSelected={false}
-          />
+      // 5. ランキング2位を追加（さらに前面に表示）
+      try {
+        const rank2 = searchResults.find(spot => 
+          spot && spot.rank === 2 && selectedSpot?.id !== spot.id
         );
-        if (marker) markers.push(marker);
+        if (rank2 && rank2.id && rank2.lat != null && rank2.lng != null) {
+          const marker = (
+            <CustomMarker
+              key={`rank2-${rank2.id}`}
+              spot={rank2}
+              rank={2}
+              calculatedFee={(rank2 as any).calculatedFee}
+              onPress={() => handleMarkerPress(rank2)}
+              isSelected={false}
+            />
+          );
+          if (marker && React.isValidElement(marker)) {
+            markers.push(marker);
+          }
+        }
+      } catch (rank2Error) {
+        console.error('⚠️ Error processing rank 2 marker:', rank2Error);
       }
-    });
-    
-    // 4. ランキング3位を追加（さらに前面に表示）
-    const rank3 = searchResults.find(spot => 
-      spot && spot.rank === 3 && selectedSpot?.id !== spot.id
-    );
-    if (rank3 && rank3.id && rank3.lat != null && rank3.lng != null) {
-      const marker = (
-        <CustomMarker
-          key={`rank3-${rank3.id}`}
-          spot={rank3}
-          rank={3}
-          calculatedFee={(rank3 as any).calculatedFee}
-          onPress={() => handleMarkerPress(rank3)}
-          isSelected={false}
-        />
-      );
-      if (marker) markers.push(marker);
+      
+      // 6. ランキング1位を追加（さらに前面に表示）
+      try {
+        const rank1 = searchResults.find(spot => 
+          spot && spot.rank === 1 && selectedSpot?.id !== spot.id
+        );
+        if (rank1 && rank1.id && rank1.lat != null && rank1.lng != null) {
+          const marker = (
+            <CustomMarker
+              key={`rank1-${rank1.id}`}
+              spot={rank1}
+              rank={1}
+              calculatedFee={(rank1 as any).calculatedFee}
+              onPress={() => handleMarkerPress(rank1)}
+              isSelected={false}
+            />
+          );
+          if (marker && React.isValidElement(marker)) {
+            markers.push(marker);
+          }
+        }
+      } catch (rank1Error) {
+        console.error('⚠️ Error processing rank 1 marker:', rank1Error);
+      }
+      
+      // 7. 最後に選択された駐車場を追加（最前面に表示）
+      try {
+        if (selectedSpot && selectedSpot.id && selectedSpot.lat != null && selectedSpot.lng != null) {
+          const marker = (
+            <CustomMarker
+              key={`selected-${selectedSpot.id}`}
+              spot={selectedSpot}
+              rank={selectedSpot.rank}
+              calculatedFee={(selectedSpot as any).calculatedFee}
+              onPress={() => handleMarkerPress(selectedSpot)}
+              isSelected={true}
+            />
+          );
+          if (marker && React.isValidElement(marker)) {
+            markers.push(marker);
+          }
+        }
+      } catch (selectedError) {
+        console.error('⚠️ Error processing selected spot marker:', selectedError);
+      }
+      
+      console.log('🗺️ renderMarkers完了 - 総マーカー数:', markers.length);
+      return markers;
+      
+    } catch (error) {
+      console.error('⚠️ renderMarkers全体エラー:', error);
+      return [];
     }
-    
-    // 5. ランキング2位を追加（さらに前面に表示）
-    const rank2 = searchResults.find(spot => 
-      spot && spot.rank === 2 && selectedSpot?.id !== spot.id
-    );
-    if (rank2 && rank2.id && rank2.lat != null && rank2.lng != null) {
-      const marker = (
-        <CustomMarker
-          key={`rank2-${rank2.id}`}
-          spot={rank2}
-          rank={2}
-          calculatedFee={(rank2 as any).calculatedFee}
-          onPress={() => handleMarkerPress(rank2)}
-          isSelected={false}
-        />
-      );
-      if (marker) markers.push(marker);
-    }
-    
-    // 6. ランキング1位を追加（さらに前面に表示）
-    const rank1 = searchResults.find(spot => 
-      spot && spot.rank === 1 && selectedSpot?.id !== spot.id
-    );
-    if (rank1 && rank1.id && rank1.lat != null && rank1.lng != null) {
-      const marker = (
-        <CustomMarker
-          key={`rank1-${rank1.id}`}
-          spot={rank1}
-          rank={1}
-          calculatedFee={(rank1 as any).calculatedFee}
-          onPress={() => handleMarkerPress(rank1)}
-          isSelected={false}
-        />
-      );
-      if (marker) markers.push(marker);
-    }
-    
-    // 7. 最後に選択された駐車場を追加（最前面に表示）
-    if (selectedSpot && selectedSpot.id && selectedSpot.lat != null && selectedSpot.lng != null) {
-      const marker = (
-        <CustomMarker
-          key={`selected-${selectedSpot.id}`}
-          spot={selectedSpot}
-          rank={selectedSpot.rank}
-          calculatedFee={(selectedSpot as any).calculatedFee}
-          onPress={() => handleMarkerPress(selectedSpot)}
-          isSelected={true}
-        />
-      );
-      if (marker) markers.push(marker);
-    }
-    
-    return markers;
   };
   
   // アプリ起動時に現在地を取得して自動検索

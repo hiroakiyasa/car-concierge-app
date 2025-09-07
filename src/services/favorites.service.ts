@@ -11,6 +11,18 @@ export interface Favorite {
 }
 
 export class FavoritesService {
+  // カテゴリ名を変換（日本語 → データベース用）
+  private static convertCategoryToDbType(category: string): string {
+    const categoryMap: Record<string, string> = {
+      'コインパーキング': 'parking',
+      'コンビニ': 'facility',
+      '温泉': 'facility',
+      'ガソリンスタンド': 'facility',
+      'お祭り・花火大会': 'facility',
+    };
+    return categoryMap[category] || 'facility';
+  }
+
   // お気に入りを追加
   static async addFavorite(userId: string, spotId: string, spotType: string): Promise<{ error: string | null }> {
     try {
@@ -26,12 +38,16 @@ export class FavoritesService {
         return { error: '既にお気に入りに登録されています' };
       }
 
+      // カテゴリ名をデータベース用に変換
+      const dbSpotType = this.convertCategoryToDbType(spotType);
+      console.log('🔖 お気に入り追加:', { originalType: spotType, dbType: dbSpotType });
+
       const { error } = await supabase
         .from('favorites')
         .insert({
           user_id: userId,
           spot_id: spotId,
-          spot_type: spotType,
+          spot_type: dbSpotType,
         });
 
       if (error) {

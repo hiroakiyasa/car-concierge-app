@@ -86,7 +86,8 @@ export const MenuModal: React.FC<MenuModalProps> = ({
                     <Text style={styles.menuText}>マイレビュー</Text>
                   </TouchableOpacity>
 
-                  {!user?.is_premium && (
+                  {/* Premium機能は一時的に無効化 */}
+                  {false && (
                     <TouchableOpacity
                       style={[styles.menuItem, styles.premiumItem]}
                       onPress={() => handleNavigate('Premium')}

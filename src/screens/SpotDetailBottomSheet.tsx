@@ -17,7 +17,9 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { Colors } from '@/utils/constants';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { RatingDisplay } from '@/components/RatingDisplay';
-import { ReviewsService } from '@/services/reviews.service';
+import { ReviewService } from '@/services/review.service';
+import { ReviewModal } from '@/components/Reviews/ReviewModal';
+import { ReviewList } from '@/components/Reviews/ReviewList';
 import { CoinParking } from '@/types';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { SupabaseService } from '@/services/supabase.service';
@@ -42,9 +44,11 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     hotspring?: string;
   }>({});
   const [reviewStats, setReviewStats] = React.useState<{
-    average_rating: number;
-    total_reviews: number;
-  }>({ average_rating: 0, total_reviews: 0 });
+    average: number;
+    count: number;
+  }>({ average: 0, count: 0 });
+  const [reviewModalVisible, setReviewModalVisible] = React.useState(false);
+  const [reviewKey, setReviewKey] = React.useState(0);
   const scrollX = React.useRef(new Animated.Value(0)).current;
   const [nameWidth, setNameWidth] = React.useState(0);
   const [containerWidth, setContainerWidth] = React.useState(0);
@@ -113,15 +117,15 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   
   // レビュー統計を取得
   React.useEffect(() => {
-    if (!selectedSpot || !visible) return;
+    if (!selectedSpot || !visible || !isParking) return;
     
     const fetchReviewStats = async () => {
-      const stats = await ReviewsService.getSpotReviewStats(selectedSpot.id);
+      const stats = await ReviewService.getAverageRating(Number(selectedSpot.id));
       setReviewStats(stats);
     };
     
     fetchReviewStats();
-  }, [visible, selectedSpot]);
+  }, [visible, selectedSpot, reviewKey]);
   
   // 名前のスクロールアニメーション
   React.useEffect(() => {
@@ -234,14 +238,6 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 {formatTimeRange(rate.time_range)}
               </Text>
             ))}
-          </View>
-        )}
-        
-        {/* 元の料金表記（参考） */}
-        {(parkingSpot as any).original_fees && (
-          <View style={styles.rateSection}>
-            <Text style={styles.rateSectionTitle}>📋 元の表記</Text>
-            <Text style={styles.originalFeesText}>{(parkingSpot as any).original_fees}</Text>
           </View>
         )}
       </View>
@@ -403,6 +399,14 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     });
   };
 
+  const handleReviewSubmitted = () => {
+    setReviewKey(prev => prev + 1);
+  };
+
+  const openReviewModal = () => {
+    setReviewModalVisible(true);
+  };
+
   return (
     <Modal
       visible={visible}
@@ -458,10 +462,10 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                     {selectedSpot.address}
                   </Text>
                 )}
-                {reviewStats.total_reviews > 0 && (
+                {reviewStats.count > 0 && (
                   <RatingDisplay
-                    rating={reviewStats.average_rating}
-                    totalReviews={reviewStats.total_reviews}
+                    rating={reviewStats.average}
+                    totalReviews={reviewStats.count}
                     size="small"
                   />
                 )}
@@ -599,9 +603,38 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 )}
               </View>
             )}
+            
+            {/* Reviews Section */}
+            <View style={styles.reviewsSection}>
+              <View style={styles.reviewsHeader}>
+                <Text style={styles.reviewsSectionTitle}>利用者の感想</Text>
+                {isAuthenticated && (
+                  <TouchableOpacity onPress={openReviewModal} style={styles.addReviewButton}>
+                    <Ionicons name="add" size={16} color={Colors.primary} />
+                    <Text style={styles.addReviewText}>投稿</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              
+              <ReviewList 
+                key={reviewKey} 
+                parkingSpotId={Number(selectedSpot.id)} 
+              />
+            </View>
           </ScrollView>
         )}
       </View>
+      
+      {/* Review Modal */}
+      {isParking && (
+        <ReviewModal
+          visible={reviewModalVisible}
+          onClose={() => setReviewModalVisible(false)}
+          parkingSpotId={Number(selectedSpot.id)}
+          parkingSpotName={selectedSpot.name}
+          onReviewSubmitted={handleReviewSubmitted}
+        />
+      )}
     </Modal>
   );
 };
@@ -871,5 +904,36 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#1A1A1A',
+  },
+  reviewsSection: {
+    marginTop: 16,
+    marginBottom: 20,
+  },
+  reviewsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  reviewsSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  addReviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F8FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+    gap: 4,
+  },
+  addReviewText: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '500',
   },
 });
