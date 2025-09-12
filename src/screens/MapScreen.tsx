@@ -118,10 +118,13 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
     }
   };
   
-  const handleSearch = async (isExpanded?: boolean) => {
+  const handleSearch = async (isExpanded?: boolean, overrideFilter?: any) => {
     setIsLoading(true);
     setSearchStatus('searching');
     try {
+      // 引数で渡されたフィルターを優先的に使用、なければstoreから取得
+      const currentFilter = overrideFilter || searchFilter;
+      
       // onRegionChangeCompleteで保存された最新のregionを使用
       const fullScreenRegion = { ...mapRegion };
       
@@ -221,23 +224,23 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       });
       
       // 選択されたカテゴリーを検索
-      const selectedCategories = searchFilter.selectedCategories;
+      const selectedCategories = currentFilter.selectedCategories;
       console.log('🔍 選択されたカテゴリー:', Array.from(selectedCategories));
       
       // 標高フィルターが有効な場合はminElevationを渡す
-      const minElevation = searchFilter.elevationFilterEnabled ? searchFilter.minElevation : undefined;
+      const minElevation = currentFilter.elevationFilterEnabled ? currentFilter.minElevation : undefined;
       
-      if (searchFilter.elevationFilterEnabled) {
-        console.log(`🏔️ 標高フィルター有効: ${searchFilter.minElevation}m以上の駐車場のみ表示`);
+      if (currentFilter.elevationFilterEnabled) {
+        console.log(`🏔️ 標高フィルター有効: ${currentFilter.minElevation}m以上の駐車場のみ表示`);
       }
       
       // 周辺検索が有効な場合は、関連施設も取得するためにカテゴリーを追加
       const categoriesForFetch = new Set(selectedCategories);
-      if (searchFilter.nearbyFilterEnabled && selectedCategories.has('コインパーキング')) {
-        if ((searchFilter.convenienceStoreRadius || 0) > 0) {
+      if (currentFilter.nearbyFilterEnabled && selectedCategories.has('コインパーキング')) {
+        if ((currentFilter.convenienceStoreRadius || 0) > 0) {
           categoriesForFetch.add('コンビニ');
         }
-        if ((searchFilter.hotSpringRadius || 0) > 0) {
+        if ((currentFilter.hotSpringRadius || 0) > 0) {
           categoriesForFetch.add('温泉');
         }
       }
@@ -257,40 +260,64 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       if (selectedCategories.has('コインパーキング')) {
         let parkingSpots: CoinParking[] = [];
         
-        // 周辺検索フィルターが有効な場合は新メソッドを使用
-        if (searchFilter.nearbyFilterEnabled && 
-            ((searchFilter.convenienceStoreRadius || 0) > 0 || (searchFilter.hotSpringRadius || 0) > 0)) {
-          console.log('🎯 周辺検索フィルター有効 - バックエンドで完結処理');
+        // フィルターの組み合わせを判定
+        const hasNearbyFilter = currentFilter.nearbyFilterEnabled && 
+            ((currentFilter.convenienceStoreRadius || 0) > 0 || (currentFilter.hotSpringRadius || 0) > 0);
+        const hasParkingTimeFilter = currentFilter.parkingTimeFilterEnabled;
+        
+        console.log('🔍 フィルター状態:', {
+          周辺検索: hasNearbyFilter,
+          駐車料金: hasParkingTimeFilter,
+          標高: currentFilter.elevationFilterEnabled
+        });
+        
+        // 両方のフィルターが有効な場合（周辺検索 + 駐車料金）
+        if (hasNearbyFilter && hasParkingTimeFilter) {
+          console.log('🎯 周辺検索 + 料金フィルター有効 - バックエンドで複合処理');
+          // 周辺検索メソッドは既に料金計算も含んでいるので、これを使用
           parkingSpots = await SupabaseService.fetchParkingSpotsByNearbyFilter(
             searchRegion,
-            searchFilter.parkingDuration.durationInMinutes,
-            searchFilter.convenienceStoreRadius,
-            searchFilter.hotSpringRadius,
+            currentFilter.parkingDuration.durationInMinutes,
+            currentFilter.convenienceStoreRadius,
+            currentFilter.hotSpringRadius,
             minElevation
           );
-          console.log(`🅿️ 周辺検索結果（バックエンド処理済み）: ${parkingSpots.length}件`);
-          // バックエンドで既に処理済みなのでそのまま表示
+          console.log(`🅿️ 周辺検索+料金フィルター結果: ${parkingSpots.length}件`);
           displaySpots.push(...parkingSpots);
         }
-        // 料金時間フィルターが有効な場合はバックエンドで料金計算・ソートを実行
-        else if (searchFilter.parkingTimeFilterEnabled) {
-          console.log('💰 料金時間フィルター有効 - バックエンドで料金計算・ソート実行');
-          parkingSpots = await SupabaseService.fetchParkingSpotsSortedByFee(
+        // 周辺検索のみ有効な場合
+        else if (hasNearbyFilter) {
+          console.log('🎯 周辺検索フィルターのみ有効 - バックエンドで処理');
+          parkingSpots = await SupabaseService.fetchParkingSpotsByNearbyFilter(
             searchRegion,
-            searchFilter.parkingDuration.durationInMinutes,
+            currentFilter.parkingDuration.durationInMinutes,
+            currentFilter.convenienceStoreRadius,
+            currentFilter.hotSpringRadius,
             minElevation
           );
-          console.log(`🅿️ バックエンドソート駐車場: ${parkingSpots.length}件`);
+          console.log(`🅿️ 周辺検索結果: ${parkingSpots.length}件`);
           displaySpots.push(...parkingSpots);
-        } else {
+        }
+        // 料金時間フィルターのみ有効な場合
+        else if (hasParkingTimeFilter) {
+          console.log('💰 料金時間フィルターのみ有効 - バックエンドで料金計算・ソート実行');
+          parkingSpots = await SupabaseService.fetchParkingSpotsSortedByFee(
+            searchRegion,
+            currentFilter.parkingDuration.durationInMinutes,
+            minElevation
+          );
+          console.log(`🅿️ 料金フィルター結果: ${parkingSpots.length}件`);
+          displaySpots.push(...parkingSpots);
+        } 
+        // どちらのフィルターも無効な場合
+        else {
           // 通常の検索（フロントエンド処理）
           parkingSpots = validSpots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
           console.log(`🅿️ 通常検索駐車場: ${parkingSpots.length}件`);
         }
         
-        // 周辺検索がバックエンドで処理済みでない場合のみフロントエンド処理を実行
-        if (!searchFilter.nearbyFilterEnabled || 
-            ((searchFilter.convenienceStoreRadius || 0) === 0 && (searchFilter.hotSpringRadius || 0) === 0)) {
+        // フィルターが無効な場合のみフロントエンド処理を実行
+        if (!hasNearbyFilter && !hasParkingTimeFilter) {
           
           // 300件を超える場合は警告を表示
           if (parkingSpots.length >= 300) {
@@ -301,16 +328,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
             );
           }
           
-          // 料金時間フィルター有効時はバックエンドで既にソート済みなのでフロントエンド処理をスキップ
-          if (searchFilter.parkingTimeFilterEnabled) {
-            // バックエンドで既に料金計算・ソート・ランキング付与済み
-            console.log(`💰 バックエンド処理済み: ${parkingSpots.length}件（無料駐車場が上位に配置済み）`);
-            displaySpots.push(...parkingSpots);
-          } else if (parkingSpots.length > 0) {
+          // フロントエンド処理（フィルターが無効な場合のみ）
+          if (parkingSpots.length > 0) {
             // 通常のフロントエンド処理
             const parkingSpotsWithFee = parkingSpots.map(spot => ({
               ...spot,
-              calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration)
+              calculatedFee: ParkingFeeCalculator.calculateFee(spot, currentFilter.parkingDuration)
             }));
             
             // 料金計算可能な駐車場と不可能な駐車場を分ける
@@ -366,14 +389,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         console.log(`🏆 駐車場を地図に表示完了`);
         
         // 周辺検索が有効でバックエンド処理済みの場合、関連施設も地図に表示
-        if (searchFilter.nearbyFilterEnabled) {
+        if (currentFilter.nearbyFilterEnabled) {
           const convenienceIds = new Set<string>();
           const hotspringIds = new Set<string>();
           
           // 表示される駐車場に紐づく施設のIDを収集
           const displayedParkingSpots = displaySpots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
           displayedParkingSpots.forEach((parking: CoinParking) => {
-            if ((searchFilter.convenienceStoreRadius || 0) > 0 && parking.nearestConvenienceStore) {
+            if ((currentFilter.convenienceStoreRadius || 0) > 0 && parking.nearestConvenienceStore) {
               const convenienceStore = parking.nearestConvenienceStore;
               const id = convenienceStore.id || (convenienceStore as any).store_id;
               const distance = (convenienceStore as any).distance_m || convenienceStore.distance;
@@ -383,7 +406,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
                 console.log(`🏪 駐車場 ${parking.name} の最寄りコンビニ: ID=${id}, 距離=${distance}m`);
               }
             }
-            if ((searchFilter.hotSpringRadius || 0) > 0 && parking.nearestHotspring) {
+            if ((currentFilter.hotSpringRadius || 0) > 0 && parking.nearestHotspring) {
               const hotspring = parking.nearestHotspring;
               const id = hotspring.id || (hotspring as any).spring_id;
               const distance = (hotspring as any).distance_m || hotspring.distance;
@@ -458,59 +481,50 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         }
       }
       
-      // その他のカテゴリーのスポットを全て表示（周辺検索でない場合のみ）
-      if (!searchFilter.nearbyFilterEnabled) {
-        let nonParkingSpots: Spot[] = [];
-        
-        if (selectedCategories.has('コンビニ')) {
-          const convenienceStores = validSpots.filter(spot => spot.category === 'コンビニ');
-          nonParkingSpots.push(...convenienceStores);
-          displaySpots.push(...convenienceStores);
-          console.log(`🏂 コンビニ: ${convenienceStores.length}件`);
-        }
-        
-        if (selectedCategories.has('ガソリンスタンド')) {
-          const gasStations = validSpots.filter(spot => spot.category === 'ガソリンスタンド');
-          nonParkingSpots.push(...gasStations);
-          displaySpots.push(...gasStations);
-          console.log(`⛽ ガソリンスタンド: ${gasStations.length}件`);
-        }
-        
-        if (selectedCategories.has('温泉')) {
-          const hotSprings = validSpots.filter(spot => spot.category === '温泉');
-          nonParkingSpots.push(...hotSprings);
-          displaySpots.push(...hotSprings);
-          console.log(`♨️ 温泉: ${hotSprings.length}件`);
-        }
-        
-        if (selectedCategories.has('お祭り・花火大会')) {
-          const festivals = validSpots.filter(spot => spot.category === 'お祭り・花火大会');
-          nonParkingSpots.push(...festivals);
-          displaySpots.push(...festivals);
-          console.log(`🎆 お祭り・花火大会: ${festivals.length}件`);
-        }
-        
-        // 駐車場以外のスポットが100件を超える場合は警告を表示
-        if (nonParkingSpots.length >= 100) {
-          Alert.alert(
-            '検索範囲が広すぎます',
-            `${nonParkingSpots.length}件の施設が見つかりました。地図を拡大してください。`,
-            [{ text: 'OK', style: 'default' }]
-          );
-        }
-      } else {
-        // 周辺検索が有効な場合でも、関連施設以外の選択カテゴリーは表示
-        if (selectedCategories.has('ガソリンスタンド')) {
-          const gasStations = spots.filter(spot => spot.category === 'ガソリンスタンド');
-          displaySpots.push(...gasStations);
-          console.log(`⛽ ガソリンスタンド: ${gasStations.length}件`);
-        }
-        
-        if (selectedCategories.has('お祭り・花火大会')) {
-          const festivals = spots.filter(spot => spot.category === 'お祭り・花火大会');
-          displaySpots.push(...festivals);
-          console.log(`🎆 お祭り・花火大会: ${festivals.length}件`);
-        }
+      // 駐車場以外のカテゴリーは絞り込みに関係なく全て表示（最大100件）
+      let nonParkingSpots: Spot[] = [];
+      
+      // コンビニ（周辺検索で既に追加されている場合はスキップ）
+      if (selectedCategories.has('コンビニ') && 
+          !(currentFilter.nearbyFilterEnabled && (currentFilter.convenienceStoreRadius || 0) > 0)) {
+        const convenienceStores = validSpots.filter(spot => spot.category === 'コンビニ').slice(0, 100);
+        nonParkingSpots.push(...convenienceStores);
+        displaySpots.push(...convenienceStores);
+        console.log(`🏪 コンビニ: ${convenienceStores.length}件（最大100件）`);
+      }
+      
+      // ガソリンスタンド（絞り込みに関係なく表示）
+      if (selectedCategories.has('ガソリンスタンド')) {
+        const gasStations = validSpots.filter(spot => spot.category === 'ガソリンスタンド').slice(0, 100);
+        nonParkingSpots.push(...gasStations);
+        displaySpots.push(...gasStations);
+        console.log(`⛽ ガソリンスタンド: ${gasStations.length}件（最大100件）`);
+      }
+      
+      // 温泉（周辺検索で既に追加されている場合はスキップ）
+      if (selectedCategories.has('温泉') && 
+          !(currentFilter.nearbyFilterEnabled && (currentFilter.hotSpringRadius || 0) > 0)) {
+        const hotSprings = validSpots.filter(spot => spot.category === '温泉').slice(0, 100);
+        nonParkingSpots.push(...hotSprings);
+        displaySpots.push(...hotSprings);
+        console.log(`♨️ 温泉: ${hotSprings.length}件（最大100件）`);
+      }
+      
+      // お祭り・花火大会（絞り込みに関係なく表示）
+      if (selectedCategories.has('お祭り・花火大会')) {
+        const festivals = validSpots.filter(spot => spot.category === 'お祭り・花火大会').slice(0, 100);
+        nonParkingSpots.push(...festivals);
+        displaySpots.push(...festivals);
+        console.log(`🎆 お祭り・花火大会: ${festivals.length}件（最大100件）`);
+      }
+      
+      // 駐車場以外のスポットが多い場合の警告（100件を超える前の元データをチェック）
+      const totalNonParkingInArea = validSpots.filter(spot => 
+        spot.category !== 'コインパーキング' && selectedCategories.has(spot.category)
+      ).length;
+      
+      if (totalNonParkingInArea > 100) {
+        console.log(`⚠️ エリア内に${totalNonParkingInArea}件の施設があります。各カテゴリー最大100件ずつ表示`);
       }
       
       // 重複を除去してからセット
@@ -715,34 +729,37 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         return [];
       }
       
-      // 1. まずコインパーキング以外のカテゴリーを追加（後ろに表示）
-      searchResults.forEach((spot) => {
-        try {
-          // スポットのデータ検証を強化
-          if (!spot || 
-              !spot.id || 
-              typeof spot.id !== 'string' && typeof spot.id !== 'number' ||
-              spot.lat == null || 
-              spot.lng == null ||
-              typeof spot.lat !== 'number' ||
-              typeof spot.lng !== 'number' ||
-              !spot.category) {
-            console.log('⚠️ Invalid spot data skipped:', {
-              hasSpot: !!spot,
-              hasId: spot?.id,
-              hasLat: spot?.lat,
-              hasLng: spot?.lng,
-              hasCategory: spot?.category,
-              latType: typeof spot?.lat,
-              lngType: typeof spot?.lng
-            });
-            return;
-          }
-          
-          if (spot.category !== 'コインパーキング') {
+      // 1. カテゴリーを表示順序で追加（後ろから順に：花火大会 → ガソリン → 温泉 → コンビニ）
+      const categoryOrder = ['お祭り・花火大会', 'ガソリンスタンド', '温泉', 'コンビニ'];
+      
+      categoryOrder.forEach((category) => {
+        const spotsInCategory = searchResults.filter(spot => spot.category === category);
+        spotsInCategory.forEach((spot) => {
+          try {
+            // スポットのデータ検証を強化
+            if (!spot || 
+                !spot.id || 
+                typeof spot.id !== 'string' && typeof spot.id !== 'number' ||
+                spot.lat == null || 
+                spot.lng == null ||
+                typeof spot.lat !== 'number' ||
+                typeof spot.lng !== 'number' ||
+                !spot.category) {
+              console.log('⚠️ Invalid spot data skipped:', {
+                hasSpot: !!spot,
+                hasId: spot?.id,
+                hasLat: spot?.lat,
+                hasLng: spot?.lng,
+                hasCategory: spot?.category,
+                latType: typeof spot?.lat,
+                lngType: typeof spot?.lng
+              });
+              return;
+            }
+            
             const marker = (
               <CustomMarker
-                key={`other-${spot.id}`}
+                key={`${category}-${spot.id}`}
                 spot={spot}
                 onPress={() => handleMarkerPress(spot)}
                 isSelected={false}
@@ -755,10 +772,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
             } else {
               console.log('⚠️ Invalid marker element created for spot:', spot.id);
             }
+          } catch (spotError) {
+            console.error('⚠️ Error processing spot for marker:', spotError, spot);
           }
-        } catch (spotError) {
-          console.error('⚠️ Error processing spot for marker:', spotError, spot);
-        }
+        });
       });
     
       // 2. 最寄り施設を追加（コンビニと温泉）
@@ -802,8 +819,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         });
       }
     
-      // 3. コインパーキング（ランキング4位以下）を追加（前面に表示）
-      searchResults.forEach((spot) => {
+      // 3. コインパーキングをランキング順に追加（順位の低い方から高い方へ）
+      // まず、ランキング外（4位以下）の駐車場を追加
+      const parkingSpots = searchResults.filter(spot => spot.category === 'コインパーキング');
+      const unrankedParkingSpots = parkingSpots.filter(spot => !spot.rank || spot.rank > 3);
+      
+      unrankedParkingSpots.forEach((spot) => {
         try {
           // スポットのデータ検証を強化
           if (!spot || 
@@ -816,7 +837,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
             return;
           }
           
-          if (spot.category === 'コインパーキング' && selectedSpot?.id !== spot.id && (!spot.rank || spot.rank > 3)) {
+          if (selectedSpot?.id !== spot.id) {
             const marker = (
               <CustomMarker
                 key={`parking-${spot.id}`}
@@ -840,9 +861,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         }
       });
     
-      // 4. ランキング3位を追加（さらに前面に表示）
+      // 4. ランキング3位を追加
       try {
-        const rank3 = searchResults.find(spot => 
+        const rank3 = parkingSpots.find(spot => 
           spot && spot.rank === 3 && selectedSpot?.id !== spot.id
         );
         if (rank3 && rank3.id && rank3.lat != null && rank3.lng != null) {
@@ -864,9 +885,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         console.error('⚠️ Error processing rank 3 marker:', rank3Error);
       }
       
-      // 5. ランキング2位を追加（さらに前面に表示）
+      // 5. ランキング2位を追加
       try {
-        const rank2 = searchResults.find(spot => 
+        const rank2 = parkingSpots.find(spot => 
           spot && spot.rank === 2 && selectedSpot?.id !== spot.id
         );
         if (rank2 && rank2.id && rank2.lat != null && rank2.lng != null) {
@@ -888,9 +909,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         console.error('⚠️ Error processing rank 2 marker:', rank2Error);
       }
       
-      // 6. ランキング1位を追加（さらに前面に表示）
+      // 6. ランキング1位を追加（最前面）
       try {
-        const rank1 = searchResults.find(spot => 
+        const rank1 = parkingSpots.find(spot => 
           spot && spot.rank === 1 && selectedSpot?.id !== spot.id
         );
         if (rank1 && rank1.id && rank1.lat != null && rank1.lng != null) {
@@ -1002,7 +1023,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       <CompactBottomPanel 
         navigation={navigation} 
         onHeightChange={() => {}}
-        onSearch={(isExpanded) => handleSearch(isExpanded)}
+        onSearch={(isExpanded: boolean, newFilter?: any) => handleSearch(isExpanded, newFilter)}
       />
       
       <RankingListModal

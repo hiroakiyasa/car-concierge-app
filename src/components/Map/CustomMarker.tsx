@@ -194,7 +194,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
               </View>
               <Text style={styles.parkingCalloutPrice}>{formatPrice()}</Text>
             </View>
-            <Text style={styles.parkingCalloutName} numberOfLines={1}>{spot.name}</Text>
+            <Text style={styles.parkingCalloutName}>{spot.name}</Text>
           </View>
         </Callout>
       </Marker>
@@ -221,7 +221,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
       </View>
       <Callout tooltip onPress={handleCalloutPress}>
         <View style={styles.calloutContainer}>
-          <Text style={styles.calloutName} numberOfLines={1}>{spot.name}</Text>
+          <Text style={styles.calloutName}>{spot.name}</Text>
         </View>
       </Callout>
     </Marker>
@@ -362,9 +362,9 @@ const styles = StyleSheet.create({
   parkingCalloutContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
-    padding: 8,
+    padding: 10,
     minWidth: 150,
-    maxWidth: 200,
+    maxWidth: 280,  // 最大幅を広げて長い名前に対応
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -409,6 +409,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#333',
     lineHeight: 16,
+    flexWrap: 'wrap',  // 長い名前を折り返し表示
   },
   calloutTapHint: {
     fontSize: 11,
@@ -420,9 +421,9 @@ const styles = StyleSheet.create({
   calloutContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
-    padding: 8,
+    padding: 10,
     minWidth: 120,
-    maxWidth: 200,
+    maxWidth: 280,  // 最大幅を広げて長い名前に対応
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -433,5 +434,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#333',
+    flexWrap: 'wrap',  // 長い名前を折り返し表示
+    lineHeight: 18,    // 読みやすい行間
   },
 });

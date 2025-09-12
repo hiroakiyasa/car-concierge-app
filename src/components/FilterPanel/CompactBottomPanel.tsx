@@ -23,7 +23,7 @@ const PANEL_HEIGHT = 160; // 下部余白を考慮して調整
 interface CompactBottomPanelProps {
   navigation?: any;
   onHeightChange?: (height: number, isExpanded: boolean) => void;
-  onSearch?: (isExpanded: boolean) => void;
+  onSearch?: (isExpanded: boolean, newFilter?: any) => void;
 }
 
 export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({ 
@@ -175,10 +175,12 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
     newFilter.elevationFilterEnabled = elevationEnabled;
     newFilter.minElevation = elevationEnabled ? minElevation : 0;
     
+    // Zustandストアを更新
     setSearchFilter(newFilter);
     
+    // 新しいフィルター設定を直接MapScreenに渡す
     if (onSearch) {
-      onSearch(false);
+      onSearch(false, newFilter);
     }
   };
   
