@@ -314,14 +314,14 @@ const styles = StyleSheet.create({
   // Menu Button Container - Top Right
   menuButtonContainer: {
     position: 'absolute',
-    right: 16,
+    right: 8,
     top: 35,
     alignItems: 'center',
   },
   // Button Container Styles
   buttonContainer: {
     position: 'absolute',
-    right: 16,
+    right: 8,
     bottom: 160,
     alignItems: 'center',
     gap: 8,

@@ -40,7 +40,7 @@ export const CategoryButtons: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    right: 16,
+    right: 8,
     top: 100,
   },
   button: {
