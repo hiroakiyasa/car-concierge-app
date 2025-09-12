@@ -292,7 +292,17 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
         
         <TouchableOpacity 
           style={[styles.filterTab, activeTab === 'nearby' && styles.activeTab]}
-          onPress={() => setActiveTab('nearby')}
+          onPress={() => {
+            setActiveTab('nearby');
+            // 周辺検索を有効化し、デフォルトでコンビニ30mを設定
+            setNearbyEnabled(true);
+            if (!convenienceSelected && !hotspringSelected) {
+              // 初回選択時はデフォルトでコンビニ30mを選択
+              setConvenienceSelected(true);
+              setConvenienceSlider(radiusToSlider(30));
+              setConvenienceRadius(30);
+            }
+          }}
         >
           <Ionicons 
             name="search-outline" 
@@ -439,7 +449,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: 0 }]}>10m</Text>
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: '35%' }]}>50m</Text>
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: '70%' }]}>100m</Text>
-                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', right: 0 }]}>1000m</Text>
+                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', right: -10 }]}>1000m</Text>
                     </View>
                   </View>
                   <Text style={[styles.radiusValue, !convenienceSelected && styles.radiusValueDisabled]}>
@@ -485,7 +495,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: 0 }]}>10m</Text>
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: '35%' }]}>50m</Text>
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: '70%' }]}>100m</Text>
-                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', right: 0 }]}>1000m</Text>
+                      <Text style={[styles.sliderScaleLabel, { position: 'absolute', right: -10 }]}>1000m</Text>
                     </View>
                   </View>
                   <Text style={[styles.radiusValue, !hotspringSelected && styles.radiusValueDisabled]}>
@@ -845,12 +855,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginRight: 8, // 大きな検索ボタンのためのスペース
+    marginRight: 0, // 右マージンを削除してスペースを広げる
   },
   nearbySliderWrapper: {
     flex: 1,
     position: 'relative',
-    maxWidth: '80%', // スライダーを短くして検索ボタンのスペースを確保
+    maxWidth: '100%', // スライダーを100%まで右に伸ばす
   },
   nearbySlider: {
     width: '100%',
@@ -870,8 +880,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: 'bold',
     color: '#333',
-    minWidth: 40,
+    minWidth: 45,
     textAlign: 'center',
+    marginRight: 5, // 右側に少し余白を追加
   },
   radiusValueDisabled: {
     color: '#999',
