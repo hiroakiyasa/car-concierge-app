@@ -14,6 +14,7 @@ import { DebugSupabase } from '@/screens/DebugSupabase';
 import { TestOperatingHours } from '@/screens/TestOperatingHours';
 import { TestNearbyData } from '@/screens/TestNearbyData';
 import TestParkingFeeAdvanced from '@/screens/TestParkingFeeAdvanced';
+import { TestAuth } from '@/screens/TestAuth';
 // Auth screens
 import { LoginScreen } from '@/screens/auth/LoginScreen';
 import { SignUpScreen } from '@/screens/auth/SignUpScreen';
@@ -96,6 +97,7 @@ export default function App() {
             <Stack.Screen name="Guide" component={GuideScreen} />
             
             {/* Test Screens */}
+            <Stack.Screen name="TestAuth" component={TestAuth} />
             <Stack.Screen name="TestMap" component={TestMapBounds} />
             <Stack.Screen name="TestData" component={TestDataFetch} />
             <Stack.Screen name="DebugSupabase" component={DebugSupabase} />

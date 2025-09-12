@@ -513,8 +513,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         }
       }
       
-      console.log(`🗺️ 合計${displaySpots.length}件を地図に表示`);
-      setSearchResults(displaySpots);
+      // 重複を除去してからセット
+      const uniqueDisplaySpots = Array.from(
+        new Map(displaySpots.map(spot => [spot.id, spot])).values()
+      );
+      console.log(`🗺️ 合計${uniqueDisplaySpots.length}件を地図に表示（重複除去前: ${displaySpots.length}件）`);
+      setSearchResults(uniqueDisplaySpots);
       setSearchStatus('complete');
       // 3秒後に状態をリセット
       setTimeout(() => setSearchStatus('idle'), 3000);

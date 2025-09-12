@@ -13,34 +13,66 @@ export interface User {
 
 export class AuthService {
   // プロフィール安全作成（重複チェック付き）
-  private static async createProfileSafely(userId: string, displayName: string, avatarUrl?: string): Promise<void> {
+  static async createProfileSafely(userId: string, displayName: string, avatarUrl?: string): Promise<boolean> {
     try {
       console.log('🔐 安全なプロフィール作成開始 - ユーザーID:', userId);
       
-      // UPSERT（存在しなければINSERT、存在すればUPDATE）を使用
-      const { error } = await supabase
+      // まず既存のプロフィールを確認
+      const { data: existing, error: selectError } = await supabase
         .from('user_profiles')
-        .upsert({
+        .select('id')
+        .eq('id', userId)
+        .single();
+      
+      // エラーが「行が見つからない」以外の場合は問題あり
+      if (selectError && selectError.code !== 'PGRST116') {
+        console.error('🔐 プロフィール確認エラー:', selectError);
+        return false;
+      }
+      
+      if (existing) {
+        console.log('🔐 プロフィールは既に存在します');
+        return true;
+      }
+      
+      // プロフィールが存在しない場合は作成
+      const { error: insertError } = await supabase
+        .from('user_profiles')
+        .insert({
           id: userId,
           display_name: displayName,
           avatar_url: avatarUrl,
-        }, { 
-          onConflict: 'id',
-          ignoreDuplicates: false  // 既存の場合はUPDATEする
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         });
 
-      if (error) {
-        console.error('🔐 プロフィールUPSERTエラー:', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
+      if (insertError) {
+        // 重複エラーの場合は成功とみなす
+        if (insertError.code === '23505') {
+          console.log('🔐 プロフィールは既に存在していました（重複エラー）');
+          return true;
+        }
+        
+        console.error('🔐 プロフィール作成エラー:', {
+          code: insertError.code,
+          message: insertError.message,
+          details: insertError.details,
           userId
         });
+        
+        // RLSエラーの場合、エラーメッセージを分かりやすくする
+        if (insertError.code === '42501') {
+          console.error('🔐 RLSポリシーエラー: ユーザーは自分のプロフィールのみ作成可能です');
+        }
+        
+        return false;
       } else {
-        console.log('🔐 プロフィールUPSERT成功');
+        console.log('🔐 プロフィール作成成功');
+        return true;
       }
     } catch (error) {
       console.error('🔐 プロフィール作成で予期しないエラー:', error);
+      return false;
     }
   }
 
@@ -49,14 +81,28 @@ export class AuthService {
     try {
       console.log('🔐 SignUp: 新規登録処理開始', { email });
       
+      // 入力値バリデーション（Zennの記事のパターン）
+      if (!email || !password) {
+        return { user: null, error: 'メールアドレスとパスワードは必須です' };
+      }
+      
+      if (password.length < 6) {
+        return { user: null, error: 'パスワードは6文字以上である必要があります' };
+      }
+      
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return { user: null, error: '有効なメールアドレスを入力してください' };
+      }
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             name: name || '',
+            full_name: name || '',
           },
-          emailRedirectTo: undefined, // 自動ログインを有効化
         },
       });
 
@@ -69,25 +115,83 @@ export class AuthService {
 
       if (error) {
         console.error('🔐 SignUp: 登録エラー', error);
-        return { user: null, error: error.message };
+        
+        // よくあるエラーメッセージを日本語化
+        let errorMessage = error.message;
+        if (error.message.includes('already registered')) {
+          errorMessage = 'このメールアドレスは既に登録されています';
+        } else if (error.message.includes('Invalid email')) {
+          errorMessage = '無効なメールアドレスです';
+        } else if (error.message.includes('Password')) {
+          errorMessage = 'パスワードが要件を満たしていません';
+        } else if (error.message.includes('weak password')) {
+          errorMessage = 'パスワードが弱すぎます。より強力なパスワードを使用してください';
+        }
+        
+        return { user: null, error: errorMessage };
       }
 
       if (data.user) {
-        // セッションが作成されているか確認
-        if (data.session) {
-          console.log('🔐 SignUp: セッション作成確認済み');
-        } else {
-          console.log('🔐 SignUp: メール確認が必要な可能性があります');
-        }
-        
-        // 安全なプロフィール作成
-        await this.createProfileSafely(
+        // プロフィール作成
+        const profileCreated = await this.createProfileSafely(
           data.user.id,
           name || data.user.email?.split('@')[0] || ''
         );
-
+        
+        if (!profileCreated) {
+          console.warn('🔐 SignUp: プロフィール作成に失敗しましたが、ユーザー登録は成功しました');
+        }
+        
+        // セッションがない場合は自動ログインを試行
+        if (!data.session) {
+          console.log('🔐 SignUp: セッションがないため自動ログインを試行');
+          
+          // 少し待機してからログイン（DBトリガーの処理を待つ）
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          const signInResult = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          
+          if (signInResult.data.session && signInResult.data.user) {
+            console.log('🔐 SignUp: 自動ログイン成功');
+            
+            const profile = await this.getProfile(signInResult.data.user.id);
+            
+            return {
+              user: profile ? {
+                ...profile,
+                email: signInResult.data.user.email!
+              } : {
+                id: signInResult.data.user.id,
+                email: signInResult.data.user.email!,
+                name: name || signInResult.data.user.email?.split('@')[0] || '',
+              },
+              error: null,
+            };
+          } else {
+            console.log('🔐 SignUp: 自動ログイン失敗、ユーザー情報のみ返却');
+            return {
+              user: {
+                id: data.user.id,
+                email: data.user.email!,
+                name: name || data.user.email?.split('@')[0] || '',
+              },
+              error: null,
+            };
+          }
+        }
+        
+        // セッションがある場合
+        console.log('🔐 SignUp: セッション作成済み');
+        const profile = await this.getProfile(data.user.id);
+        
         return {
-          user: {
+          user: profile ? {
+            ...profile,
+            email: data.user.email!
+          } : {
             id: data.user.id,
             email: data.user.email!,
             name: name || data.user.email?.split('@')[0] || '',
@@ -108,9 +212,23 @@ export class AuthService {
     try {
       console.log('🔐 SignIn: ログイン処理開始', { email });
       
-      // 既存のセッションをクリア（重要：古いセッションが残っている可能性）
-      await supabase.auth.signOut();
-      console.log('🔐 SignIn: 既存セッションをクリア');
+      // 入力値バリデーション
+      if (!email || !password) {
+        return { user: null, error: 'メールアドレスとパスワードを入力してください' };
+      }
+      
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return { user: null, error: '有効なメールアドレスを入力してください' };
+      }
+      
+      // 現在のセッションを確認（不要なsignOutを避ける）
+      const { data: currentSession } = await supabase.auth.getSession();
+      if (currentSession.session?.user?.email !== email) {
+        // 異なるユーザーの場合のみクリア
+        await supabase.auth.signOut();
+        console.log('🔐 SignIn: 異なるユーザーのセッションをクリア');
+      }
       
       // ログイン実行
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -127,7 +245,20 @@ export class AuthService {
 
       if (error) {
         console.error('🔐 SignIn: ログインエラー', error);
-        return { user: null, error: error.message };
+        
+        // よくあるエラーメッセージを日本語化
+        let errorMessage = error.message;
+        if (error.message.includes('Invalid login credentials')) {
+          errorMessage = 'メールアドレスまたはパスワードが間違っています';
+        } else if (error.message.includes('Email not confirmed')) {
+          errorMessage = 'メールアドレスが確認されていません。メールボックスを確認してください';
+        } else if (error.message.includes('Account not found')) {
+          errorMessage = 'アカウントが見つかりません';
+        } else if (error.message.includes('Too many requests')) {
+          errorMessage = 'しばらく時間をおいてから再度お試しください';
+        }
+        
+        return { user: null, error: errorMessage };
       }
 
       if (data.session && data.user) {
@@ -247,10 +378,24 @@ export class AuthService {
         .eq('id', userId)
         .single();
 
-      if (error || !data) {
-        console.log('Profile not found, will be created on next login');
+      if (error) {
+        if (error.code === 'PGRST116') {
+          console.log('🔐 プロフィールが見つかりません（正常）');
+        } else {
+          console.error('🔐 プロフィール取得エラー:', error);
+        }
         return null;
       }
+
+      if (!data) {
+        console.log('🔐 プロフィールデータが空です');
+        return null;
+      }
+
+      console.log('🔐 プロフィール取得成功:', {
+        id: data.id,
+        display_name: data.display_name
+      });
 
       return {
         id: data.id,
@@ -260,7 +405,7 @@ export class AuthService {
         created_at: data.created_at,
       };
     } catch (error) {
-      console.error('Get profile error:', error);
+      console.error('🔐 プロフィール取得で予期しないエラー:', error);
       return null;
     }
   }
@@ -391,43 +536,82 @@ export class AuthService {
           }
 
           if (access_token) {
+            console.log('🔐 アクセストークン取得成功、セッション設定開始');
+            
             const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
               access_token,
               refresh_token: refresh_token || '',
             });
 
             if (sessionError) {
-              console.error('🔐 セッション設定エラー:', sessionError);
-              return { user: null, error: sessionError.message };
+              console.error('🔐 セッション設定エラー:', {
+                error: sessionError.message,
+                code: sessionError.code,
+                details: sessionError.details
+              });
+              return { user: null, error: `セッション設定失敗: ${sessionError.message}` };
             }
 
             if (sessionData.user) {
-              // プロフィールの作成または更新
-              const { data: profileData } = await supabase
+              console.log('🔐 セッション設定成功:', {
+                userId: sessionData.user.id,
+                email: sessionData.user.email,
+                metadata: sessionData.user.user_metadata
+              });
+              
+              // プロフィールの確認
+              const { data: profileData, error: profileCheckError } = await supabase
                 .from('user_profiles')
                 .select('*')
                 .eq('id', sessionData.user.id)
                 .single();
+              
+              if (profileCheckError && profileCheckError.code !== 'PGRST116') {
+                console.error('🔐 プロフィール確認エラー:', profileCheckError);
+              }
 
               if (!profileData) {
-                await this.createProfileSafely(
+                console.log('🔐 プロフィールが存在しないため作成開始');
+                const profileCreated = await this.createProfileSafely(
                   sessionData.user.id,
                   sessionData.user.user_metadata?.full_name || sessionData.user.email?.split('@')[0] || 'ユーザー',
                   sessionData.user.user_metadata?.avatar_url
                 );
+                
+                if (!profileCreated) {
+                  console.warn('🔐 プロフィール作成に失敗しましたが、認証は成功しています');
+                }
+              } else {
+                console.log('🔐 既存のプロフィールを使用');
               }
 
+              // プロフィール再取得
               const profile = await this.getProfile(sessionData.user.id);
               
-              return {
-                user: profile || {
-                  id: sessionData.user.id,
-                  email: sessionData.user.email!,
-                  name: sessionData.user.user_metadata?.full_name,
-                  avatar_url: sessionData.user.user_metadata?.avatar_url,
-                },
-                error: null,
-              };
+              if (profile) {
+                console.log('🔐 Google認証完了 - プロフィール取得成功');
+                return {
+                  user: {
+                    ...profile,
+                    email: sessionData.user.email!
+                  },
+                  error: null,
+                };
+              } else {
+                console.log('🔐 Google認証完了 - プロフィールなし、メタデータから生成');
+                return {
+                  user: {
+                    id: sessionData.user.id,
+                    email: sessionData.user.email!,
+                    name: sessionData.user.user_metadata?.full_name || sessionData.user.user_metadata?.name,
+                    avatar_url: sessionData.user.user_metadata?.avatar_url || sessionData.user.user_metadata?.picture,
+                  },
+                  error: null,
+                };
+              }
+            } else {
+              console.error('🔐 セッションは設定されたがユーザー情報がありません');
+              return { user: null, error: 'ユーザー情報の取得に失敗しました' };
             }
           } else {
             console.error('🔐 アクセストークンが取得できませんでした');

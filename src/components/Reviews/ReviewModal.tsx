@@ -37,18 +37,31 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const { user, isAuthenticated, checkAuth } = useAuthStore();
+  
+  // 認証状態のログ出力（デバッグ用）
+  React.useEffect(() => {
+    console.log('📝 ReviewModal: コンポーネント認証状態', {
+      visible,
+      hasUser: !!user,
+      isAuthenticated,
+      userEmail: user?.email,
+      userId: user?.id
+    });
+  }, [visible, user, isAuthenticated]);
 
   const handleSubmit = async () => {
-    if (content.trim().length < 10) {
-      Alert.alert('エラー', '感想は10文字以上入力してください');
+    // 文字数チェック
+    if (content.trim().length < 1) {
+      Alert.alert('エラー', '感想を入力してください');
       return;
     }
 
-    // 認証状態の事前チェック
-    console.log('📝 ReviewModal: 認証状態チェック開始', {
+    // 認証状態の事前チェック（ボタンが有効でも念のため再確認）
+    console.log('📝 ReviewModal: 投稿実行時の認証状態', {
       hasUser: !!user,
       isAuthenticated,
-      userEmail: user?.email
+      userEmail: user?.email,
+      userId: user?.id
     });
 
     if (!isAuthenticated || !user) {
@@ -192,19 +205,19 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
           <Text style={styles.title}>感想を投稿</Text>
           <TouchableOpacity
             onPress={handleSubmit}
-            disabled={isSubmitting || content.trim().length < 10}
+            disabled={isSubmitting || content.trim().length < 1 || !isAuthenticated || !user}
             style={[
               styles.submitButton,
-              (isSubmitting || content.trim().length < 10) && styles.submitButtonDisabled,
+              (isSubmitting || content.trim().length < 1 || !isAuthenticated || !user) && styles.submitButtonDisabled,
             ]}
           >
             <Text
               style={[
                 styles.submitButtonText,
-                (isSubmitting || content.trim().length < 10) && styles.submitButtonTextDisabled,
+                (isSubmitting || content.trim().length < 1 || !isAuthenticated || !user) && styles.submitButtonTextDisabled,
               ]}
             >
-              {isSubmitting ? '投稿中...' : '投稿'}
+              {isSubmitting ? '投稿中...' : !isAuthenticated ? 'ログインが必要' : '投稿'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -223,15 +236,20 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
               style={styles.textInput}
               value={content}
               onChangeText={setContent}
-              placeholder="駐車場の感想を教えてください（10文字以上）"
+              placeholder="駐車場の感想を教えてください"
               multiline
               numberOfLines={6}
               maxLength={500}
               textAlignVertical="top"
             />
             <Text style={styles.characterCount}>
-              {content.length}/500文字 (最低10文字)
+              {content.length}/500文字
             </Text>
+            {!isAuthenticated && (
+              <Text style={styles.authWarning}>
+                ⚠️ レビューを投稿するにはログインが必要です
+              </Text>
+            )}
           </View>
 
           <View style={styles.guidelines}>
@@ -352,6 +370,10 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 4,
   },
+  characterCountWarning: {
+    color: '#FF3B30',
+    fontWeight: '500',
+  },
   guidelines: {
     backgroundColor: '#F8F9FA',
     borderRadius: 12,
@@ -368,5 +390,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     lineHeight: 18,
+  },
+  authWarning: {
+    fontSize: 12,
+    color: '#FF3B30',
+    marginTop: 8,
+    fontWeight: '500',
   },
 });

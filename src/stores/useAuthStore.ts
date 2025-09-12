@@ -7,6 +7,8 @@ interface AuthStore {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isInitialized: boolean;
+  authListener?: any;
   
   // Actions
   signUp: (email: string, password: string, name?: string) => Promise<{ error: string | null }>;
@@ -24,6 +26,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   user: null,
   isLoading: true,
   isAuthenticated: false,
+  isInitialized: false,
+  authListener: undefined,
 
   signUp: async (email: string, password: string, name?: string) => {
     set({ isLoading: true });
@@ -171,12 +175,29 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   signInWithGoogle: async () => {
     set({ isLoading: true });
     
+    console.log('🔐 AuthStore: Google認証開始');
     const { user, error } = await AuthService.signInWithGoogle();
     
     if (user) {
+      console.log('🔐 AuthStore: Google認証成功', {
+        userId: user.id,
+        email: user.email,
+        name: user.name
+      });
+      
+      // Storeとローカルストレージを更新
       set({ user, isAuthenticated: true, isLoading: false });
       await AsyncStorage.setItem('user', JSON.stringify(user));
+      
+      // セッション確認
+      const { data: sessionData } = await supabase.auth.getSession();
+      console.log('🔐 AuthStore: Google認証後のセッション状態', {
+        hasSession: !!sessionData.session,
+        sessionUserId: sessionData.session?.user?.id,
+        sessionEmail: sessionData.session?.user?.email
+      });
     } else {
+      console.error('🔐 AuthStore: Google認証失敗', { error });
       set({ isLoading: false });
     }
     
@@ -195,61 +216,176 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   initializeAuth: async () => {
-    console.log('🔐 AuthStore: initializeAuth - Supabase認証監視を開始');
+    console.log('🔐 AuthStore: initializeAuth - 認証状態初期化開始');
     
-    // まず現在のSupabaseセッション状態を確認
-    try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-      
-      console.log('🔐 AuthStore: 初期化時のSupabase状態:', {
-        hasSession: !!sessionData.session,
-        hasUser: !!currentUser,
-        sessionError: sessionError?.message,
-        userError: userError?.message,
-        userId: currentUser?.id
-      });
-      
-      // Supabaseセッションが有効な場合、AuthStoreを同期
-      if (currentUser && sessionData.session) {
-        console.log('🔐 AuthStore: 有効なSupabaseセッションを発見 - AuthStoreを同期');
-        const profile = await AuthService.getCurrentUser();
-        if (profile) {
-          set({ user: profile, isAuthenticated: true, isLoading: false });
-          await AsyncStorage.setItem('user', JSON.stringify(profile));
-          console.log('🔐 AuthStore: Supabaseセッションから復元成功');
-        }
-      } else {
-        // Supabaseセッションが無効な場合、AuthStoreもクリア
-        console.log('🔐 AuthStore: Supabaseセッション無効 - AuthStoreをクリア');
-        set({ user: null, isAuthenticated: false, isLoading: false });
-        await AsyncStorage.removeItem('user');
-      }
-    } catch (initError) {
-      console.error('🔐 AuthStore: 初期化エラー:', initError);
-      set({ user: null, isAuthenticated: false, isLoading: false });
-      await AsyncStorage.removeItem('user');
+    if (get().isInitialized) {
+      console.log('🔐 AuthStore: 既に初期化済み');
+      return;
     }
     
-    // Supabaseの認証状態変更を監視
-    const { data: { subscription } } = AuthService.subscribeToAuthChanges(async (user) => {
-      console.log('🔐 AuthStore: 認証状態変更:', !!user ? user.email : 'ログアウト');
+    set({ isLoading: true });
+    
+    try {
+      // 1. まずSupabaseセッションを確認（Zennの記事のパターン）
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      if (user) {
-        const profile = await AuthService.getCurrentUser();
+      console.log('🔐 AuthStore: 初期セッション確認:', {
+        hasSession: !!session,
+        userId: session?.user?.id,
+        email: session?.user?.email,
+        error: sessionError?.message
+      });
+      
+      if (sessionError) {
+        console.error('🔐 AuthStore: セッション取得エラー:', sessionError);
+        throw sessionError;
+      }
+      
+      // 2. セッションが存在する場合の処理
+      if (session?.user) {
+        console.log('🔐 AuthStore: 有効なセッション発見、プロフィール取得中');
+        
+        // プロフィール取得（安全に）
+        let profile: User | null = null;
+        try {
+          profile = await AuthService.getCurrentUser();
+        } catch (profileError) {
+          console.error('🔐 AuthStore: プロフィール取得エラー:', profileError);
+          // プロフィール取得に失敗してもセッションが有効なら基本情報で継続
+        }
+        
         if (profile) {
-          set({ user: profile, isAuthenticated: true, isLoading: false });
+          set({ 
+            user: profile, 
+            isAuthenticated: true, 
+            isLoading: false, 
+            isInitialized: true 
+          });
           await AsyncStorage.setItem('user', JSON.stringify(profile));
+          console.log('🔐 AuthStore: セッション復元成功（プロフィール付き）');
+        } else {
+          // プロフィールがない場合でもセッションは有効
+          const basicUser: User = {
+            id: session.user.id,
+            email: session.user.email!,
+            name: session.user.user_metadata?.full_name || 
+                  session.user.user_metadata?.name ||
+                  session.user.email?.split('@')[0] || 'ユーザー',
+            avatar_url: session.user.user_metadata?.avatar_url ||
+                       session.user.user_metadata?.picture
+          };
+          
+          set({ 
+            user: basicUser, 
+            isAuthenticated: true, 
+            isLoading: false, 
+            isInitialized: true 
+          });
+          await AsyncStorage.setItem('user', JSON.stringify(basicUser));
+          console.log('🔐 AuthStore: 基本ユーザー情報で初期化');
+          
+          // バックグラウンドでプロフィール作成を試行
+          try {
+            await AuthService.createProfileSafely(
+              basicUser.id,
+              basicUser.name || 'ユーザー',
+              basicUser.avatar_url
+            );
+            console.log('🔐 AuthStore: バックグラウンドプロフィール作成完了');
+          } catch (createError) {
+            console.error('🔐 AuthStore: バックグラウンドプロフィール作成失敗:', createError);
+          }
         }
       } else {
-        set({ user: null, isAuthenticated: false, isLoading: false });
+        // 3. セッションがない場合の処理
+        console.log('🔐 AuthStore: セッションなし - 未認証状態に設定');
+        
+        // ローカルストレージもクリア
         await AsyncStorage.removeItem('user');
+        
+        set({ 
+          user: null, 
+          isAuthenticated: false, 
+          isLoading: false, 
+          isInitialized: true 
+        });
       }
-    });
+    } catch (error) {
+      console.error('🔐 AuthStore: 初期化エラー:', error);
+      
+      // エラー時はクリーンアップ
+      await AsyncStorage.removeItem('user');
+      set({ 
+        user: null, 
+        isAuthenticated: false, 
+        isLoading: false, 
+        isInitialized: true 
+      });
+    }
     
-    console.log('🔐 AuthStore: 認証状態監視設定完了');
-    
-    // 初期認証チェック（既に上で実行済みだがバックアップとして）
-    await get().checkAuth();
+    // 4. 認証状態変更の監視を設定（一度だけ）
+    if (!get().authListener) {
+      console.log('🔐 AuthStore: 認証監視の設定開始');
+      
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log('🔐 AuthStore: 認証イベント発生:', event, session?.user?.email);
+        
+        switch (event) {
+          case 'SIGNED_IN':
+            if (session?.user) {
+              console.log('🔐 AuthStore: サインインイベント処理');
+              let profile: User | null = null;
+              
+              try {
+                profile = await AuthService.getCurrentUser();
+              } catch (error) {
+                console.error('🔐 AuthStore: SIGNED_INでプロフィール取得失敗:', error);
+              }
+              
+              if (profile) {
+                set({ user: profile, isAuthenticated: true, isLoading: false });
+                await AsyncStorage.setItem('user', JSON.stringify(profile));
+              } else {
+                const basicUser: User = {
+                  id: session.user.id,
+                  email: session.user.email!,
+                  name: session.user.user_metadata?.full_name || 
+                        session.user.user_metadata?.name ||
+                        session.user.email?.split('@')[0] || 'ユーザー',
+                  avatar_url: session.user.user_metadata?.avatar_url ||
+                             session.user.user_metadata?.picture
+                };
+                set({ user: basicUser, isAuthenticated: true, isLoading: false });
+                await AsyncStorage.setItem('user', JSON.stringify(basicUser));
+              }
+            }
+            break;
+            
+          case 'SIGNED_OUT':
+            console.log('🔐 AuthStore: サインアウトイベント処理');
+            set({ user: null, isAuthenticated: false, isLoading: false });
+            await AsyncStorage.removeItem('user');
+            break;
+            
+          case 'TOKEN_REFRESHED':
+            console.log('🔐 AuthStore: トークン更新イベント');
+            if (session) {
+              const currentState = get();
+              if (currentState.user && currentState.isAuthenticated) {
+                // 現在の認証状態を維持
+                set({ isLoading: false });
+              }
+            }
+            break;
+            
+          default:
+            console.log('🔐 AuthStore: その他の認証イベント:', event);
+        }
+      });
+      
+      // サブスクリプションを保存（クリーンアップ用）
+      set({ authListener: subscription });
+      console.log('🔐 AuthStore: 認証監視設定完了');
+    }
   },
 }));
