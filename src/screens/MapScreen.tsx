@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
+  Text,
   StyleSheet,
   Alert,
   Platform,
@@ -235,7 +236,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       }
       
       // 周辺検索が有効な場合は、関連施設も取得するためにカテゴリーを追加
-      const categoriesForFetch = new Set(selectedCategories);
+      const categoriesForFetch = new Set<string>(selectedCategories);
       if (currentFilter.nearbyFilterEnabled && selectedCategories.has('コインパーキング')) {
         if ((currentFilter.convenienceStoreRadius || 0) > 0) {
           categoriesForFetch.add('コンビニ');
@@ -993,7 +994,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           showsMyLocationButton={false}
           showsCompass={false}
         >
-          {isMapReady && renderMarkers()}
+          {isMapReady && !isLoading && renderMarkers()}
         </MapView>
         
         <CategoryButtons />
@@ -1015,7 +1016,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         
         {isLoading && (
           <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color={Colors.primary} />
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.loadingText}>検索中...</Text>
+            </View>
           </View>
         )}
       </View>
@@ -1182,5 +1186,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  loadingContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: Colors.textPrimary,
+    fontWeight: '600',
   },
 });

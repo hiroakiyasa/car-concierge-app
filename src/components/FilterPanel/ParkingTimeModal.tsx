@@ -38,7 +38,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   const [activeTab, setActiveTab] = useState<'entry' | 'duration'>(getInitialTab());
   
   // 駐車時間の選択
-  const [selectedDurationIndex, setSelectedDurationIndex] = useState(2); // デフォルト30分
+  const [selectedDurationIndex, setSelectedDurationIndex] = useState(5); // デフォルト1時間
   
   // 入庫日時の選択（現在時刻をデフォルト）
   const now = new Date();
@@ -58,7 +58,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   const hourScrollRef = useRef<ScrollView>(null);
   const minuteScrollRef = useRef<ScrollView>(null);
 
-  // 駐車時間のオプション
+  // 駐車時間のオプション（3時間から48時間まで1時間刻み）
   const durations = [
     { minutes: 10, label: '10分間' },
     { minutes: 20, label: '20分間' },
@@ -73,10 +73,48 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
     { minutes: 240, label: '4時間' },
     { minutes: 300, label: '5時間' },
     { minutes: 360, label: '6時間' },
+    { minutes: 420, label: '7時間' },
     { minutes: 480, label: '8時間' },
+    { minutes: 540, label: '9時間' },
     { minutes: 600, label: '10時間' },
+    { minutes: 660, label: '11時間' },
     { minutes: 720, label: '12時間' },
+    { minutes: 780, label: '13時間' },
+    { minutes: 840, label: '14時間' },
+    { minutes: 900, label: '15時間' },
+    { minutes: 960, label: '16時間' },
+    { minutes: 1020, label: '17時間' },
+    { minutes: 1080, label: '18時間' },
+    { minutes: 1140, label: '19時間' },
+    { minutes: 1200, label: '20時間' },
+    { minutes: 1260, label: '21時間' },
+    { minutes: 1320, label: '22時間' },
+    { minutes: 1380, label: '23時間' },
     { minutes: 1440, label: '24時間' },
+    { minutes: 1500, label: '25時間' },
+    { minutes: 1560, label: '26時間' },
+    { minutes: 1620, label: '27時間' },
+    { minutes: 1680, label: '28時間' },
+    { minutes: 1740, label: '29時間' },
+    { minutes: 1800, label: '30時間' },
+    { minutes: 1860, label: '31時間' },
+    { minutes: 1920, label: '32時間' },
+    { minutes: 1980, label: '33時間' },
+    { minutes: 2040, label: '34時間' },
+    { minutes: 2100, label: '35時間' },
+    { minutes: 2160, label: '36時間' },
+    { minutes: 2220, label: '37時間' },
+    { minutes: 2280, label: '38時間' },
+    { minutes: 2340, label: '39時間' },
+    { minutes: 2400, label: '40時間' },
+    { minutes: 2460, label: '41時間' },
+    { minutes: 2520, label: '42時間' },
+    { minutes: 2580, label: '43時間' },
+    { minutes: 2640, label: '44時間' },
+    { minutes: 2700, label: '45時間' },
+    { minutes: 2760, label: '46時間' },
+    { minutes: 2820, label: '47時間' },
+    { minutes: 2880, label: '48時間' },
   ];
 
   // 日付オプション
