@@ -24,7 +24,7 @@ export class SupabaseService {
     // クエリビルダーを作成
     let query = supabase
       .from('parking_spots')
-      .select('*')
+      .select('*, nearest_convenience_store, nearest_hotspring')
       .gte('lat', minLat)
       .lte('lat', maxLat)
       .gte('lng', minLng)
@@ -395,6 +395,204 @@ export class SupabaseService {
   // Unsubscribe from updates
   static unsubscribe(subscription: any) {
     supabase.removeChannel(subscription);
+  }
+
+  // 周辺検索付き駐車場検索（バックエンドで完結）
+  static async fetchParkingSpotsByNearbyFilter(
+    region: Region,
+    durationMinutes: number,
+    convenienceRadius?: number,
+    hotspringRadius?: number,
+    minElevation?: number
+  ): Promise<CoinParking[]> {
+    const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
+    
+    const minLat = latitude - (latitudeDelta / 2);
+    const maxLat = latitude + (latitudeDelta / 2);
+    const minLng = longitude - (longitudeDelta / 2);
+    const maxLng = longitude + (longitudeDelta / 2);
+    
+    console.log('🎯 周辺検索付き駐車場検索（バックエンド処理）:', {
+      地図範囲: `${minLat.toFixed(4)}-${maxLat.toFixed(4)}, ${minLng.toFixed(4)}-${maxLng.toFixed(4)}`,
+      駐車時間: `${durationMinutes}分`,
+      コンビニ: convenienceRadius ? `${convenienceRadius}m以内` : '指定なし',
+      温泉: hotspringRadius ? `${hotspringRadius}m以内` : '指定なし',
+      最低標高: minElevation ? `${minElevation}m` : '制限なし',
+    });
+
+    try {
+      // まず地図範囲内の駐車場を取得
+      let query = supabase
+        .from('parking_spots')
+        .select('*, nearest_convenience_store, nearest_hotspring')
+        .gte('lat', minLat)
+        .lte('lat', maxLat)
+        .gte('lng', minLng)
+        .lte('lng', maxLng);
+      
+      // 標高フィルター
+      if (minElevation !== undefined && minElevation > 0) {
+        query = query.gte('elevation', minElevation);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('❌ 駐車場取得エラー:', error);
+        return [];
+      }
+      
+      if (!data || data.length === 0) {
+        console.log('📍 該当する駐車場が見つかりません');
+        return [];
+      }
+      
+      console.log(`📍 地図範囲内の駐車場: ${data.length}件`);
+      
+      // フィルタリング処理
+      let filteredData = data;
+      
+      // コンビニ距離フィルター
+      if (convenienceRadius && convenienceRadius > 0) {
+        filteredData = filteredData.filter(spot => {
+          if (!spot.nearest_convenience_store) return false;
+          try {
+            const nearestStore = typeof spot.nearest_convenience_store === 'string' 
+              ? JSON.parse(spot.nearest_convenience_store) 
+              : spot.nearest_convenience_store;
+            const distance = nearestStore.distance_m || nearestStore.distance || 999999;
+            return distance <= convenienceRadius;
+          } catch {
+            return false;
+          }
+        });
+        console.log(`🏪 コンビニフィルター適用後: ${filteredData.length}件`);
+      }
+      
+      // 温泉距離フィルター
+      if (hotspringRadius && hotspringRadius > 0) {
+        filteredData = filteredData.filter(spot => {
+          if (!spot.nearest_hotspring) return false;
+          try {
+            const nearestSpring = typeof spot.nearest_hotspring === 'string' 
+              ? JSON.parse(spot.nearest_hotspring) 
+              : spot.nearest_hotspring;
+            const distance = nearestSpring.distance_m || nearestSpring.distance || 999999;
+            return distance <= hotspringRadius;
+          } catch {
+            return false;
+          }
+        });
+        console.log(`♨️ 温泉フィルター適用後: ${filteredData.length}件`);
+      }
+      
+      // 料金計算とソート（フロントエンドの料金計算ロジックを簡易実装）
+      const parkingSpotsWithFee = filteredData.map(spot => {
+        let calculatedFee = -1; // デフォルトは料金計算不可
+        
+        if (spot.rates && Array.isArray(spot.rates)) {
+          try {
+            // 基本料金を探す
+            const baseRate = spot.rates.find((r: any) => r.type === 'base');
+            const maxRate = spot.rates.find((r: any) => r.type === 'max');
+            
+            if (baseRate) {
+              // 簡易的な料金計算
+              const periods = Math.ceil(durationMinutes / baseRate.minutes);
+              calculatedFee = periods * baseRate.price;
+              
+              // 最大料金チェック
+              if (maxRate && maxRate.price < calculatedFee) {
+                calculatedFee = maxRate.price;
+              }
+            }
+          } catch (error) {
+            console.error('料金計算エラー:', error);
+          }
+        }
+        
+        return {
+          ...spot,
+          calculatedFee
+        };
+      });
+      
+      // 料金でソート（-1は最後に）
+      const sortedSpots = parkingSpotsWithFee.sort((a, b) => {
+        if (a.calculatedFee === -1 && b.calculatedFee === -1) return 0;
+        if (a.calculatedFee === -1) return 1;
+        if (b.calculatedFee === -1) return -1;
+        return a.calculatedFee - b.calculatedFee;
+      });
+      
+      // 上位20件を取得
+      const top20Spots = sortedSpots.slice(0, 20);
+      
+      // データ形式を整形
+      const results = top20Spots.map((spot, index) => {
+        let nearestConvenienceStore = null;
+        let nearestHotspring = null;
+        
+        if (spot.nearest_convenience_store) {
+          try {
+            nearestConvenienceStore = typeof spot.nearest_convenience_store === 'string' 
+              ? JSON.parse(spot.nearest_convenience_store) 
+              : spot.nearest_convenience_store;
+          } catch {}
+        }
+        
+        if (spot.nearest_hotspring) {
+          try {
+            nearestHotspring = typeof spot.nearest_hotspring === 'string' 
+              ? JSON.parse(spot.nearest_hotspring) 
+              : spot.nearest_hotspring;
+          } catch {}
+        }
+        
+        // hoursフィールドをJSONパース
+        let hoursData = null;
+        if (spot.hours) {
+          try {
+            hoursData = typeof spot.hours === 'string' ? JSON.parse(spot.hours) : spot.hours;
+          } catch {}
+        }
+        
+        return {
+          ...spot,
+          category: 'コインパーキング',
+          rates: spot.rates || [],
+          hours: hoursData || spot.hours,
+          operatingHours: spot.operating_hours || spot.operatingHours || spot.hours,
+          operating_hours: spot.operating_hours,
+          is_24h: spot.is_24h,
+          nearestConvenienceStore,
+          nearestHotspring,
+          calculatedFee: spot.calculatedFee,
+          rank: index + 1
+        };
+      }) as CoinParking[];
+      
+      console.log(`✅ 周辺検索結果: ${results.length}件（料金順上位20件）`);
+      
+      // 上位5件の詳細をログ出力
+      if (results.length > 0) {
+        console.log('💰 上位5件の詳細:');
+        results.slice(0, 5).forEach((spot, idx) => {
+          const convenienceInfo = spot.nearestConvenienceStore 
+            ? `🏪${spot.nearestConvenienceStore.distance_m || spot.nearestConvenienceStore.distance}m`
+            : '❌';
+          const hotspringInfo = spot.nearestHotspring
+            ? `♨️${spot.nearestHotspring.distance_m || spot.nearestHotspring.distance}m`
+            : '❌';
+          console.log(`  ${idx + 1}. ${spot.name}: ¥${spot.calculatedFee} (${convenienceInfo}, ${hotspringInfo})`);
+        });
+      }
+      
+      return results;
+    } catch (error) {
+      console.error('❌ 周辺検索エラー:', error);
+      return [];
+    }
   }
 
   // Fetch parking spots sorted by calculated fee (backend calculation)
