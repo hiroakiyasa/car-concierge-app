@@ -152,7 +152,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         const bottomPanelRatio = 0.33; // パネルが占める割合
         const bottomExclusionRatio = bottomPanelRatio + bottomLabelMargin; // パネル境界まで
         const leftMargin = labelWidthRatio; // 左側はラベル1個分内側（範囲を1ラベル分拡張）
-        const rightMargin = labelWidthRatio + 0.05; // 右側はラベル1個分内側
+        const rightMargin = labelWidthRatio * 2 + 0.05; // 右側はラベル2個分内側に調整
         
         // 境界を計算
         // 上側：画面上端から1ラベル分内側（画面内に制限）
@@ -182,7 +182,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         const bottomPanelRatio = 0.15; // 最小パネルが占める割合
         const bottomExclusionRatio = bottomPanelRatio + bottomLabelMargin; // パネル境界まで
         const leftMargin = labelWidthRatio; // 左側はラベル1個分内側（範囲を1ラベル分拡張）
-        const rightMargin = labelWidthRatio + 0.05; // 右側はラベル1個分内側
+        const rightMargin = labelWidthRatio * 2 + 0.05; // 右側はラベル2個分内側に調整
         
         // 境界を計算
         // 上側：画面上端から1ラベル分内側（画面内に制限）
