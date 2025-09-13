@@ -203,7 +203,7 @@ export class SupabaseService {
     })) as ConvenienceStore[];
   }
   
-  // Fetch hot springs
+  // Fetch hot springs (exclude hotels with price > 5000)
   static async fetchHotSprings(region: Region): Promise<HotSpring[]> {
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
     
@@ -225,6 +225,7 @@ export class SupabaseService {
       西端経度: minLng.toFixed(6),
     });
     
+    // 温泉データを取得（全データを一旦取得）
     const { data, error } = await supabase
       .from('hot_springs')
       .select('*')
@@ -232,7 +233,7 @@ export class SupabaseService {
       .lte('lat', maxLat)
       .gte('lng', minLng)
       .lte('lng', maxLng)
-      .limit(50);
+      .limit(100);
     
     if (error) {
       console.error('Error fetching hot springs:', error);
@@ -241,7 +242,30 @@ export class SupabaseService {
     
     console.log(`♨️ Supabaseから${data?.length || 0}件の温泉を取得`);
     
-    return (data || []).map(spring => ({
+    // 価格でフィルタリング（5000円以下のみ、ホテルを除外）
+    const filteredData = (data || []).filter(spring => {
+      // priceフィールドから数値を抽出
+      if (!spring.price) return true; // 価格情報がない場合は表示
+      
+      // 価格文字列から数値を抽出（例: "大人 1,200円" → 1200）
+      const priceMatch = spring.price.match(/[\d,]+/);
+      if (!priceMatch) return true; // 数値が見つからない場合は表示
+      
+      const priceNum = parseInt(priceMatch[0].replace(/,/g, ''), 10);
+      
+      // 5000円以下のみ表示（ホテルの温泉を除外）
+      const isAffordable = priceNum <= 5000;
+      
+      if (!isAffordable) {
+        console.log(`🚫 高額温泉を除外: ${spring.name} (${spring.price})`);
+      }
+      
+      return isAffordable;
+    });
+    
+    console.log(`♨️ フィルタリング後: ${filteredData.length}件（5000円以下）`);
+    
+    return filteredData.map(spring => ({
       ...spring,
       category: '温泉',
       operatingHours: spring.Hours || spring.operating_hours || spring.operatingHours,

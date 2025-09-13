@@ -14,9 +14,10 @@ if (Platform.OS === 'web') {
   Marker = ReactNativeMaps.Marker;
   Callout = ReactNativeMaps.Callout;
 }
-import { Spot, ConvenienceStore, GasStation, CoinParking } from '@/types';
+import { Spot, ConvenienceStore, GasStation, CoinParking, HotSpring } from '@/types';
 import { getConvenienceStoreLogo, getGasStationLogo } from '@/utils/brandLogos';
 import { Colors } from '@/utils/constants';
+import { getGasStationMarkerColor, NATIONAL_AVERAGE_PRICES, formatPriceDifference } from '@/utils/fuelPrices';
 
 interface CustomMarkerProps {
   spot: Spot;
@@ -93,8 +94,59 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
   
   const logo = getLogoForSpot();
   
-  // コンビニやガソリンスタンドでロゴがある場合
-  if (logo) {
+  // ガソリンスタンドでロゴがある場合 - 四角形マーカーに色付け
+  if (spot.category === 'ガソリンスタンド' && logo) {
+    const gasStation = spot as GasStation;
+    const markerColor = getGasStationMarkerColor(gasStation.services);
+    const priceDiff = formatPriceDifference(gasStation.services?.regular_price, NATIONAL_AVERAGE_PRICES.regular);
+    const isWhite = markerColor === '#FFFFFF';
+    
+    return (
+      <Marker
+        coordinate={{
+          latitude: spot.lat,
+          longitude: spot.lng,
+        }}
+        onPress={handleMarkerPress}
+        tracksViewChanges={false}
+        anchor={{ x: 0.5, y: 0.5 }}
+      >
+        <View style={[
+          styles.gasStationLogoMarker,
+          { 
+            backgroundColor: markerColor,
+            borderColor: isWhite ? '#CCCCCC' : '#FFFFFF'
+          },
+          isNearbyFacility && styles.nearbyFacilityGasLogoMarker
+        ]}>
+          <View style={styles.gasLogoInnerContainer}>
+            <Image source={logo} style={styles.gasLogoImage} resizeMode="contain" />
+          </View>
+        </View>
+        <Callout tooltip onPress={handleCalloutPress}>
+          <View style={styles.gasStationCallout}>
+            <Text style={styles.gasStationCalloutName} numberOfLines={2}>
+              {spot.name}
+            </Text>
+            {gasStation.services?.regular_price && (
+              <View style={styles.gasCalloutPriceRow}>
+                <Text style={styles.gasCalloutPriceLabel}>レギュラー</Text>
+                <Text style={[
+                  styles.gasCalloutPriceDiff,
+                  { color: markerColor }
+                ]}>
+                  {priceDiff}
+                </Text>
+              </View>
+            )}
+          </View>
+        </Callout>
+      </Marker>
+    );
+  }
+  
+  // コンビニでロゴがある場合 - 丸形マーカー
+  if (spot.category === 'コンビニ' && logo) {
     return (
       <Marker
         coordinate={{
@@ -201,6 +253,55 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
     );
   }
 
+  // For gas stations, show square marker with gradient color
+  if (spot.category === 'ガソリンスタンド') {
+    const gasStation = spot as GasStation;
+    const markerColor = getGasStationMarkerColor(gasStation.services);
+    const priceDiff = formatPriceDifference(gasStation.services?.regular_price, NATIONAL_AVERAGE_PRICES.regular);
+    const isWhite = markerColor === '#FFFFFF';
+    
+    return (
+      <Marker
+        coordinate={{
+          latitude: spot.lat,
+          longitude: spot.lng,
+        }}
+        onPress={handleMarkerPress}
+        tracksViewChanges={false}
+        anchor={{ x: 0.5, y: 1 }}
+      >
+        <View style={[
+          styles.gasStationMarker,
+          { 
+            backgroundColor: markerColor,
+            borderColor: isWhite ? '#CCCCCC' : '#FFFFFF'
+          },
+          isNearbyFacility && styles.nearbyFacilityGasMarker
+        ]}>
+          <Text style={styles.gasStationMarkerIcon}>⛽</Text>
+        </View>
+        <Callout tooltip onPress={handleCalloutPress}>
+          <View style={styles.gasStationCallout}>
+            <Text style={styles.gasStationCalloutName} numberOfLines={2}>
+              {spot.name}
+            </Text>
+            {gasStation.services?.regular_price && (
+              <View style={styles.gasCalloutPriceRow}>
+                <Text style={styles.gasCalloutPriceLabel}>レギュラー</Text>
+                <Text style={[
+                  styles.gasCalloutPriceDiff,
+                  { color: markerColor }
+                ]}>
+                  {priceDiff}
+                </Text>
+              </View>
+            )}
+          </View>
+        </Callout>
+      </Marker>
+    );
+  }
+
   // For other categories, show colored marker with icon
   return (
     <Marker
@@ -222,6 +323,9 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
       <Callout tooltip onPress={handleCalloutPress}>
         <View style={styles.calloutContainer}>
           <Text style={styles.calloutName}>{spot.name}</Text>
+          {spot.category === '温泉' && (spot as HotSpring).price && (
+            <Text style={styles.calloutPrice}>{(spot as HotSpring).price}</Text>
+          )}
         </View>
       </Callout>
     </Marker>
@@ -436,5 +540,120 @@ const styles = StyleSheet.create({
     color: '#333',
     flexWrap: 'wrap',  // 長い名前を折り返し表示
     lineHeight: 18,    // 読みやすい行間
+  },
+  calloutPrice: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.primary,
+    marginTop: 4,
+  },
+  // Gas Station Square Marker Styles
+  gasStationMarker: {
+    width: 34,
+    height: 34,
+    borderRadius: 6, // Square with slightly rounded corners
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  nearbyFacilityGasMarker: {
+    borderWidth: 3,
+    borderColor: '#007AFF',
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 8,
+    transform: [{ scale: 1.1 }],
+  },
+  gasStationMarkerIcon: {
+    fontSize: 20,
+  },
+  gasStationCallout: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    minWidth: 180,
+    maxWidth: 280,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  gasStationCalloutName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  gasCalloutPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  gasCalloutPriceLabel: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '500',
+  },
+  gasCalloutPrice: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FF6B35',
+  },
+  gasCalloutPriceDiff: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  // Gas Station Logo Marker Styles
+  gasStationLogoMarker: {
+    width: 42,
+    height: 42,
+    borderRadius: 6, // Square with rounded corners
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    padding: 4,
+  },
+  nearbyFacilityGasLogoMarker: {
+    borderWidth: 3,
+    borderColor: '#007AFF',
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 8,
+    transform: [{ scale: 1.1 }],
+    width: 46,
+    height: 46,
+  },
+  gasLogoInnerContainer: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 2,
+  },
+  gasLogoImage: {
+    width: 28,
+    height: 28,
   },
 });

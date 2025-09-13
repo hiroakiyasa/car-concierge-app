@@ -20,9 +20,12 @@ import { RatingDisplay } from '@/components/RatingDisplay';
 import { ReviewService } from '@/services/review.service';
 import { ReviewModal } from '@/components/Reviews/ReviewModal';
 import { ReviewList } from '@/components/Reviews/ReviewList';
-import { CoinParking } from '@/types';
+import { HotSpringReviewModal } from '@/components/Reviews/HotSpringReviewModal';
+import { HotSpringReviewList } from '@/components/Reviews/HotSpringReviewList';
+import { CoinParking, HotSpring, GasStation } from '@/types';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { SupabaseService } from '@/services/supabase.service';
+import { NATIONAL_AVERAGE_PRICES, formatPriceDifference, getPriceDifferenceColor } from '@/utils/fuelPrices';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.5; // 50% of screen height
@@ -48,7 +51,13 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     count: number;
   }>({ average: 0, count: 0 });
   const [reviewModalVisible, setReviewModalVisible] = React.useState(false);
+  const [hotSpringReviewModalVisible, setHotSpringReviewModalVisible] = React.useState(false);
   const [reviewKey, setReviewKey] = React.useState(0);
+  const [hotSpringReviewKey, setHotSpringReviewKey] = React.useState(0);
+  const [hotSpringReviewStats, setHotSpringReviewStats] = React.useState<{
+    average: number;
+    count: number;
+  }>({ average: 0, count: 0 });
   const scrollX = React.useRef(new Animated.Value(0)).current;
   const [nameWidth, setNameWidth] = React.useState(0);
   const [containerWidth, setContainerWidth] = React.useState(0);
@@ -117,15 +126,20 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   
   // レビュー統計を取得
   React.useEffect(() => {
-    if (!selectedSpot || !visible || !isParking) return;
+    if (!selectedSpot || !visible) return;
     
     const fetchReviewStats = async () => {
-      const stats = await ReviewService.getAverageRating(Number(selectedSpot.id));
-      setReviewStats(stats);
+      if (selectedSpot.category === 'コインパーキング') {
+        const stats = await ReviewService.getAverageRating(Number(selectedSpot.id));
+        setReviewStats(stats);
+      } else if (selectedSpot.category === '温泉') {
+        const stats = await ReviewService.getHotSpringAverageRating(selectedSpot.id);
+        setHotSpringReviewStats(stats);
+      }
     };
     
     fetchReviewStats();
-  }, [visible, selectedSpot, reviewKey]);
+  }, [visible, selectedSpot, reviewKey, hotSpringReviewKey]);
   
   // 名前のスクロールアニメーション
   React.useEffect(() => {
@@ -157,7 +171,11 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   }
   
   const isParking = selectedSpot.category === 'コインパーキング';
+  const isHotSpring = selectedSpot.category === '温泉';
+  const isGasStation = selectedSpot.category === 'ガソリンスタンド';
   const parkingSpot = selectedSpot as CoinParking;
+  const hotSpringSpot = selectedSpot as HotSpring;
+  const gasStationSpot = selectedSpot as GasStation;
   
   
   const formatPrice = (): string => {
@@ -403,8 +421,16 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     setReviewKey(prev => prev + 1);
   };
 
+  const handleHotSpringReviewSubmitted = () => {
+    setHotSpringReviewKey(prev => prev + 1);
+  };
+
   const openReviewModal = () => {
     setReviewModalVisible(true);
+  };
+
+  const openHotSpringReviewModal = () => {
+    setHotSpringReviewModalVisible(true);
   };
 
   return (
@@ -429,7 +455,9 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         {/* Title Section */}
         <View style={styles.titleSection}>
           <View style={styles.titleLeft}>
-            <Text style={styles.categoryIcon}>🅿️</Text>
+            <Text style={styles.categoryIcon}>
+              {isParking ? '🅿️' : isHotSpring ? '♨️' : isGasStation ? '⛽' : '📍'}
+            </Text>
             <View style={styles.titleInfo}>
               <View style={styles.nameRow}>
                 <View 
@@ -457,15 +485,22 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 </View>
               </View>
               <View style={styles.addressRow}>
-                {selectedSpot.address && (
+                {selectedSpot.address && !isHotSpring && !isGasStation && (
                   <Text style={styles.address} numberOfLines={1}>
                     {selectedSpot.address}
                   </Text>
                 )}
-                {reviewStats.count > 0 && (
+                {reviewStats.count > 0 && isParking && (
                   <RatingDisplay
                     rating={reviewStats.average}
                     totalReviews={reviewStats.count}
+                    size="small"
+                  />
+                )}
+                {hotSpringReviewStats.count > 0 && isHotSpring && (
+                  <RatingDisplay
+                    rating={hotSpringReviewStats.average}
+                    totalReviews={hotSpringReviewStats.count}
                     size="small"
                   />
                 )}
@@ -623,6 +658,212 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
             </View>
           </ScrollView>
         )}
+        
+        {/* Hot Spring Info - Compact Premium Design */}
+        {isHotSpring && (
+          <ScrollView 
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            {/* Compact Combined Info Card */}
+            <View style={styles.hotSpringCompactCard}>
+              {/* Price Section - Fixed visibility */}
+              {hotSpringSpot.price && (
+                <View style={styles.compactPriceSection}>
+                  <View style={styles.compactPriceHeader}>
+                    <View style={styles.priceIconBadge}>
+                      <Text style={styles.priceIconText}>¥</Text>
+                    </View>
+                    <Text style={styles.compactPriceLabel}>入浴料金</Text>
+                  </View>
+                  <Text style={styles.compactPriceValue}>{hotSpringSpot.price}</Text>
+                </View>
+              )}
+              
+              {/* Divider */}
+              {hotSpringSpot.price && (
+                <View style={styles.compactDivider} />
+              )}
+              
+              {/* Facility Info - Compact Grid */}
+              <View style={styles.compactInfoGrid}>
+                {/* Address */}
+                {selectedSpot.address && (
+                  <View style={styles.compactInfoItem}>
+                    <View style={styles.compactInfoIcon}>
+                      <Ionicons name="location" size={14} color="#666" />
+                    </View>
+                    <View style={styles.compactInfoText}>
+                      <Text style={styles.compactInfoLabel}>住所</Text>
+                      <Text style={styles.compactInfoValue} numberOfLines={2}>
+                        {selectedSpot.address}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+                
+                {/* Operating Hours */}
+                {hotSpringSpot.operatingHours && (
+                  <View style={styles.compactInfoItem}>
+                    <View style={styles.compactInfoIcon}>
+                      <Ionicons name="time" size={14} color="#666" />
+                    </View>
+                    <View style={styles.compactInfoText}>
+                      <Text style={styles.compactInfoLabel}>営業時間</Text>
+                      <Text style={styles.compactInfoValue} numberOfLines={2}>
+                        {hotSpringSpot.operatingHours}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+                
+                {/* Facility Type */}
+                {hotSpringSpot.facilityType && (
+                  <View style={styles.compactInfoItem}>
+                    <View style={styles.compactInfoIcon}>
+                      <Ionicons name="business" size={14} color="#666" />
+                    </View>
+                    <View style={styles.compactInfoText}>
+                      <Text style={styles.compactInfoLabel}>施設タイプ</Text>
+                      <Text style={styles.compactInfoValue} numberOfLines={1}>
+                        {hotSpringSpot.facilityType}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+                
+                {/* Holiday Info */}
+                {hotSpringSpot.holidayInfo && (
+                  <View style={styles.compactInfoItem}>
+                    <View style={styles.compactInfoIcon}>
+                      <Ionicons name="calendar" size={14} color="#666" />
+                    </View>
+                    <View style={styles.compactInfoText}>
+                      <Text style={styles.compactInfoLabel}>定休日</Text>
+                      <Text style={styles.compactInfoValue} numberOfLines={1}>
+                        {hotSpringSpot.holidayInfo}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </View>
+            
+            {/* Reviews Section for Hot Springs */}
+            <View style={styles.reviewsSection}>
+              <View style={styles.reviewsHeader}>
+                <Text style={styles.reviewsSectionTitle}>利用者の感想</Text>
+                {isAuthenticated && (
+                  <TouchableOpacity onPress={openHotSpringReviewModal} style={styles.addReviewButton}>
+                    <Ionicons name="add" size={16} color={Colors.primary} />
+                    <Text style={styles.addReviewText}>投稿</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              
+              <HotSpringReviewList 
+                key={hotSpringReviewKey} 
+                hotSpringId={selectedSpot.id} 
+              />
+            </View>
+          </ScrollView>
+        )}
+        
+        {/* Gas Station Info - Compact Design */}
+        {isGasStation && (
+          <ScrollView 
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            {/* Premium Compact Fuel Price Card */}
+            <View style={styles.premiumGasPriceCard}>
+              <View style={styles.gasPriceHeaderRow}>
+                <Text style={styles.gasPriceHeaderText}>⛽ 全国平均との差額</Text>
+              </View>
+              
+              <View style={styles.fuelPriceRows}>
+                {/* Regular */}
+                <View style={styles.fuelPriceRow}>
+                  <View style={[styles.fuelBadgeCompact, styles.regularBadgeCompact]}>
+                    <Text style={styles.fuelBadgeTextCompact}>レギュラー</Text>
+                  </View>
+                  <Text style={[
+                    styles.fuelPriceDiff,
+                    { color: getPriceDifferenceColor(gasStationSpot.services?.regular_price, NATIONAL_AVERAGE_PRICES.regular) }
+                  ]}>
+                    {formatPriceDifference(gasStationSpot.services?.regular_price, NATIONAL_AVERAGE_PRICES.regular)}
+                  </Text>
+                </View>
+                
+                {/* Premium */}
+                <View style={styles.fuelPriceRow}>
+                  <View style={[styles.fuelBadgeCompact, styles.premiumBadgeCompact]}>
+                    <Text style={styles.fuelBadgeTextCompact}>ハイオク</Text>
+                  </View>
+                  <Text style={[
+                    styles.fuelPriceDiff,
+                    { color: getPriceDifferenceColor(gasStationSpot.services?.premium_price, NATIONAL_AVERAGE_PRICES.premium) }
+                  ]}>
+                    {formatPriceDifference(gasStationSpot.services?.premium_price, NATIONAL_AVERAGE_PRICES.premium)}
+                  </Text>
+                </View>
+                
+                {/* Diesel */}
+                <View style={styles.fuelPriceRow}>
+                  <View style={[styles.fuelBadgeCompact, styles.dieselBadgeCompact]}>
+                    <Text style={styles.fuelBadgeTextCompact}>軽油</Text>
+                  </View>
+                  <Text style={[
+                    styles.fuelPriceDiff,
+                    { color: getPriceDifferenceColor(gasStationSpot.services?.diesel_price, NATIONAL_AVERAGE_PRICES.diesel) }
+                  ]}>
+                    {formatPriceDifference(gasStationSpot.services?.diesel_price, NATIONAL_AVERAGE_PRICES.diesel)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            
+            {/* Premium Compact Station Info */}
+            <View style={styles.premiumGasInfoCard}>
+              <View style={styles.gasInfoHeaderCompact}>
+                <Ionicons name="information-circle" size={18} color={Colors.primary} />
+                <Text style={styles.gasInfoTitleCompact}>施設情報</Text>
+              </View>
+              
+              {/* Address */}
+              {selectedSpot.address && (
+                <View style={styles.gasInfoItemCompact}>
+                  <Ionicons name="location" size={16} color="#666" />
+                  <Text style={styles.gasInfoTextCompact} numberOfLines={2}>
+                    {selectedSpot.address}
+                  </Text>
+                </View>
+              )}
+              
+              {/* Operating Hours */}
+              {gasStationSpot.operatingHours && (
+                <View style={styles.gasInfoItemCompact}>
+                  <Ionicons name="time" size={16} color="#666" />
+                  <Text style={styles.gasInfoTextCompact}>
+                    営業時間: {gasStationSpot.operatingHours}
+                  </Text>
+                </View>
+              )}
+              
+              {/* Brand */}
+              {gasStationSpot.brand && (
+                <View style={styles.gasInfoItemCompact}>
+                  <Ionicons name="pricetag" size={16} color="#666" />
+                  <Text style={styles.gasInfoTextCompact}>
+                    ブランド: {gasStationSpot.brand}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
+        )}
       </View>
       
       {/* Review Modal */}
@@ -633,6 +874,17 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
           parkingSpotId={Number(selectedSpot.id)}
           parkingSpotName={selectedSpot.name}
           onReviewSubmitted={handleReviewSubmitted}
+        />
+      )}
+      
+      {/* Hot Spring Review Modal */}
+      {isHotSpring && (
+        <HotSpringReviewModal
+          visible={hotSpringReviewModalVisible}
+          onClose={() => setHotSpringReviewModalVisible(false)}
+          hotSpringId={selectedSpot.id}
+          hotSpringName={selectedSpot.name}
+          onReviewSubmitted={handleHotSpringReviewSubmitted}
         />
       )}
     </Modal>
@@ -842,9 +1094,127 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   infoCard: {
-    width: '50%',
-    paddingHorizontal: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  infoCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  infoLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+  },
+  infoValue: {
+    fontSize: 14,
+    color: '#1A1A1A',
+    fontWeight: '500',
+    maxWidth: '60%',
+    textAlign: 'right',
+  },
+  // Compact Hot Spring Styles
+  hotSpringCompactCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+    overflow: 'hidden',
+  },
+  compactPriceSection: {
+    backgroundColor: '#F8FAFE',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8ECF0',
+  },
+  compactPriceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 8,
+  },
+  priceIconBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  priceIconText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  compactPriceLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+  },
+  compactPriceValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginLeft: 32,
+  },
+  compactDivider: {
+    height: 1,
+    backgroundColor: '#F0F0F0',
+  },
+  compactInfoGrid: {
+    padding: 12,
+  },
+  compactInfoItem: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+  },
+  compactInfoIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F5F6F8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  compactInfoText: {
+    flex: 1,
+  },
+  compactInfoLabel: {
+    fontSize: 11,
+    color: '#999',
+    marginBottom: 2,
+    fontWeight: '500',
+  },
+  compactInfoValue: {
+    fontSize: 13,
+    color: '#1A1A1A',
+    fontWeight: '600',
+    lineHeight: 18,
   },
   infoCardContent: {
     flexDirection: 'row',
@@ -935,5 +1305,169 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.primary,
     fontWeight: '500',
+  },
+  // Gas Station Styles - Compact Premium Design
+  gasStationPriceCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  gasPriceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  gasPriceTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  nationalAvgNote: {
+    fontSize: 10,
+    color: '#999',
+    fontWeight: '500',
+  },
+  compactFuelGrid: {
+    gap: 8,
+  },
+  compactFuelItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  compactFuelBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  regularBadge: {
+    backgroundColor: '#E8F5E9',
+  },
+  premiumBadge: {
+    backgroundColor: '#FFF3E0',
+  },
+  dieselBadge: {
+    backgroundColor: '#E3F2FD',
+  },
+  compactFuelBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#333',
+  },
+  compactPriceInfo: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+  },
+  compactFuelPrice: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  priceDifference: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  // Premium Compact Gas Station Styles
+  premiumGasPriceCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  gasPriceHeaderRow: {
+    marginBottom: 14,
+  },
+  gasPriceHeaderText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  fuelPriceRows: {
+    gap: 10,
+  },
+  fuelPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  fuelBadgeCompact: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 10,
+    minWidth: 85,
+    alignItems: 'center',
+  },
+  regularBadgeCompact: {
+    backgroundColor: '#E8F5E9',
+  },
+  premiumBadgeCompact: {
+    backgroundColor: '#FFF3E0',
+  },
+  dieselBadgeCompact: {
+    backgroundColor: '#E3F2FD',
+  },
+  fuelBadgeTextCompact: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+  },
+  fuelPriceDiff: {
+    fontSize: 20,
+    fontWeight: '700',
+    minWidth: 80,
+    textAlign: 'right',
+  },
+  premiumGasInfoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  gasInfoHeaderCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
+  gasInfoTitleCompact: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  gasInfoItemCompact: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    gap: 10,
+  },
+  gasInfoTextCompact: {
+    flex: 1,
+    fontSize: 13,
+    color: '#333',
+    lineHeight: 18,
   },
 });

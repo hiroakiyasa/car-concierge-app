@@ -13,6 +13,18 @@ export interface ParkingReview {
   user_name?: string;
 }
 
+export interface HotSpringReview {
+  id: string;
+  hot_spring_id: string;
+  user_id: string;
+  content: string;
+  rating: number;
+  created_at: string;
+  updated_at: string;
+  user_email?: string;
+  user_name?: string;
+}
+
 export class ReviewService {
   /**
    * 駐車場の感想を取得
@@ -257,6 +269,123 @@ export class ReviewService {
       return { average: Math.round(average * 10) / 10, count: data.length };
     } catch (error) {
       console.error('Error in getAverageRating:', error);
+      return { average: 0, count: 0 };
+    }
+  }
+
+  // ============ Hot Spring Review Methods ============
+
+  /**
+   * 温泉の感想を取得
+   */
+  static async getHotSpringReviews(hotSpringId: string): Promise<HotSpringReview[]> {
+    try {
+      const { data: reviews, error } = await supabase
+        .from('hot_spring_reviews')
+        .select('*')
+        .eq('hot_spring_id', hotSpringId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching hot spring reviews:', error);
+        return [];
+      }
+
+      if (!reviews || reviews.length === 0) {
+        return [];
+      }
+
+      const userIds = [...new Set(reviews.map(review => review.user_id))];
+      const { data: profiles } = await supabase
+        .from('user_profiles')
+        .select('id, display_name, avatar_url')
+        .in('id', userIds);
+
+      const profileMap = new Map(
+        profiles?.map(profile => [profile.id, profile]) || []
+      );
+
+      return reviews.map(review => ({
+        id: review.id,
+        hot_spring_id: review.hot_spring_id,
+        user_id: review.user_id,
+        content: review.content,
+        rating: review.rating,
+        created_at: review.created_at,
+        updated_at: review.updated_at,
+        user_email: '',
+        user_name: profileMap.get(review.user_id)?.display_name || '匿名ユーザー'
+      }));
+    } catch (error) {
+      console.error('Error in getHotSpringReviews:', error);
+      return [];
+    }
+  }
+
+  /**
+   * 温泉の感想を投稿
+   */
+  static async createHotSpringReview(
+    hotSpringId: string,
+    content: string,
+    rating: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (!user) {
+        return { 
+          success: false, 
+          error: '認証が必要です。ログインしてください。' 
+        };
+      }
+
+      const { error } = await supabase
+        .from('hot_spring_reviews')
+        .insert({
+          hot_spring_id: hotSpringId,
+          user_id: user.id,
+          content: content.trim(),
+          rating
+        });
+
+      if (error) {
+        console.error('Error creating hot spring review:', error);
+        return { success: false, error: '感想の投稿に失敗しました' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in createHotSpringReview:', error);
+      return { success: false, error: '感想の投稿に失敗しました' };
+    }
+  }
+
+  /**
+   * 温泉の平均評価を取得
+   */
+  static async getHotSpringAverageRating(hotSpringId: string): Promise<{ average: number; count: number }> {
+    try {
+      const { data, error } = await supabase
+        .from('hot_spring_reviews')
+        .select('rating')
+        .eq('hot_spring_id', hotSpringId);
+
+      if (error) {
+        console.error('Error fetching hot spring rating:', error);
+        return { average: 0, count: 0 };
+      }
+
+      if (!data || data.length === 0) {
+        return { average: 0, count: 0 };
+      }
+
+      const total = data.reduce((sum, review) => sum + review.rating, 0);
+      const average = total / data.length;
+
+      return { average: Math.round(average * 10) / 10, count: data.length };
+    } catch (error) {
+      console.error('Error in getHotSpringAverageRating:', error);
       return { average: 0, count: 0 };
     }
   }

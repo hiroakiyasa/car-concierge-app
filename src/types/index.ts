@@ -88,7 +88,12 @@ export interface ConvenienceStore extends Spot {
 
 export interface GasStation extends Spot {
   brand?: string;
-  services?: string[];
+  services?: {
+    regular_price?: number;
+    premium_price?: number;
+    diesel_price?: number;
+    last_updated?: string;
+  };
   operatingHours?: string;
 }
 
@@ -173,7 +178,7 @@ export const CATEGORY_EMOJIS: Record<string, string> = {
 export const CATEGORY_COLORS: Record<string, string> = {
   [CATEGORIES.PARKING]: '#1976d2',
   [CATEGORIES.CONVENIENCE]: '#4CAF50',
-  [CATEGORIES.HOT_SPRING]: '#E91E63',
+  [CATEGORIES.HOT_SPRING]: '#FFD700',
   [CATEGORIES.FESTIVAL]: '#9C27B0',
   [CATEGORIES.GAS_STATION]: '#FF9800',
 };
