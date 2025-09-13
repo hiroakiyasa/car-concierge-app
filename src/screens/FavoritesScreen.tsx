@@ -92,12 +92,26 @@ export const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ navigation }) 
     { key: 'ガソリンスタンド', label: 'GS', icon: '⛽' },
   ];
 
+  const handleNavigateToMap = (item: Spot) => {
+    // 地図画面に遷移して、選択したスポットを表示
+    navigation.navigate('Map', {
+      selectedSpot: {
+        id: item.id,
+        lat: item.lat,
+        lng: item.lng,
+        name: item.name,
+        category: item.category,
+        address: item.address,
+      },
+      centerOnSpot: true,
+      showDetail: true,
+    });
+  };
+
   const renderFavoriteItem = ({ item }: { item: Spot }) => (
     <TouchableOpacity 
       style={styles.favoriteItem}
-      onPress={() => {
-        // TODO: Navigate to detail screen
-      }}
+      onPress={() => handleNavigateToMap(item)}
     >
       <View style={styles.favoriteIcon}>
         <Text style={styles.iconText}>
@@ -126,7 +140,10 @@ export const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ navigation }) 
       
       <TouchableOpacity
         style={styles.removeButton}
-        onPress={() => handleRemoveFavorite(item.id)}
+        onPress={(e) => {
+          e.stopPropagation(); // 親のTouchableOpacityのonPressを防ぐ
+          handleRemoveFavorite(item.id);
+        }}
       >
         <Ionicons name="heart" size={24} color={Colors.error} />
       </TouchableOpacity>

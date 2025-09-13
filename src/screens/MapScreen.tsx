@@ -45,9 +45,10 @@ import { Region, Spot, CoinParking } from '@/types';
 
 interface MapScreenProps {
   navigation: any;
+  route?: any;
 }
 
-export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
+export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   const mapRef = useRef<any>(null);
   const [showDetailSheet, setShowDetailSheet] = useState(false);
   const [showRankingModal, setShowRankingModal] = useState(false);
@@ -75,6 +76,48 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   useEffect(() => {
     initializeLocation();
   }, []);
+  
+  // Handle navigation from favorites
+  useEffect(() => {
+    if (route?.params?.selectedSpot && isMapReady) {
+      const { selectedSpot: spotFromFavorites, centerOnSpot, showDetail } = route.params;
+      
+      console.log('📍 お気に入りから選択されたスポット:', spotFromFavorites);
+      
+      // 地図を選択されたスポットの位置に移動
+      if (centerOnSpot && spotFromFavorites.lat && spotFromFavorites.lng) {
+        const newRegion = {
+          latitude: spotFromFavorites.lat,
+          longitude: spotFromFavorites.lng,
+          latitudeDelta: 0.005, // ズームレベルを調整
+          longitudeDelta: 0.005,
+        };
+        
+        setMapRegion(newRegion);
+        
+        // アニメーション付きで地図を移動
+        if (mapRef.current) {
+          mapRef.current.animateToRegion(newRegion, 1000);
+        }
+        
+        // スポットを選択状態にする
+        selectSpot(spotFromFavorites);
+        
+        // 少し遅延してから詳細画面を表示
+        if (showDetail) {
+          setTimeout(() => {
+            setShowDetailSheet(true);
+          }, 1500);
+        }
+        
+        // そのカテゴリーのスポットを検索
+        handleSearchForCategory(spotFromFavorites.category, newRegion);
+      }
+      
+      // パラメータをクリア（再度実行されないように）
+      navigation.setParams({ selectedSpot: null, centerOnSpot: false, showDetail: false });
+    }
+  }, [route?.params?.selectedSpot, isMapReady]);
   
   // 地図がレンダリングされて初期位置が設定されたら自動検索
   useEffect(() => {
@@ -119,6 +162,69 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
     }
   };
   
+  const handleSearchForCategory = async (category: string, region?: Region) => {
+    // 特定のカテゴリーのみを検索
+    const searchRegion = region || mapRegion;
+    setIsLoading(true);
+    
+    try {
+      console.log(`🔍 ${category}を検索中...`);
+      
+      // カテゴリーに応じて検索
+      let results: Spot[] = [];
+      
+      switch (category) {
+        case 'コインパーキング':
+          const parkingData = await SupabaseService.fetchParkingSpots(searchRegion);
+          
+          // 料金計算
+          const parkingWithFees = parkingData.map(spot => ({
+            ...spot,
+            id: spot.id.toString(),
+            category: 'コインパーキング' as const,
+            calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration),
+          }));
+          
+          // 料金でソートしてトップ20のみ表示
+          results = parkingWithFees
+            .sort((a, b) => (a.calculatedFee || 999999) - (b.calculatedFee || 999999))
+            .slice(0, 20);
+          break;
+          
+        case 'コンビニ':
+          const convenienceData = await SupabaseService.fetchConvenienceStores(searchRegion);
+          results = convenienceData.map(spot => ({
+            ...spot,
+            category: 'コンビニ' as const,
+          }));
+          break;
+          
+        case '温泉':
+          const hotSpringData = await SupabaseService.fetchHotSprings(searchRegion);
+          results = hotSpringData.map(spot => ({
+            ...spot,
+            category: '温泉' as const,
+          }));
+          break;
+          
+        case 'ガソリンスタンド':
+          const gasStationData = await SupabaseService.fetchGasStations(searchRegion);
+          results = gasStationData.map(spot => ({
+            ...spot,
+            category: 'ガソリンスタンド' as const,
+          }));
+          break;
+      }
+      
+      setSearchResults(results);
+      console.log(`✅ ${category}検索完了: ${results.length}件`);
+    } catch (error) {
+      console.error(`${category}検索エラー:`, error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSearch = async (isExpanded?: boolean, overrideFilter?: any) => {
     setIsLoading(true);
     setSearchStatus('searching');
