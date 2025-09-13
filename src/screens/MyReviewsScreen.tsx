@@ -11,7 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { ReviewsService, Review } from '@/services/reviews.service';
+import { ReviewService, ParkingReview, HotSpringReview } from '@/services/review.service';
+import { supabase } from '@/config/supabase';
 import { RatingDisplay } from '@/components/RatingDisplay';
 import { Colors } from '@/utils/constants';
 
@@ -19,9 +20,14 @@ interface MyReviewsScreenProps {
   navigation: any;
 }
 
+type CombinedReview = (ParkingReview | HotSpringReview) & { 
+  spot_type: string;
+  spot_name?: string;
+};
+
 export const MyReviewsScreen: React.FC<MyReviewsScreenProps> = ({ navigation }) => {
   const { user } = useAuthStore();
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviews, setReviews] = useState<CombinedReview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -35,8 +41,44 @@ export const MyReviewsScreen: React.FC<MyReviewsScreenProps> = ({ navigation }) 
 
     setIsLoading(true);
     try {
-      const { reviews: userReviews } = await ReviewsService.getUserReviews(user.id);
-      setReviews(userReviews);
+      const allReviews: CombinedReview[] = [];
+      
+      // 駐車場レビューを取得
+      const { data: parkingReviews } = await supabase
+        .from('parking_reviews')
+        .select('*, parking_spots!parking_spot_id(name)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (parkingReviews) {
+        allReviews.push(...parkingReviews.map(r => ({
+          ...r,
+          spot_type: 'コインパーキング',
+          spot_name: r.parking_spots?.name || '不明な駐車場'
+        })));
+      }
+      
+      // 温泉レビューを取得
+      const { data: hotSpringReviews } = await supabase
+        .from('hot_spring_reviews')
+        .select('*, hot_springs!hot_spring_id(name)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (hotSpringReviews) {
+        allReviews.push(...hotSpringReviews.map(r => ({
+          ...r,
+          spot_type: '温泉',
+          spot_name: r.hot_springs?.name || '不明な温泉'
+        })));
+      }
+      
+      // 日付でソート
+      allReviews.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      
+      setReviews(allReviews);
     } catch (error) {
       console.error('Failed to load reviews:', error);
       Alert.alert('エラー', 'レビューの読み込みに失敗しました');
@@ -45,7 +87,7 @@ export const MyReviewsScreen: React.FC<MyReviewsScreenProps> = ({ navigation }) 
     }
   };
 
-  const handleDeleteReview = (reviewId: string) => {
+  const handleDeleteReview = (review: CombinedReview) => {
     Alert.alert(
       'レビューを削除',
       'このレビューを削除しますか？',
@@ -57,12 +99,32 @@ export const MyReviewsScreen: React.FC<MyReviewsScreenProps> = ({ navigation }) 
           onPress: async () => {
             if (!user) return;
             
-            const { error } = await ReviewsService.deleteReview(reviewId, user.id);
-            if (!error) {
-              setReviews(reviews.filter(r => r.id !== reviewId));
-              Alert.alert('完了', 'レビューを削除しました');
-            } else {
-              Alert.alert('エラー', error);
+            try {
+              let error;
+              if (review.spot_type === 'コインパーキング') {
+                const result = await supabase
+                  .from('parking_reviews')
+                  .delete()
+                  .eq('id', review.id)
+                  .eq('user_id', user.id);
+                error = result.error;
+              } else if (review.spot_type === '温泉') {
+                const result = await supabase
+                  .from('hot_spring_reviews')
+                  .delete()
+                  .eq('id', review.id)
+                  .eq('user_id', user.id);
+                error = result.error;
+              }
+              
+              if (!error) {
+                setReviews(reviews.filter(r => r.id !== review.id));
+                Alert.alert('完了', 'レビューを削除しました');
+              } else {
+                Alert.alert('エラー', 'レビューの削除に失敗しました');
+              }
+            } catch (err) {
+              Alert.alert('エラー', 'レビューの削除に失敗しました');
             }
           },
         },
@@ -70,18 +132,18 @@ export const MyReviewsScreen: React.FC<MyReviewsScreenProps> = ({ navigation }) 
     );
   };
 
-  const renderReviewItem = ({ item }: { item: Review }) => (
+  const renderReviewItem = ({ item }: { item: CombinedReview }) => (
     <View style={styles.reviewItem}>
       <View style={styles.reviewHeader}>
         <View style={styles.spotInfo}>
           <Text style={styles.spotType}>{item.spot_type}</Text>
           <Text style={styles.spotName} numberOfLines={1}>
-            施設ID: {item.spot_id}
+            {item.spot_name}
           </Text>
         </View>
         <TouchableOpacity
           style={styles.deleteButton}
-          onPress={() => handleDeleteReview(item.id)}
+          onPress={() => handleDeleteReview(item)}
         >
           <Ionicons name="trash-outline" size={20} color={Colors.error} />
         </TouchableOpacity>
@@ -89,13 +151,9 @@ export const MyReviewsScreen: React.FC<MyReviewsScreenProps> = ({ navigation }) 
 
       <View style={styles.reviewContent}>
         <RatingDisplay rating={item.rating} showReviewCount={false} size="small" />
-        <Text style={styles.reviewComment}>{item.comment}</Text>
+        <Text style={styles.reviewComment}>{item.content}</Text>
         
         <View style={styles.reviewFooter}>
-          <View style={styles.likesContainer}>
-            <Ionicons name="heart" size={16} color={Colors.error} />
-            <Text style={styles.likesCount}>{item.likes_count}</Text>
-          </View>
           <Text style={styles.reviewDate}>
             {new Date(item.created_at).toLocaleDateString('ja-JP')}
           </Text>

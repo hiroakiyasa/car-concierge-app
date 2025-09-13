@@ -36,8 +36,18 @@ export const FavoritesScreen: React.FC<FavoritesScreenProps> = ({ navigation }) 
 
     setIsLoading(true);
     try {
-      const { spots } = await FavoritesService.getFavoriteSpots(user.id);
+      console.log('📱 FavoritesScreen: お気に入り読み込み開始 - userId:', user.id);
+      const { spots, error } = await FavoritesService.getFavoriteSpots(user.id);
+      console.log('📱 FavoritesScreen: お気に入り読み込み結果:', { 
+        spotsCount: spots.length, 
+        spots: spots,
+        error: error 
+      });
       setFavorites(spots);
+      if (error) {
+        console.error('📱 FavoritesScreen: エラー発生:', error);
+        Alert.alert('エラー', error);
+      }
     } catch (error) {
       console.error('Failed to load favorites:', error);
       Alert.alert('エラー', 'お気に入りの読み込みに失敗しました');

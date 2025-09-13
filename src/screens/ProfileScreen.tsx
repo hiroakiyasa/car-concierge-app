@@ -111,9 +111,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             <Ionicons name="arrow-back" size={24} color="#333" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>プロフィール</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('EditProfile')} style={styles.editButton}>
-            <Ionicons name="settings-outline" size={24} color="#333" />
-          </TouchableOpacity>
+          <View style={{ width: 32 }} />
         </View>
 
         <View style={styles.profileSection}>
@@ -184,32 +182,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             <View style={styles.menuItemLeft}>
               <Ionicons name="star-outline" size={24} color="#333" />
               <Text style={styles.menuItemText}>マイレビュー</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#999" />
-          </TouchableOpacity>
-
-          {!user.is_premium && (
-            <TouchableOpacity 
-              style={[styles.menuItem, styles.premiumMenuItem]}
-              onPress={() => navigation.navigate('Premium')}
-            >
-              <View style={styles.menuItemLeft}>
-                <Ionicons name="diamond-outline" size={24} color={Colors.warning} />
-                <Text style={[styles.menuItemText, { color: Colors.warning }]}>
-                  プレミアムプランへ
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={Colors.warning} />
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('Settings')}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="settings-outline" size={24} color="#333" />
-              <Text style={styles.menuItemText}>設定</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#999" />
           </TouchableOpacity>

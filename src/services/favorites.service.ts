@@ -157,8 +157,19 @@ export class FavoritesService {
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
+      console.log('🔖 お気に入り取得結果:', { 
+        userId, 
+        favoritesCount: favorites?.length || 0,
+        favorites: favorites,
+        error: favError 
+      });
+
       if (favError || !favorites) {
         return { spots: [], error: favError?.message || 'お気に入りの取得に失敗しました' };
+      }
+
+      if (favorites.length === 0) {
+        return { spots: [], error: null };
       }
 
       // カテゴリー別にスポットIDをグループ化
@@ -169,89 +180,107 @@ export class FavoritesService {
         }
         spotsByType[fav.spot_type].push(fav.spot_id);
       });
+      
+      console.log('🔖 カテゴリー別スポットID:', spotsByType);
 
       // 各カテゴリーのテーブルから情報を取得
       const allSpots: Spot[] = [];
 
-      // コインパーキング
-      if (spotsByType['コインパーキング']) {
-        const { data } = await supabase
+      // コインパーキング (データベースでは 'parking' として保存)
+      if (spotsByType['parking']) {
+        console.log('🚗 駐車場検索中:', spotsByType['parking']);
+        // parking_spots.id is bigint, so we need to convert strings to numbers
+        const parkingIds = spotsByType['parking'].map(id => parseInt(id, 10));
+        const { data, error } = await supabase
           .from('parking_spots')
           .select('*')
-          .in('id', spotsByType['コインパーキング']);
+          .in('id', parkingIds);
+        
+        console.log('🚗 駐車場検索結果:', { count: data?.length || 0, error });
         
         if (data) {
           allSpots.push(...data.map(spot => ({
             ...spot,
+            id: spot.id.toString(), // Convert bigint back to string for consistency
             category: 'コインパーキング' as const,
           })));
         }
       }
 
-      // コンビニ
-      if (spotsByType['コンビニ']) {
-        const { data } = await supabase
+      // 施設系 (データベースでは 'facility' として保存)
+      if (spotsByType['facility']) {
+        // コンビニ、温泉、ガソリンスタンド、お祭りなどすべての施設IDを取得
+        const facilityIds = spotsByType['facility'];
+        console.log('🏢 施設系ID:', facilityIds);
+        
+        // コンビニ
+        const { data: convenienceData, error: convError } = await supabase
           .from('convenience_stores')
           .select('*')
-          .in('id', spotsByType['コンビニ']);
+          .in('id', facilityIds);
         
-        if (data) {
-          allSpots.push(...data.map(spot => ({
+        console.log('🏪 コンビニ検索結果:', { count: convenienceData?.length || 0, error: convError });
+        
+        if (convenienceData) {
+          allSpots.push(...convenienceData.map(spot => ({
             ...spot,
             category: 'コンビニ' as const,
           })));
         }
-      }
 
-      // 温泉
-      if (spotsByType['温泉']) {
-        const { data } = await supabase
+        // 温泉
+        const { data: hotSpringData, error: hotError } = await supabase
           .from('hot_springs')
           .select('*')
-          .in('id', spotsByType['温泉']);
+          .in('id', facilityIds);
         
-        if (data) {
-          allSpots.push(...data.map(spot => ({
+        console.log('♨️ 温泉検索結果:', { count: hotSpringData?.length || 0, error: hotError });
+        
+        if (hotSpringData) {
+          allSpots.push(...hotSpringData.map(spot => ({
             ...spot,
             category: '温泉' as const,
           })));
         }
-      }
 
-      // ガソリンスタンド
-      if (spotsByType['ガソリンスタンド']) {
-        const { data } = await supabase
+        // ガソリンスタンド
+        const { data: gasStationData, error: gasError } = await supabase
           .from('gas_stations')
           .select('*')
-          .in('id', spotsByType['ガソリンスタンド']);
+          .in('id', facilityIds);
         
-        if (data) {
-          allSpots.push(...data.map(spot => ({
+        console.log('⛽ ガソリンスタンド検索結果:', { count: gasStationData?.length || 0, error: gasError });
+        
+        if (gasStationData) {
+          allSpots.push(...gasStationData.map(spot => ({
             ...spot,
             category: 'ガソリンスタンド' as const,
           })));
         }
-      }
 
-      // お祭り・花火大会
-      if (spotsByType['お祭り・花火大会']) {
-        const { data } = await supabase
+        // お祭り・花火大会
+        const { data: festivalData, error: festError } = await supabase
           .from('festivals')
           .select('*')
-          .in('id', spotsByType['お祭り・花火大会']);
+          .in('id', facilityIds);
         
-        if (data) {
-          allSpots.push(...data.map(spot => ({
+        console.log('🎆 お祭り検索結果:', { count: festivalData?.length || 0, error: festError });
+        
+        if (festivalData) {
+          allSpots.push(...festivalData.map(spot => ({
             ...spot,
             category: 'お祭り・花火大会' as const,
           })));
         }
       }
+      
+      console.log('🔖 全スポット取得結果:', { totalSpots: allSpots.length });
 
       // お気に入り登録順にソート
       const sortedSpots = allSpots.sort((a, b) => {
-        const favA = favorites.find(f => f.spot_id === a.id);
-        const favB = favorites.find(f => f.spot_id === b.id);
+        // Convert both IDs to strings for comparison
+        const favA = favorites.find(f => f.spot_id === a.id.toString());
+        const favB = favorites.find(f => f.spot_id === b.id.toString());
         return new Date(favB?.created_at || 0).getTime() - new Date(favA?.created_at || 0).getTime();
       });
 

@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Switch,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,26 +18,6 @@ interface SettingsScreenProps {
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const { user } = useAuthStore();
-  const [notifications, setNotifications] = useState(true);
-  const [locationServices, setLocationServices] = useState(true);
-  const [autoSearch, setAutoSearch] = useState(true);
-  const [offlineMode, setOfflineMode] = useState(false);
-
-  const handleClearCache = () => {
-    Alert.alert(
-      'キャッシュをクリア',
-      'アプリのキャッシュをクリアしてもよろしいですか？',
-      [
-        { text: 'キャンセル', style: 'cancel' },
-        {
-          text: 'クリア',
-          onPress: () => {
-            Alert.alert('完了', 'キャッシュをクリアしました');
-          },
-        },
-      ]
-    );
-  };
 
   const handleDeleteAccount = () => {
     Alert.alert(
@@ -78,81 +57,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* 通知設定 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>通知設定</Text>
-          
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>プッシュ通知</Text>
-              <Text style={styles.settingDescription}>
-                お気に入りスポットの更新情報を受け取る
-              </Text>
-            </View>
-            <Switch
-              value={notifications}
-              onValueChange={setNotifications}
-              trackColor={{ false: '#767577', true: Colors.primary }}
-            />
-          </View>
-        </View>
-
-        {/* 位置情報設定 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>位置情報</Text>
-          
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>位置情報サービス</Text>
-              <Text style={styles.settingDescription}>
-                現在地の取得を許可する
-              </Text>
-            </View>
-            <Switch
-              value={locationServices}
-              onValueChange={setLocationServices}
-              trackColor={{ false: '#767577', true: Colors.primary }}
-            />
-          </View>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>自動検索</Text>
-              <Text style={styles.settingDescription}>
-                地図移動時に自動で検索する
-              </Text>
-            </View>
-            <Switch
-              value={autoSearch}
-              onValueChange={setAutoSearch}
-              trackColor={{ false: '#767577', true: Colors.primary }}
-            />
-          </View>
-        </View>
-
-        {/* データ設定 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>データ</Text>
-          
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>オフラインモード</Text>
-              <Text style={styles.settingDescription}>
-                キャッシュされたデータのみを使用
-              </Text>
-            </View>
-            <Switch
-              value={offlineMode}
-              onValueChange={setOfflineMode}
-              trackColor={{ false: '#767577', true: Colors.primary }}
-            />
-          </View>
-
-          <TouchableOpacity style={styles.button} onPress={handleClearCache}>
-            <Text style={styles.buttonText}>キャッシュをクリア</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* アカウント設定 */}
         {user && (
           <View style={styles.section}>
@@ -160,17 +64,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
             
             <TouchableOpacity 
               style={styles.linkItem}
-              onPress={() => navigation.navigate('EditProfile')}
+              onPress={() => navigation.navigate('Profile')}
             >
-              <Text style={styles.linkText}>プロフィール編集</Text>
-              <Ionicons name="chevron-forward" size={20} color="#999" />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.linkItem}
-              onPress={() => navigation.navigate('ChangePassword')}
-            >
-              <Text style={styles.linkText}>パスワード変更</Text>
+              <Text style={styles.linkText}>プロフィール</Text>
               <Ionicons name="chevron-forward" size={20} color="#999" />
             </TouchableOpacity>
 
