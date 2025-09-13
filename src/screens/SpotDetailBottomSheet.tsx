@@ -78,43 +78,68 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       rates: parkingSpot.rates,
       type: parkingSpot.type,
       capacity: parkingSpot.capacity,
+      nearestConvenienceStore: parkingSpot.nearestConvenienceStore,
+      nearestHotspring: parkingSpot.nearestHotspring,
     });
     
-    // 施設名を取得
+    // 施設名を取得（バックエンドのデータ構造に基づいて修正）
     const fetchFacilityNames = async () => {
       const names: { convenience?: string; hotspring?: string } = {};
       
+      // デバッグ: データ構造を確認
+      console.log('🔍 周辺施設データ構造:', {
+        nearestConvenienceStore: parkingSpot.nearestConvenienceStore,
+        nearestHotspring: parkingSpot.nearestHotspring,
+      });
+      
+      // コンビニ情報
       if (parkingSpot.nearestConvenienceStore) {
-        const convenienceId = parkingSpot.nearestConvenienceStore.id || 
-                              parkingSpot.nearestConvenienceStore.store_id ||
-                              (parkingSpot.nearestConvenienceStore as any).facility_id;
+        const convenienceData = parkingSpot.nearestConvenienceStore as any;
         
-        if (convenienceId) {
-          console.log('🏪 コンビニID取得:', convenienceId);
-          const store = await SupabaseService.fetchConvenienceStoreById(convenienceId);
-          if (store) {
-            names.convenience = store.name || store.store_name || 'コンビニ';
-            console.log('🏪 コンビニ名取得成功:', names.convenience);
-          } else {
-            console.log('🏪 コンビニ情報取得失敗');
+        // IDから施設名を取得
+        if (convenienceData.id) {
+          console.log('🏪 コンビニID:', convenienceData.id);
+          try {
+            const store = await SupabaseService.fetchConvenienceStoreById(convenienceData.id);
+            if (store && store.name) {
+              names.convenience = store.name;
+              console.log('🏪 コンビニ名取得成功:', names.convenience);
+            } else {
+              // サブタイプがある場合はそれを使用
+              names.convenience = convenienceData.sub_type || 'コンビニ';
+              console.log('🏪 コンビニ名取得失敗、デフォルト使用:', names.convenience);
+            }
+          } catch (error) {
+            console.error('🏪 コンビニ情報取得エラー:', error);
+            names.convenience = 'コンビニ';
           }
+        } else {
+          names.convenience = 'コンビニ';
         }
       }
       
+      // 温泉情報
       if (parkingSpot.nearestHotspring) {
-        const hotspringId = parkingSpot.nearestHotspring.id || 
-                           parkingSpot.nearestHotspring.spring_id ||
-                           (parkingSpot.nearestHotspring as any).facility_id;
+        const hotspringData = parkingSpot.nearestHotspring as any;
         
-        if (hotspringId) {
-          console.log('♨️ 温泉ID取得:', hotspringId);
-          const spring = await SupabaseService.fetchHotSpringById(hotspringId);
-          if (spring) {
-            names.hotspring = spring.name || spring.spring_name || '温泉';
-            console.log('♨️ 温泉名取得成功:', names.hotspring);
-          } else {
-            console.log('♨️ 温泉情報取得失敗');
+        // IDから施設名を取得
+        if (hotspringData.id) {
+          console.log('♨️ 温泉ID:', hotspringData.id);
+          try {
+            const spring = await SupabaseService.fetchHotSpringById(hotspringData.id);
+            if (spring && spring.name) {
+              names.hotspring = spring.name;
+              console.log('♨️ 温泉名取得成功:', names.hotspring);
+            } else {
+              names.hotspring = '温泉';
+              console.log('♨️ 温泉名取得失敗、デフォルト使用');
+            }
+          } catch (error) {
+            console.error('♨️ 温泉情報取得エラー:', error);
+            names.hotspring = '温泉';
           }
+        } else {
+          names.hotspring = '温泉';
         }
       }
       
@@ -550,94 +575,78 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               </View>
             </View>
             
-            {/* Compact Info Grid 2x2 */}
-            <View style={styles.infoGrid}>
-              {/* Operating Hours */}
-              <View style={styles.infoCard}>
-                <View style={styles.infoCardContent}>
-                  <Ionicons name="time-outline" size={14} color="#666" />
-                  <View style={styles.infoTextContainer}>
-                    <Text style={styles.infoLabel}>営業時間</Text>
-                    <Text style={styles.infoValue} numberOfLines={1}>
-                      {formatOperatingHours()}
-                    </Text>
-                  </View>
-                </View>
+            {/* Nearby Facilities - Always show section for debugging */}
+            <View style={styles.nearbySection}>
+              <View style={styles.nearbyHeader}>
+                <Ionicons name="location-outline" size={14} color="#666" />
+                <Text style={styles.nearbyTitle}>周辺施設</Text>
               </View>
               
-              {/* Type */}
-              <View style={styles.infoCard}>
-                <View style={styles.infoCardContent}>
-                  <Ionicons name="car-outline" size={14} color="#666" />
-                  <View style={styles.infoTextContainer}>
-                    <Text style={styles.infoLabel}>タイプ</Text>
-                    <Text style={styles.infoValue} numberOfLines={1}>
-                      {parkingSpot.type || '平面'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
+              {/* デバッグ用: データの存在を確認 */}
+              {!parkingSpot.nearestConvenienceStore && !parkingSpot.nearestHotspring && (
+                <Text style={styles.nearbyNameCompact}>
+                  データを読み込み中...
+                </Text>
+              )}
               
-              {/* Capacity */}
-              <View style={styles.infoCard}>
-                <View style={styles.infoCardContent}>
-                  <Ionicons name="grid-outline" size={14} color="#666" />
-                  <View style={styles.infoTextContainer}>
-                    <Text style={styles.infoLabel}>収容台数</Text>
-                    <Text style={styles.infoValue} numberOfLines={1}>
-                      {parkingSpot.capacity ? `${parkingSpot.capacity}台` : '---'}
-                    </Text>
-                  </View>
+              {/* コンビニ情報 */}
+              {parkingSpot.nearestConvenienceStore && (
+                <View style={styles.nearbyItemCompact}>
+                  <Text style={styles.nearbyIconCompact}>🏪</Text>
+                  <Text style={styles.nearbyNameCompact}>
+                    {(() => {
+                      const convenienceData = parkingSpot.nearestConvenienceStore as any;
+                      // 名前を直接チェック
+                      if (convenienceData.name) {
+                        return convenienceData.name;
+                      } else if (convenienceData.store_name) {
+                        return convenienceData.store_name;
+                      } else if (facilityNames.convenience) {
+                        return facilityNames.convenience;
+                      } else {
+                        return 'コンビニ';
+                      }
+                    })()}
+                  </Text>
+                  <Text style={styles.nearbyDistanceCompact}>
+                    {(() => {
+                      const data = parkingSpot.nearestConvenienceStore as any;
+                      const distance = data.distance_m || data.distance;
+                      return distance ? `${Math.round(distance)}m` : '---';
+                    })()}
+                  </Text>
                 </View>
-              </View>
+              )}
               
-              {/* Elevation */}
-              <View style={styles.infoCard}>
-                <View style={styles.infoCardContent}>
-                  <Ionicons name="trending-up-outline" size={14} color="#666" />
-                  <View style={styles.infoTextContainer}>
-                    <Text style={styles.infoLabel}>標高</Text>
-                    <Text style={styles.infoValue} numberOfLines={1}>
-                      {selectedSpot.elevation !== undefined ? `${selectedSpot.elevation}m` : '---'}
-                    </Text>
-                  </View>
+              {/* 温泉情報 */}
+              {parkingSpot.nearestHotspring && (
+                <View style={styles.nearbyItemCompact}>
+                  <Text style={styles.nearbyIconCompact}>♨️</Text>
+                  <Text style={styles.nearbyNameCompact}>
+                    {(() => {
+                      const hotspringData = parkingSpot.nearestHotspring as any;
+                      // 名前を直接チェック
+                      if (hotspringData.name) {
+                        return hotspringData.name;
+                      } else if (hotspringData.spring_name) {
+                        return hotspringData.spring_name;
+                      } else if (facilityNames.hotspring) {
+                        return facilityNames.hotspring;
+                      } else {
+                        return '温泉';
+                      }
+                    })()}
+                  </Text>
+                  <Text style={styles.nearbyDistanceCompact}>
+                    {(() => {
+                      const data = parkingSpot.nearestHotspring as any;
+                      const distance = data.distance_m || data.distance;
+                      return distance ? `${Math.round(distance)}m` : '---';
+                    })()}
+                  </Text>
                 </View>
-              </View>
+              )}
             </View>
-            
-            {/* Nearby Facilities - Vertical Compact */}
-            {(parkingSpot.nearestConvenienceStore || parkingSpot.nearestHotspring) && (
-              <View style={styles.nearbySection}>
-                <View style={styles.nearbyHeader}>
-                  <Ionicons name="location-outline" size={14} color="#666" />
-                  <Text style={styles.nearbyTitle}>周辺施設</Text>
-                </View>
-                {parkingSpot.nearestConvenienceStore && (
-                  <View style={styles.nearbyItemCompact}>
-                    <Text style={styles.nearbyIconCompact}>🏪</Text>
-                    <Text style={styles.nearbyNameCompact}>
-                      {facilityNames.convenience || 'コンビニ'}
-                    </Text>
-                    <Text style={styles.nearbyDistanceCompact}>
-                      {(parkingSpot.nearestConvenienceStore as any).distance_m || 
-                       parkingSpot.nearestConvenienceStore.distance || '---'}m
-                    </Text>
-                  </View>
-                )}
-                {parkingSpot.nearestHotspring && (
-                  <View style={styles.nearbyItemCompact}>
-                    <Text style={styles.nearbyIconCompact}>♨️</Text>
-                    <Text style={styles.nearbyNameCompact}>
-                      {facilityNames.hotspring || '温泉'}
-                    </Text>
-                    <Text style={styles.nearbyDistanceCompact}>
-                      {(parkingSpot.nearestHotspring as any).distance_m || 
-                       parkingSpot.nearestHotspring.distance || '---'}m
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
             
             {/* Reviews Section */}
             <View style={styles.reviewsSection}>
@@ -1087,50 +1096,6 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 6,
   },
-  infoGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -4,
-    marginBottom: 12,
-  },
-  infoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  infoCardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 12,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  infoLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 8,
-  },
-  infoValue: {
-    fontSize: 14,
-    color: '#1A1A1A',
-    fontWeight: '500',
-    maxWidth: '60%',
-    textAlign: 'right',
-  },
   // Compact Hot Spring Styles
   hotSpringCompactCard: {
     backgroundColor: '#FFFFFF',
@@ -1215,28 +1180,6 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
     fontWeight: '600',
     lineHeight: 18,
-  },
-  infoCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    borderRadius: 10,
-    padding: 10,
-    gap: 8,
-    minHeight: 48,
-  },
-  infoTextContainer: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 11,
-    color: '#888',
-    marginBottom: 2,
-  },
-  infoValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1A1A1A',
   },
   nearbySection: {
     backgroundColor: '#F8F9FA',
