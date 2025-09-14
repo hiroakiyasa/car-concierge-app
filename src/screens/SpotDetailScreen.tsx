@@ -10,25 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-// プラットフォームに応じてマップコンポーネントを条件付きインポート
-let MapView: any;
-let Marker: any;
-let PROVIDER_GOOGLE: any;
-let PROVIDER_DEFAULT: any;
-
-if (Platform.OS === 'web') {
-  const { WebMapView: WebMap, WebMarker: WebMarkerComp } = require('@/components/Map/WebMapView');
-  MapView = WebMap;
-  Marker = WebMarkerComp;
-  PROVIDER_GOOGLE = 'google';
-  PROVIDER_DEFAULT = 'default';
-} else {
-  const ReactNativeMaps = require('react-native-maps');
-  MapView = ReactNativeMaps.default;
-  Marker = ReactNativeMaps.Marker;
-  PROVIDER_GOOGLE = ReactNativeMaps.PROVIDER_GOOGLE;
-  PROVIDER_DEFAULT = ReactNativeMaps.PROVIDER_DEFAULT;
-}
+import { CrossPlatformMap, Marker } from '@/components/Map/CrossPlatformMap';
 import { Ionicons } from '@expo/vector-icons';
 import { useMainStore } from '@/stores/useMainStore';
 import { Colors, Spacing, Typography } from '@/utils/constants';
@@ -194,19 +176,14 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
     <View style={styles.container}>
       {/* Top 50%: Map */}
       <View style={styles.mapSection}>
-        <MapView
+        <CrossPlatformMap
           style={styles.map}
-          provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
-          initialRegion={{
+          region={{
             latitude: selectedSpot.lat,
             longitude: selectedSpot.lng,
             latitudeDelta: 0.005,
             longitudeDelta: 0.005,
           }}
-          scrollEnabled={true}
-          zoomEnabled={true}
-          rotateEnabled={false}
-          pitchEnabled={false}
         >
           <Marker
             coordinate={{
@@ -214,7 +191,7 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
               longitude: selectedSpot.lng,
             }}
           />
-        </MapView>
+        </CrossPlatformMap>
         
         {/* Header Overlay */}
         <SafeAreaView style={styles.headerOverlay} edges={['top']}>

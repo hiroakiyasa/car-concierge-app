@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Dimensions, Text, Image } from 'react-native';
-import { VideoView, useVideoPlayer, VideoViewProps } from 'expo-video';
+// expo-video は本番端末で白画面の原因になりやすいため、
+// 開発時のみ動画を再生し、本番は静的フォールバックに切り替える
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/utils/constants';
 
@@ -11,15 +13,19 @@ interface SplashScreenProps {
 }
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
-  const [showVideo, setShowVideo] = useState(true);
+  // 本番(TestFlight/リリース)では動画再生を無効化して白画面リスクを回避
+  const [showVideo, setShowVideo] = useState(__DEV__);
   const [videoError, setVideoError] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout>();
 
-  const player = useVideoPlayer(require('../../assets/flush_movie.mp4'), (player) => {
-    player.loop = false;
-    player.muted = false;
-    player.play();
-  });
+  // 開発時のみプレイヤー初期化
+  const player = showVideo
+    ? useVideoPlayer(require('../../assets/flush_movie.mp4'), (player) => {
+        player.loop = false;
+        player.muted = false;
+        player.play();
+      })
+    : undefined as any;
 
   useEffect(() => {
     console.log('スプラッシュスクリーン開始');
@@ -30,8 +36,8 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
       onComplete();
     }, 2000);
 
-    // プレイヤーの状態監視
-    const subscription = player.addListener('playbackStatusUpdate', (status) => {
+    // 開発モード時のみプレイヤーの状態監視
+    const subscription = player?.addListener?.('playbackStatusUpdate', (status: any) => {
       if (status.currentTime && status.currentTime >= 2000) {
         console.log('動画2秒経過 - 遷移');
         if (timeoutRef.current) {
@@ -42,7 +48,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
     });
 
     return () => {
-      subscription.remove();
+      subscription?.remove?.();
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }

@@ -4,29 +4,9 @@ import {
   Text,
   StyleSheet,
   Alert,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
-
-// プラットフォームに応じてマップコンポーネントを条件付きインポート
-let MapView: any;
-let PROVIDER_GOOGLE: any;
-let PROVIDER_DEFAULT: any;
-let Marker: any;
-
-if (Platform.OS === 'web') {
-  const { WebMapView: WebMap, WebMarker: WebMarkerComp } = require('@/components/Map/WebMapView');
-  MapView = WebMap;
-  Marker = WebMarkerComp;
-  PROVIDER_GOOGLE = 'google';
-  PROVIDER_DEFAULT = 'default';
-} else {
-  const ReactNativeMaps = require('react-native-maps');
-  MapView = ReactNativeMaps.default;
-  Marker = ReactNativeMaps.Marker;
-  PROVIDER_GOOGLE = ReactNativeMaps.PROVIDER_GOOGLE;
-  PROVIDER_DEFAULT = ReactNativeMaps.PROVIDER_DEFAULT;
-}
+import { CrossPlatformMap } from '@/components/Map/CrossPlatformMap';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMainStore } from '@/stores/useMainStore';
 import { LocationService } from '@/services/location.service';
@@ -1090,11 +1070,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.mapWrapper}>
-        <MapView
-          ref={mapRef}
+        <CrossPlatformMap
+          mapRef={mapRef}
           style={styles.map}
-          provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
-          initialRegion={{
+          region={{
             latitude: 35.6812,
             longitude: 139.7671,
             latitudeDelta: 0.02,
@@ -1127,7 +1106,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
               return [];
             }
           })()}
-        </MapView>
+        </CrossPlatformMap>
         
         <CategoryButtons />
         

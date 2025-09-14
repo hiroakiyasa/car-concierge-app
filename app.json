@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
     "scheme": "car-concierge-app",
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -16,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.carconciege.app",
-      "buildNumber": "16",
+      "buildNumber": "17",
       "infoPlist": {
         "NSCameraUsageDescription": "このアプリは駐車場や施設の写真を撮影するためにカメラを使用します。",
         "NSPhotoLibraryUsageDescription": "このアプリは駐車場や施設の写真を選択するために写真ライブラリへのアクセスが必要です。",

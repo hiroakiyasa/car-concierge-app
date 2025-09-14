@@ -1,26 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
-
-// プラットフォームに応じてマップコンポーネントを条件付きインポート
-let MapView: any;
-let Marker: any;
-let Region: any;
-
-if (Platform.OS === 'web') {
-  const { WebMapView: WebMap, WebMarker: WebMarkerComp } = require('@/components/Map/WebMapView');
-  MapView = WebMap;
-  Marker = WebMarkerComp;
-  Region = { latitude: 0, longitude: 0, latitudeDelta: 0, longitudeDelta: 0 };
-} else {
-  const ReactNativeMaps = require('react-native-maps');
-  MapView = ReactNativeMaps.default;
-  Marker = ReactNativeMaps.Marker;
-  Region = ReactNativeMaps.Region;
-}
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { CrossPlatformMap, Marker, Region } from '@/components/Map/CrossPlatformMap';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export const TestMapBounds: React.FC = () => {
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [currentRegion, setCurrentRegion] = useState<Region>({
     latitude: 35.6812,
@@ -93,7 +77,7 @@ export const TestMapBounds: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.mapContainer}>
-        <MapView
+        <CrossPlatformMap
           ref={mapRef}
           style={styles.map}
           initialRegion={currentRegion}
@@ -108,7 +92,7 @@ export const TestMapBounds: React.FC = () => {
               description={`${marker.lat.toFixed(4)}, ${marker.lng.toFixed(4)}`}
             />
           ))}
-        </MapView>
+        </CrossPlatformMap>
       </View>
       
       <View style={styles.controls}>

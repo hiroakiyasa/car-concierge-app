@@ -35,7 +35,6 @@
       <intent-filter data-generated="true">
         <action android:name="android.intent.action.VIEW"/>
         <data android:scheme="car-concierge-app" android:host="auth" android:pathPrefix="/callback"/>
-        <data android:scheme="exp+car-concierge-app"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <category android:name="android.intent.category.DEFAULT"/>
       </intent-filter>

@@ -1,19 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, Platform } from 'react-native';
-
-// プラットフォームに応じてマップコンポーネントを条件付きインポート
-let Marker: any;
-let Callout: any;
-
-if (Platform.OS === 'web') {
-  const { WebMarker: WebMarkerComp, WebCallout: WebCalloutComp } = require('./WebMapView');
-  Marker = WebMarkerComp;
-  Callout = WebCalloutComp;
-} else {
-  const ReactNativeMaps = require('react-native-maps');
-  Marker = ReactNativeMaps.Marker;
-  Callout = ReactNativeMaps.Callout;
-}
+import { View, Text, StyleSheet, Image } from 'react-native';
+import { Marker, Callout } from './CrossPlatformMap';
 import { Spot, ConvenienceStore, GasStation, CoinParking, HotSpring } from '@/types';
 import { getConvenienceStoreLogo, getGasStationLogo } from '@/utils/brandLogos';
 import { Colors } from '@/utils/constants';
@@ -118,8 +105,10 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
           longitude: spot.lng,
         }}
         onPress={handleMarkerPress}
-        tracksViewChanges={false}
+        tracksViewChanges={true}
         anchor={{ x: 0.5, y: 0.5 }}
+        title={spot.name}
+        description={gasStation.services?.regular_price ? `レギュラー: ${priceDiff}` : ''}
       >
         <View style={[
           styles.gasStationLogoMarker,
@@ -164,8 +153,10 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
           longitude: spot.lng,
         }}
         onPress={handleMarkerPress}
-        tracksViewChanges={false}
+        tracksViewChanges={true}
         anchor={{ x: 0.5, y: 0.5 }}
+        title={spot.name}
+        description={''}
       >
         <View style={[
           styles.logoMarker,
@@ -238,8 +229,10 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
           longitude: spot.lng,
         }}
         onPress={handleMarkerPress}
-        tracksViewChanges={false}
+        tracksViewChanges={true}
         anchor={{ x: 0.5, y: 1 }}
+        title={spot.name}
+        description={formatPrice()}
       >
         <View style={getMarkerStyle()}>
           <Text style={styles.parkingMarkerText}>{rank}</Text>
@@ -277,8 +270,10 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
           longitude: spot.lng,
         }}
         onPress={handleMarkerPress}
-        tracksViewChanges={false}
+        tracksViewChanges={true}
         anchor={{ x: 0.5, y: 1 }}
+        title={spot.name}
+        description={gasStation.services?.regular_price ? `レギュラー: ${priceDiff}` : ''}
       >
         <View style={[
           styles.gasStationMarker,
@@ -320,8 +315,10 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
         longitude: spot.lng,
       }}
       onPress={handleMarkerPress}
-      tracksViewChanges={false}
+      tracksViewChanges={true}
       anchor={{ x: 0.5, y: 1 }}
+      title={spot.name}
+      description={spot.category === '温泉' && (spot as HotSpring).price ? (spot as HotSpring).price : ''}
     >
       <View style={[
         styles.categoryMarker, 
