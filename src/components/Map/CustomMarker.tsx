@@ -122,7 +122,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
             <Image source={logo} style={styles.gasLogoImage} resizeMode="contain" />
           </View>
         </View>
-        <Callout tooltip onPress={handleCalloutPress}>
+        <Callout onPress={handleCalloutPress}>
           <View style={styles.gasStationCallout}>
             <Text style={styles.gasStationCalloutName} numberOfLines={2}>
               {spot.name}
@@ -164,7 +164,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
         ]}>
           <Image source={logo} style={styles.logoImage} resizeMode="contain" />
         </View>
-        <Callout tooltip onPress={handleCalloutPress}>
+        <Callout onPress={handleCalloutPress}>
           <View style={styles.calloutContainer}>
             <Text style={styles.calloutName} numberOfLines={1}>{spot.name}</Text>
           </View>
@@ -237,7 +237,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
         <View style={getMarkerStyle()}>
           <Text style={styles.parkingMarkerText}>{rank}</Text>
         </View>
-        <Callout tooltip onPress={handleCalloutPress}>
+        <Callout onPress={handleCalloutPress}>
           <View style={styles.parkingCalloutContainer}>
             <View style={styles.parkingCalloutHeader}>
               <View style={[styles.calloutRankBadge, 
@@ -285,7 +285,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
         ]}>
           <Text style={styles.gasStationMarkerIcon}>⛽</Text>
         </View>
-        <Callout tooltip onPress={handleCalloutPress}>
+        <Callout onPress={handleCalloutPress}>
           <View style={styles.gasStationCallout}>
             <Text style={styles.gasStationCalloutName} numberOfLines={2}>
               {spot.name}
@@ -341,64 +341,68 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
 
 const styles = StyleSheet.create({
   parkingMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+    overflow: 'visible',
   },
   goldMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#FFD700',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#FFFFFF',
     shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 4,
+    overflow: 'visible',
   },
   silverMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#C0C0C0',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#FFFFFF',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    elevation: 4,
+    overflow: 'visible',
   },
   bronzeMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#CD7F32',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#FFFFFF',
     shadowColor: '#CD7F32',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    elevation: 4,
+    overflow: 'visible',
   },
   selectedMarker: {
     transform: [{ scale: 1.3 }],

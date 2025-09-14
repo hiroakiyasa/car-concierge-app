@@ -687,46 +687,80 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       // 最寄りのコンビニを取得して地図に追加
       if (parkingSpot.nearestConvenienceStore) {
-        const convenienceId = parkingSpot.nearestConvenienceStore.id || 
-                              (parkingSpot.nearestConvenienceStore as any).store_id ||
-                              (parkingSpot.nearestConvenienceStore as any).facility_id;
-        
-        console.log('🏪 コンビニID:', convenienceId);
-        
-        if (convenienceId) {
-          try {
-            const store = await SupabaseService.fetchConvenienceStoreById(convenienceId);
-            if (store) {
-              console.log('✅ コンビニ取得成功:', store.name);
-              facilities.push(store);
-            } else {
-              console.log('❌ コンビニ情報なし');
+        const nearestStore = parkingSpot.nearestConvenienceStore;
+        console.log('🏪 コンビニデータ構造:', nearestStore);
+
+        // データ構造に応じて処理
+        if (typeof nearestStore === 'object' && nearestStore !== null) {
+          // フルデータが含まれている場合
+          if ((nearestStore as any).name && (nearestStore as any).lat && (nearestStore as any).lng) {
+            console.log('✅ コンビニデータ使用:', (nearestStore as any).name);
+            facilities.push({
+              ...(nearestStore as any),
+              category: 'コンビニ' as const,
+              id: (nearestStore as any).id || String(Math.random()),
+            });
+          } else {
+            // IDのみの場合は詳細を取得
+            const convenienceId = nearestStore.id ||
+                                  (nearestStore as any).store_id ||
+                                  (nearestStore as any).facility_id;
+
+            console.log('🏪 コンビニID:', convenienceId);
+
+            if (convenienceId) {
+              try {
+                const store = await SupabaseService.fetchConvenienceStoreById(convenienceId);
+                if (store) {
+                  console.log('✅ コンビニ取得成功:', store.name);
+                  facilities.push(store);
+                } else {
+                  console.log('❌ コンビニ情報なし');
+                }
+              } catch (error) {
+                console.error('コンビニ情報取得エラー:', error);
+              }
             }
-          } catch (error) {
-            console.error('コンビニ情報取得エラー:', error);
           }
         }
       }
       
       // 最寄りの温泉を取得して地図に追加
       if (parkingSpot.nearestHotspring) {
-        const hotspringId = parkingSpot.nearestHotspring.id || 
-                           (parkingSpot.nearestHotspring as any).spring_id ||
-                           (parkingSpot.nearestHotspring as any).facility_id;
-        
-        console.log('♨️ 温泉ID:', hotspringId);
-        
-        if (hotspringId) {
-          try {
-            const spring = await SupabaseService.fetchHotSpringById(hotspringId);
-            if (spring) {
-              console.log('✅ 温泉取得成功:', spring.name);
-              facilities.push(spring);
-            } else {
-              console.log('❌ 温泉情報なし');
+        const nearestSpring = parkingSpot.nearestHotspring;
+        console.log('♨️ 温泉データ構造:', nearestSpring);
+
+        // データ構造に応じて処理
+        if (typeof nearestSpring === 'object' && nearestSpring !== null) {
+          // フルデータが含まれている場合
+          if ((nearestSpring as any).name && (nearestSpring as any).lat && (nearestSpring as any).lng) {
+            console.log('✅ 温泉データ使用:', (nearestSpring as any).name);
+            facilities.push({
+              ...(nearestSpring as any),
+              category: '温泉' as const,
+              id: (nearestSpring as any).id || String(Math.random()),
+            });
+          } else {
+            // IDのみの場合は詳細を取得
+            const hotspringId = nearestSpring.id ||
+                               (nearestSpring as any).spring_id ||
+                               (nearestSpring as any).facility_id;
+
+            console.log('♨️ 温泉ID:', hotspringId);
+
+            if (hotspringId) {
+              try {
+                const spring = await SupabaseService.fetchHotSpringById(hotspringId);
+                if (spring) {
+                  console.log('✅ 温泉取得成功:', spring.name);
+                  facilities.push(spring);
+                } else {
+                  console.log('❌ 温泉情報なし');
+                }
+              } catch (error) {
+                console.error('温泉情報取得エラー:', error);
+              }
             }
-          } catch (error) {
-            console.error('温泉情報取得エラー:', error);
           }
         }
       }
