@@ -31,8 +31,8 @@ module.exports = function(api) {
           verbose: false,
         },
       ],
-      // Worklets plugin must be listed last (replaces reanimated plugin)
-      'react-native-worklets/plugin',
+      // Reanimated plugin must be listed last
+      'react-native-reanimated/plugin',
     ],
   };
 };
