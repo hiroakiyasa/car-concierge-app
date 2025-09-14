@@ -19,7 +19,11 @@ export const HotSpringReviewList: React.FC<HotSpringReviewListProps> = ({ hotSpr
   const fetchReviews = async () => {
     setLoading(true);
     const fetchedReviews = await ReviewService.getHotSpringReviews(hotSpringId);
-    setReviews(fetchedReviews);
+    
+    // 感想（コンテンツ）があるレビューのみをフィルタリング
+    const reviewsWithContent = fetchedReviews.filter(review => review.content && review.content.trim().length > 0);
+    
+    setReviews(reviewsWithContent);
     setLoading(false);
   };
 

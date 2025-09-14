@@ -35,10 +35,7 @@ export const HotSpringReviewModal: React.FC<HotSpringReviewModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (!content.trim()) {
-      Alert.alert('エラー', '感想を入力してください');
-      return;
-    }
+    // 評価のみでも投稿可能（感想はオプショナル）
 
     setIsSubmitting(true);
     const result = await ReviewService.createHotSpringReview(
@@ -50,7 +47,8 @@ export const HotSpringReviewModal: React.FC<HotSpringReviewModalProps> = ({
     setIsSubmitting(false);
 
     if (result.success) {
-      Alert.alert('成功', '感想を投稿しました', [
+      const message = content.trim() ? '感想を投稿しました' : '評価を投稿しました';
+      Alert.alert('成功', message, [
         {
           text: 'OK',
           onPress: () => {
@@ -77,11 +75,12 @@ export const HotSpringReviewModal: React.FC<HotSpringReviewModalProps> = ({
           >
             <Ionicons
               name={star <= rating ? 'star' : 'star-outline'}
-              size={32}
-              color={star <= rating ? '#FFD700' : '#CCCCCC'}
+              size={36}
+              color={star <= rating ? '#FFB800' : '#DDD'}
             />
           </TouchableOpacity>
         ))}
+        <Text style={styles.ratingText}>({rating}/5)</Text>
       </View>
     );
   };
@@ -129,12 +128,12 @@ export const HotSpringReviewModal: React.FC<HotSpringReviewModalProps> = ({
               style={styles.textInput}
               value={content}
               onChangeText={setContent}
-              placeholder="温泉の感想を入力してください..."
+              placeholder="温泉の感想を教えてください（省略可）"
               placeholderTextColor="#999"
               multiline
               maxLength={500}
             />
-            <Text style={styles.charCount}>{content.length}/500</Text>
+            <Text style={styles.charCount}>{content.length}/500文字</Text>
           </View>
 
           <TouchableOpacity
@@ -218,10 +217,17 @@ const styles = StyleSheet.create({
   starsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     gap: 8,
   },
   starButton: {
     padding: 4,
+  },
+  ratingText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+    marginLeft: 8,
   },
   reviewSection: {
     marginBottom: 24,

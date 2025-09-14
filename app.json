@@ -18,6 +18,9 @@
       "bundleIdentifier": "com.carconciege.app",
       "buildNumber": "12",
       "infoPlist": {
+        "NSCameraUsageDescription": "このアプリは駐車場や施設の写真を撮影するためにカメラを使用します。",
+        "NSPhotoLibraryUsageDescription": "このアプリは駐車場や施設の写真を選択するために写真ライブラリへのアクセスが必要です。",
+        "NSPhotoLibraryAddUsageDescription": "このアプリは撮影した写真を保存するために写真ライブラリへの書き込み権限が必要です。",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -36,8 +39,14 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "intentFilters": [
         {
@@ -68,6 +77,13 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "このアプリは駐車場や施設の写真を選択するために写真ライブラリへのアクセスが必要です。",
+          "cameraPermission": "このアプリは駐車場や施設の写真を撮影するためにカメラを使用します。"
         }
       ],
       [

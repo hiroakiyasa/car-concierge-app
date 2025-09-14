@@ -46,25 +46,12 @@
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>
-      <true/>
+      <false/>
       <key>NSAllowsLocalNetworking</key>
       <true/>
-      <key>NSExceptionDomains</key>
-      <dict>
-        <key>localhost</key>
-        <dict>
-          <key>NSExceptionAllowsInsecureHTTPLoads</key>
-          <true/>
-        </dict>
-        <key>192.168.0.0</key>
-        <dict>
-          <key>NSExceptionAllowsInsecureHTTPLoads</key>
-          <true/>
-          <key>NSExceptionMinimumTLSVersion</key>
-          <string>TLSv1.0</string>
-        </dict>
-      </dict>
     </dict>
+    <key>NSCameraUsageDescription</key>
+    <string>このアプリは駐車場や施設の写真を撮影するためにカメラを使用します。</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to use your location.</string>
     <key>NSLocationAlwaysUsageDescription</key>
@@ -73,6 +60,12 @@
     <string>Allow $(PRODUCT_NAME) to access your location</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>このアプリは撮影した写真を保存するために写真ライブラリへの書き込み権限が必要です。</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>このアプリは駐車場や施設の写真を選択するために写真ライブラリへのアクセスが必要です。</string>
+    <key>RCTNewArchEnabled</key>
+    <true/>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

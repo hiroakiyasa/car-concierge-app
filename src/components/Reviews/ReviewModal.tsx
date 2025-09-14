@@ -50,11 +50,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   }, [visible, user, isAuthenticated]);
 
   const handleSubmit = async () => {
-    // 文字数チェック
-    if (content.trim().length < 1) {
-      Alert.alert('エラー', '感想を入力してください');
-      return;
-    }
+    // 評価のみでも投稿可能（感想はオプショナル）
 
     // 認証状態の事前チェック（ボタンが有効でも念のため再確認）
     console.log('📝 ReviewModal: 投稿実行時の認証状態', {
@@ -144,7 +140,8 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
       const result = await ReviewService.createReview(parkingSpotId, content, rating);
       
       if (result.success) {
-        Alert.alert('投稿完了', '感想を投稿しました', [
+        const message = content.trim() ? '感想を投稿しました' : '評価を投稿しました';
+        Alert.alert('投稿完了', message, [
           {
             text: 'OK',
             onPress: () => {
@@ -167,22 +164,26 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
 
   const renderStars = () => {
     return (
-      <View style={styles.starsContainer}>
-        <Text style={styles.ratingLabel}>評価:</Text>
-        {[1, 2, 3, 4, 5].map((star) => (
-          <TouchableOpacity
-            key={star}
-            onPress={() => setRating(star)}
-            style={styles.starButton}
-          >
-            <Ionicons
-              name={star <= rating ? 'star' : 'star-outline'}
-              size={24}
-              color={star <= rating ? '#FFD700' : '#DDD'}
-            />
-          </TouchableOpacity>
-        ))}
-        <Text style={styles.ratingText}>({rating}/5)</Text>
+      <View style={styles.starsSection}>
+        <View style={styles.starsRow}>
+          <Text style={styles.ratingLabel}>評価:</Text>
+          <View style={styles.starsButtonGroup}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <TouchableOpacity
+                key={star}
+                onPress={() => setRating(star)}
+                style={styles.starButton}
+              >
+                <Ionicons
+                  name={star <= rating ? 'star' : 'star-outline'}
+                  size={32}
+                  color={star <= rating ? '#FFB800' : '#DDD'}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.ratingText}>({rating}/5)</Text>
+        </View>
       </View>
     );
   };
@@ -205,16 +206,16 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
           <Text style={styles.title}>感想を投稿</Text>
           <TouchableOpacity
             onPress={handleSubmit}
-            disabled={isSubmitting || content.trim().length < 1 || !isAuthenticated || !user}
+            disabled={isSubmitting || !isAuthenticated || !user}
             style={[
               styles.submitButton,
-              (isSubmitting || content.trim().length < 1 || !isAuthenticated || !user) && styles.submitButtonDisabled,
+              (isSubmitting || !isAuthenticated || !user) && styles.submitButtonDisabled,
             ]}
           >
             <Text
               style={[
                 styles.submitButtonText,
-                (isSubmitting || content.trim().length < 1 || !isAuthenticated || !user) && styles.submitButtonTextDisabled,
+                (isSubmitting || !isAuthenticated || !user) && styles.submitButtonTextDisabled,
               ]}
             >
               {isSubmitting ? '投稿中...' : !isAuthenticated ? 'ログインが必要' : '投稿'}
@@ -231,12 +232,13 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
           {renderStars()}
 
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>感想 *</Text>
+            <Text style={styles.inputLabel}>感想</Text>
             <TextInput
               style={styles.textInput}
               value={content}
               onChangeText={setContent}
-              placeholder="駐車場の感想を教えてください"
+              placeholder="駐車場の感想を教えてください（省略可）"
+              placeholderTextColor="#999"
               multiline
               numberOfLines={6}
               maxLength={500}
@@ -326,25 +328,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textPrimary,
   },
-  starsContainer: {
+  starsSection: {
+    marginBottom: 24,
+  },
+  starsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
-    gap: 4,
+    gap: 12,
+  },
+  starsButtonGroup: {
+    flexDirection: 'row',
+    gap: 8,
   },
   ratingLabel: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: Colors.textPrimary,
-    marginRight: 8,
   },
   starButton: {
-    padding: 4,
+    padding: 2,
   },
   ratingText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#666',
-    marginLeft: 8,
+    fontWeight: '500',
   },
   inputContainer: {
     marginBottom: 24,

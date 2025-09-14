@@ -844,13 +844,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         spotsInCategory.forEach((spot) => {
           try {
             // スポットのデータ検証を強化
-            if (!spot || 
-                !spot.id || 
+            if (!spot ||
+                !spot.id ||
                 typeof spot.id !== 'string' && typeof spot.id !== 'number' ||
-                spot.lat == null || 
+                spot.lat == null ||
                 spot.lng == null ||
                 typeof spot.lat !== 'number' ||
                 typeof spot.lng !== 'number' ||
+                isNaN(spot.lat) ||
+                isNaN(spot.lng) ||
                 !spot.category) {
               console.log('⚠️ Invalid spot data skipped:', {
                 hasSpot: !!spot,
@@ -891,13 +893,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         nearbyFacilities.forEach((facility) => {
           try {
             // 施設のデータ検証を強化
-            if (!facility || 
-                !facility.id || 
+            if (!facility ||
+                !facility.id ||
                 typeof facility.id !== 'string' && typeof facility.id !== 'number' ||
-                facility.lat == null || 
+                facility.lat == null ||
                 facility.lng == null ||
                 typeof facility.lat !== 'number' ||
                 typeof facility.lng !== 'number' ||
+                isNaN(facility.lat) ||
+                isNaN(facility.lng) ||
                 !facility.category) {
               console.log('⚠️ Invalid facility data skipped:', facility);
               return;
@@ -934,13 +938,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       unrankedParkingSpots.forEach((spot) => {
         try {
           // スポットのデータ検証を強化
-          if (!spot || 
-              !spot.id || 
+          if (!spot ||
+              !spot.id ||
               typeof spot.id !== 'string' && typeof spot.id !== 'number' ||
-              spot.lat == null || 
+              spot.lat == null ||
               spot.lng == null ||
               typeof spot.lat !== 'number' ||
-              typeof spot.lng !== 'number') {
+              typeof spot.lng !== 'number' ||
+              isNaN(spot.lat) ||
+              isNaN(spot.lng)) {
             return;
           }
           
@@ -970,10 +976,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     
       // 4. ランキング3位を追加
       try {
-        const rank3 = parkingSpots.find(spot => 
+        const rank3 = parkingSpots.find(spot =>
           spot && spot.rank === 3 && selectedSpot?.id !== spot.id
         );
-        if (rank3 && rank3.id && rank3.lat != null && rank3.lng != null) {
+        if (rank3 && rank3.id && rank3.lat != null && rank3.lng != null && !isNaN(rank3.lat) && !isNaN(rank3.lng)) {
           const marker = (
             <CustomMarker
               key={`rank3-${rank3.id}`}
@@ -994,10 +1000,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       // 5. ランキング2位を追加
       try {
-        const rank2 = parkingSpots.find(spot => 
+        const rank2 = parkingSpots.find(spot =>
           spot && spot.rank === 2 && selectedSpot?.id !== spot.id
         );
-        if (rank2 && rank2.id && rank2.lat != null && rank2.lng != null) {
+        if (rank2 && rank2.id && rank2.lat != null && rank2.lng != null && !isNaN(rank2.lat) && !isNaN(rank2.lng)) {
           const marker = (
             <CustomMarker
               key={`rank2-${rank2.id}`}
@@ -1018,10 +1024,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       // 6. ランキング1位を追加（最前面）
       try {
-        const rank1 = parkingSpots.find(spot => 
+        const rank1 = parkingSpots.find(spot =>
           spot && spot.rank === 1 && selectedSpot?.id !== spot.id
         );
-        if (rank1 && rank1.id && rank1.lat != null && rank1.lng != null) {
+        if (rank1 && rank1.id && rank1.lat != null && rank1.lng != null && !isNaN(rank1.lat) && !isNaN(rank1.lng)) {
           const marker = (
             <CustomMarker
               key={`rank1-${rank1.id}`}
@@ -1042,7 +1048,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       // 7. 最後に選択された駐車場を追加（最前面に表示）
       try {
-        if (selectedSpot && selectedSpot.id && selectedSpot.lat != null && selectedSpot.lng != null) {
+        if (selectedSpot && selectedSpot.id && selectedSpot.lat != null && selectedSpot.lng != null && !isNaN(selectedSpot.lat) && !isNaN(selectedSpot.lng)) {
           const marker = (
             <CustomMarker
               key={`selected-${selectedSpot.id}`}
@@ -1100,7 +1106,27 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           showsMyLocationButton={false}
           showsCompass={false}
         >
-          {isMapReady && !isLoading && renderMarkers()}
+          {isMapReady && !isLoading && (() => {
+            try {
+              const allMarkers = renderMarkers();
+              const validMarkers = allMarkers.filter(marker => {
+                if (!marker) {
+                  console.log('⚠️ Null marker detected');
+                  return false;
+                }
+                if (!React.isValidElement(marker)) {
+                  console.log('⚠️ Invalid React element marker detected');
+                  return false;
+                }
+                return true;
+              });
+              console.log(`🗺️ Rendering ${validMarkers.length} valid markers out of ${allMarkers.length} total`);
+              return validMarkers;
+            } catch (renderError) {
+              console.error('⚠️ Error rendering markers:', renderError);
+              return [];
+            }
+          })()}
         </MapView>
         
         <CategoryButtons />

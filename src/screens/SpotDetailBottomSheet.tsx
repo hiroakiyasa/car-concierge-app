@@ -10,6 +10,9 @@ import {
   Linking,
   Platform,
   Animated,
+  PanResponder,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMainStore } from '@/stores/useMainStore';
@@ -22,13 +25,16 @@ import { ReviewModal } from '@/components/Reviews/ReviewModal';
 import { ReviewList } from '@/components/Reviews/ReviewList';
 import { HotSpringReviewModal } from '@/components/Reviews/HotSpringReviewModal';
 import { HotSpringReviewList } from '@/components/Reviews/HotSpringReviewList';
+import { PhotoUploadModal } from '@/components/Photos/PhotoUploadModal';
 import { CoinParking, HotSpring, GasStation } from '@/types';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { SupabaseService } from '@/services/supabase.service';
 import { NATIONAL_AVERAGE_PRICES, formatPriceDifference, getPriceDifferenceColor } from '@/utils/fuelPrices';
+import { supabase } from '@/config/supabase';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SHEET_HEIGHT = SCREEN_HEIGHT * 0.5; // 50% of screen height
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+const SHEET_HEIGHT = SCREEN_HEIGHT * 0.6; // 60% of screen height
+const PHOTO_SIZE = (SCREEN_WIDTH - 64) / 3;
 
 interface SpotDetailBottomSheetProps {
   visible: boolean;
@@ -41,7 +47,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
 }) => {
   // すべてのフックを最初に定義（条件分岐なし）
   const { selectedSpot, searchFilter } = useMainStore();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const [facilityNames, setFacilityNames] = React.useState<{
     convenience?: string;
     hotspring?: string;
@@ -61,7 +67,104 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   const scrollX = React.useRef(new Animated.Value(0)).current;
   const [nameWidth, setNameWidth] = React.useState(0);
   const [containerWidth, setContainerWidth] = React.useState(0);
+  const [activeTab, setActiveTab] = React.useState<'overview' | 'reviews' | 'photos'>('overview');
+  const [ratingDistribution, setRatingDistribution] = React.useState<Record<number, number>>({});
+  const [sortOrder, setSortOrder] = React.useState<'relevance' | 'newest' | 'highest' | 'lowest'>('relevance');
+  const tabTranslateX = React.useRef(new Animated.Value(0)).current;
+  const [photos, setPhotos] = React.useState<any[]>([]);
+  const [photosLoading, setPhotosLoading] = React.useState(false);
+  const [photoUploadModalVisible, setPhotoUploadModalVisible] = React.useState(false);
   
+  // スワイプジェスチャーの設定
+  const panResponder = React.useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 20 && Math.abs(gestureState.dy) < 20;
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const { dx } = gestureState;
+        const threshold = 50;
+        
+        if (dx > threshold) {
+          // 右にスワイプ - 前のタブへ
+          if (activeTab === 'reviews') {
+            setActiveTab('overview');
+          } else if (activeTab === 'photos') {
+            setActiveTab('reviews');
+          }
+        } else if (dx < -threshold) {
+          // 左にスワイプ - 次のタブへ
+          if (activeTab === 'overview') {
+            setActiveTab('reviews');
+          } else if (activeTab === 'reviews') {
+            setActiveTab('photos');
+          }
+        }
+      },
+    })
+  ).current;
+  
+  // 写真を取得
+  const fetchPhotos = React.useCallback(async () => {
+    if (!selectedSpot || !visible) return;
+
+    setPhotosLoading(true);
+    try {
+      let tableName = '';
+      let columnName = '';
+
+      if (selectedSpot.category === 'コインパーキング') {
+        tableName = 'parking_photos';
+        columnName = 'parking_spot_id';
+      } else if (selectedSpot.category === '温泉') {
+        tableName = 'hotspring_photos';
+        columnName = 'hotspring_id';
+      } else if (selectedSpot.category === 'ガソリンスタンド') {
+        tableName = 'gasstation_photos';
+        columnName = 'gasstation_id';
+      } else {
+        setPhotosLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from(tableName)
+        .select(`
+          id,
+          url,
+          thumbnail_url,
+          user_id,
+          created_at
+        `)
+        .eq(columnName, selectedSpot.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      console.log(`Fetched ${data?.length || 0} photos from ${tableName} for ${columnName}=${selectedSpot.id}`);
+
+      // ユーザー情報を省略してシンプルに表示
+      const formattedPhotos = data?.map(photo => ({
+        ...photo,
+        user_name: '投稿者',
+      })) || [];
+
+      setPhotos(formattedPhotos);
+    } catch (error) {
+      console.error('Error fetching photos:', error);
+    } finally {
+      setPhotosLoading(false);
+    }
+  }, [selectedSpot, visible]);
+
+  React.useEffect(() => {
+    // 概要タブでも写真を表示するため、常に写真を取得
+    if (selectedSpot && visible) {
+      fetchPhotos();
+    }
+  }, [selectedSpot, visible, fetchPhotos]);
+
   // 駐車場データのログと施設名の取得
   React.useEffect(() => {
     if (!selectedSpot || selectedSpot.category !== 'コインパーキング' || !visible) {
@@ -157,6 +260,16 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       if (selectedSpot.category === 'コインパーキング') {
         const stats = await ReviewService.getAverageRating(Number(selectedSpot.id));
         setReviewStats(stats);
+        
+        // レビューの分布を取得
+        const reviews = await ReviewService.getReviews(Number(selectedSpot.id));
+        const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        reviews.forEach(review => {
+          if (review.rating >= 1 && review.rating <= 5) {
+            distribution[review.rating]++;
+          }
+        });
+        setRatingDistribution(distribution);
       } else if (selectedSpot.category === '温泉') {
         const stats = await ReviewService.getHotSpringAverageRating(selectedSpot.id);
         setHotSpringReviewStats(stats);
@@ -458,6 +571,12 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     setHotSpringReviewModalVisible(true);
   };
 
+  // 写真アップロード後の処理
+  const handlePhotoUploaded = () => {
+    setPhotoUploadModalVisible(false);
+    fetchPhotos();
+  };
+
   return (
     <Modal
       visible={visible}
@@ -548,13 +667,50 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
           </View>
         </View>
         
-        {/* Premium Info Cards */}
+        {/* Tab Bar for Parking */}
         {isParking && (
-          <ScrollView 
-            style={styles.content}
-            showsVerticalScrollIndicator={false}
-            bounces={false}
-          >
+          <View style={styles.tabBar}>
+            <TouchableOpacity 
+              style={[styles.tabButton, activeTab === 'overview' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('overview')}
+            >
+              <Text style={[styles.tabText, activeTab === 'overview' && styles.tabTextActive]}>
+                概要
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tabButton, activeTab === 'reviews' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('reviews')}
+            >
+              <Text style={[styles.tabText, activeTab === 'reviews' && styles.tabTextActive]}>
+                口コミ
+              </Text>
+              {reviewStats.count > 0 && (
+                <View style={styles.reviewCountBadge}>
+                  <Text style={styles.reviewCountText}>{reviewStats.count}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tabButton, activeTab === 'photos' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('photos')}
+            >
+              <Text style={[styles.tabText, activeTab === 'photos' && styles.tabTextActive]}>
+                写真
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        {/* Tab Content with Swipe Gesture */}
+        <View style={styles.content} {...panResponder.panHandlers}>
+          {/* Premium Info Cards */}
+          {isParking && activeTab === 'overview' && (
+            <ScrollView 
+              style={styles.tabContent}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
             {/* Combined Pricing Card - Compact */}
             <View style={styles.pricingCard}>
               <View style={styles.pricingContent}>
@@ -575,6 +731,45 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               </View>
             </View>
             
+            {/* Photos Preview in Overview */}
+            {photos.length > 0 && (
+              <View style={styles.photosPreviewSection}>
+                <View style={styles.photosPreviewHeader}>
+                  <Ionicons name="camera-outline" size={14} color="#666" />
+                  <Text style={styles.photosPreviewTitle}>写真</Text>
+                  <TouchableOpacity onPress={() => setActiveTab('photos')}>
+                    <Text style={styles.photosPreviewMore}>すべて見る →</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.photosPreviewScroll}
+                >
+                  {photos.slice(0, 5).map((photo) => (
+                    <TouchableOpacity
+                      key={photo.id}
+                      style={styles.photoPreviewItem}
+                      onPress={() => setActiveTab('photos')}
+                    >
+                      <Image 
+                        source={{ uri: photo.thumbnail_url || photo.url }} 
+                        style={styles.photoPreviewImage} 
+                      />
+                    </TouchableOpacity>
+                  ))}
+                  {photos.length > 5 && (
+                    <TouchableOpacity
+                      style={[styles.photoPreviewItem, styles.photoPreviewMoreButton]}
+                      onPress={() => setActiveTab('photos')}
+                    >
+                      <Text style={styles.photoPreviewMoreText}>+{photos.length - 5}</Text>
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
+              </View>
+            )}
+            
             {/* Nearby Facilities - Always show section for debugging */}
             <View style={styles.nearbySection}>
               <View style={styles.nearbyHeader}>
@@ -593,14 +788,17 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               {parkingSpot.nearestConvenienceStore && (
                 <View style={styles.nearbyItemCompact}>
                   <Text style={styles.nearbyIconCompact}>🏪</Text>
-                  <Text style={styles.nearbyNameCompact}>
+                  <Text style={styles.nearbyNameCompact} numberOfLines={1}>
                     {(() => {
                       const convenienceData = parkingSpot.nearestConvenienceStore as any;
-                      // 名前を直接チェック
+                      console.log('🏪 コンビニデータ:', convenienceData);
+                      // すべての可能なフィールドをチェック
                       if (convenienceData.name) {
                         return convenienceData.name;
                       } else if (convenienceData.store_name) {
                         return convenienceData.store_name;
+                      } else if (convenienceData.sub_type) {
+                        return convenienceData.sub_type;
                       } else if (facilityNames.convenience) {
                         return facilityNames.convenience;
                       } else {
@@ -611,7 +809,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                   <Text style={styles.nearbyDistanceCompact}>
                     {(() => {
                       const data = parkingSpot.nearestConvenienceStore as any;
-                      const distance = data.distance_m || data.distance;
+                      const distance = data.distance_m || data.distance || data.distance_meters;
                       return distance ? `${Math.round(distance)}m` : '---';
                     })()}
                   </Text>
@@ -622,14 +820,17 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               {parkingSpot.nearestHotspring && (
                 <View style={styles.nearbyItemCompact}>
                   <Text style={styles.nearbyIconCompact}>♨️</Text>
-                  <Text style={styles.nearbyNameCompact}>
+                  <Text style={styles.nearbyNameCompact} numberOfLines={1}>
                     {(() => {
                       const hotspringData = parkingSpot.nearestHotspring as any;
-                      // 名前を直接チェック
+                      console.log('♨️ 温泉データ:', hotspringData);
+                      // すべての可能なフィールドをチェック
                       if (hotspringData.name) {
                         return hotspringData.name;
                       } else if (hotspringData.spring_name) {
                         return hotspringData.spring_name;
+                      } else if (hotspringData.facility_name) {
+                        return hotspringData.facility_name;
                       } else if (facilityNames.hotspring) {
                         return facilityNames.hotspring;
                       } else {
@@ -640,7 +841,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                   <Text style={styles.nearbyDistanceCompact}>
                     {(() => {
                       const data = parkingSpot.nearestHotspring as any;
-                      const distance = data.distance_m || data.distance;
+                      const distance = data.distance_m || data.distance || data.distance_meters;
                       return distance ? `${Math.round(distance)}m` : '---';
                     })()}
                   </Text>
@@ -648,25 +849,172 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               )}
             </View>
             
-            {/* Reviews Section */}
-            <View style={styles.reviewsSection}>
-              <View style={styles.reviewsHeader}>
-                <Text style={styles.reviewsSectionTitle}>利用者の感想</Text>
-                {isAuthenticated && (
-                  <TouchableOpacity onPress={openReviewModal} style={styles.addReviewButton}>
-                    <Ionicons name="add" size={16} color={Colors.primary} />
-                    <Text style={styles.addReviewText}>投稿</Text>
-                  </TouchableOpacity>
-                )}
+            </ScrollView>
+          )}
+          
+          {/* Reviews Tab Content */}
+          {isParking && activeTab === 'reviews' && (
+            <ScrollView 
+              style={styles.tabContent}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+            {/* Review Stats Header - Compact */}
+            <View style={styles.reviewStatsCard}>
+              <View style={styles.reviewStatsLeft}>
+                <Text style={styles.reviewAverageScore}>
+                  {reviewStats.average > 0 ? reviewStats.average.toFixed(1) : '---'}
+                </Text>
+                <View style={styles.reviewStarsContainer}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Ionicons
+                      key={star}
+                      name={star <= Math.round(reviewStats.average) ? 'star' : 'star-outline'}
+                      size={14}
+                      color={star <= Math.round(reviewStats.average) ? '#FFB800' : '#CCC'}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.reviewCountLabel}>
+                  ({reviewStats.count}件)
+                </Text>
               </View>
               
-              <ReviewList 
-                key={reviewKey} 
-                parkingSpotId={Number(selectedSpot.id)} 
-              />
+              {/* Star Distribution with correct percentages */}
+              <View style={styles.reviewDistribution}>
+                {[5, 4, 3, 2, 1].map((rating) => {
+                  const count = ratingDistribution[rating] || 0;
+                  const percentage = reviewStats.count > 0 ? (count / reviewStats.count) * 100 : 0;
+                  
+                  return (
+                    <View key={rating} style={styles.distributionRow}>
+                      <Text style={styles.distributionLabel}>{rating}</Text>
+                      <View style={styles.distributionBarContainer}>
+                        <View 
+                          style={[
+                            styles.distributionBar, 
+                            { width: `${percentage}%` }
+                          ]} 
+                        />
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
             </View>
-          </ScrollView>
-        )}
+            
+            {/* Review Actions */}
+            <View style={styles.reviewActionsContainer}>
+              <Text style={styles.reviewSectionTitle}>評価と口コミ</Text>
+              {isAuthenticated && (
+                <TouchableOpacity onPress={openReviewModal} style={styles.writeReviewButton}>
+                  <Ionicons name="create-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.writeReviewText}>投稿</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            {/* Filter Options */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.filterContainer}
+            >
+              <TouchableOpacity 
+                style={[styles.filterChip, sortOrder === 'relevance' && styles.filterChipActive]}
+                onPress={() => setSortOrder('relevance')}
+              >
+                {sortOrder === 'relevance' && <Ionicons name="checkmark" size={12} color={Colors.primary} />}
+                <Text style={[styles.filterChipText, sortOrder === 'relevance' && styles.filterChipTextActive]}>関連度</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.filterChip, sortOrder === 'newest' && styles.filterChipActive]}
+                onPress={() => setSortOrder('newest')}
+              >
+                {sortOrder === 'newest' && <Ionicons name="checkmark" size={12} color={Colors.primary} />}
+                <Text style={[styles.filterChipText, sortOrder === 'newest' && styles.filterChipTextActive]}>新しい順</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.filterChip, sortOrder === 'highest' && styles.filterChipActive]}
+                onPress={() => setSortOrder('highest')}
+              >
+                {sortOrder === 'highest' && <Ionicons name="checkmark" size={12} color={Colors.primary} />}
+                <Text style={[styles.filterChipText, sortOrder === 'highest' && styles.filterChipTextActive]}>評価の高い順</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.filterChip, sortOrder === 'lowest' && styles.filterChipActive]}
+                onPress={() => setSortOrder('lowest')}
+              >
+                {sortOrder === 'lowest' && <Ionicons name="checkmark" size={12} color={Colors.primary} />}
+                <Text style={[styles.filterChipText, sortOrder === 'lowest' && styles.filterChipTextActive]}>評価の低い順</Text>
+              </TouchableOpacity>
+            </ScrollView>
+            
+            {/* Review List */}
+            <ReviewList 
+              key={`${reviewKey}-${sortOrder}`} 
+              parkingSpotId={Number(selectedSpot.id)}
+              sortOrder={sortOrder}
+            />
+            </ScrollView>
+          )}
+          
+          {/* Photos Tab Content */}
+          {isParking && activeTab === 'photos' && (
+            <ScrollView 
+              style={styles.tabContent}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+            >
+              {photosLoading ? (
+                <View style={styles.photoLoadingContainer}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <Text style={styles.photoLoadingText}>写真を読み込み中...</Text>
+                </View>
+              ) : photos.length === 0 ? (
+                <View style={styles.photoEmptyContainer}>
+                  <Ionicons name="camera-outline" size={48} color={Colors.textSecondary} />
+                  <Text style={styles.photoEmptyText}>まだ写真が投稿されていません</Text>
+                  <Text style={styles.photoEmptySubText}>最初の写真を投稿してみましょう</Text>
+                  {isAuthenticated && (
+                    <TouchableOpacity style={styles.photoUploadButton} onPress={() => setPhotoUploadModalVisible(true)}>
+                      <Ionicons name="camera" size={20} color={Colors.primary} />
+                      <Text style={styles.photoUploadButtonText}>写真を追加</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <>
+                  {/* ヘッダー */}
+                  <View style={styles.photoHeader}>
+                    <Text style={styles.photoTitle}>写真 ({photos.length}枚)</Text>
+                    {isAuthenticated && (
+                      <TouchableOpacity style={styles.photoUploadButton} onPress={() => setPhotoUploadModalVisible(true)}>
+                        <Ionicons name="camera" size={20} color={Colors.primary} />
+                        <Text style={styles.photoUploadButtonText}>写真を追加</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {/* 写真グリッド */}
+                  <View style={styles.photoGrid}>
+                    {photos.map((photo) => (
+                      <TouchableOpacity
+                        key={photo.id}
+                        style={styles.photoItem}
+                        onPress={() => {
+                          // 写真拡大表示
+                          console.log('Photo tapped:', photo.url);
+                        }}
+                      >
+                        <Image source={{ uri: photo.thumbnail_url || photo.url }} style={styles.photoImage} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          )}
+        </View>
         
         {/* Hot Spring Info - Compact Premium Design */}
         {isHotSpring && (
@@ -896,6 +1244,17 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
           onReviewSubmitted={handleHotSpringReviewSubmitted}
         />
       )}
+
+      {/* 写真アップロードモーダル */}
+      {selectedSpot && (
+        <PhotoUploadModal
+          visible={photoUploadModalVisible}
+          onClose={() => setPhotoUploadModalVisible(false)}
+          onPhotoUploaded={handlePhotoUploaded}
+          spotId={selectedSpot.id.toString()}
+          spotType={selectedSpot.type === 'parking' ? 'parking' : selectedSpot.type === 'hotspring' ? 'hotspring' : 'gasstation'}
+        />
+      )}
     </Modal>
   );
 };
@@ -962,7 +1321,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   spotName: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
     color: '#1A1A1A',
   },
@@ -1005,6 +1364,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  tabContent: {
+    flex: 1,
     paddingHorizontal: 16,
     paddingTop: 12,
   },
@@ -1028,17 +1390,17 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   pricingIcon: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.primary,
     fontWeight: '700',
   },
   pricingMainLabel: {
-    fontSize: 13,
+    fontSize: 15,
     color: '#666',
     fontWeight: '500',
   },
   pricingMainValue: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.primary,
   },
@@ -1048,11 +1410,11 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   pricingSubLabel: {
-    fontSize: 12,
+    fontSize: 15,
     color: '#888',
   },
   pricingSubValue: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '500',
     color: '#333',
   },
@@ -1067,7 +1429,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rateStructureText: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '500',
     color: '#333',
   },
@@ -1075,7 +1437,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   rateSectionTitle: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '600',
     color: '#4CAF50',
     marginBottom: 4,
@@ -1194,7 +1556,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   nearbyTitle: {
-    fontSize: 11,
+    fontSize: 15,
     fontWeight: '600',
     color: '#666',
   },
@@ -1210,11 +1572,11 @@ const styles = StyleSheet.create({
   },
   nearbyNameCompact: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 15,
     color: '#666',
   },
   nearbyDistanceCompact: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '600',
     color: '#1A1A1A',
   },
@@ -1412,5 +1774,376 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#333',
     lineHeight: 18,
+  },
+  // Tab Bar Styles
+  tabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    backgroundColor: '#FFFFFF',
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    position: 'relative',
+  },
+  tabButtonActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: Colors.primary,
+  },
+  tabText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#999',
+  },
+  tabTextActive: {
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  reviewCountBadge: {
+    marginLeft: 6,
+    backgroundColor: '#FF6B6B',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  reviewCountText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  // Review Stats Styles - More Compact
+  reviewStatsCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  reviewStatsLeft: {
+    alignItems: 'center',
+    marginRight: 20,
+  },
+  reviewAverageScore: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  reviewStarsContainer: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  reviewCountLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  reviewDistribution: {
+    flex: 1,
+  },
+  distributionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  distributionLabel: {
+    fontSize: 11,
+    color: '#666',
+    width: 10,
+    marginRight: 6,
+  },
+  distributionBarContainer: {
+    flex: 1,
+    height: 6,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  distributionBar: {
+    height: '100%',
+    backgroundColor: '#FFB800',
+    borderRadius: 3,
+  },
+  reviewActionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  reviewSectionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  writeReviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F8FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+    gap: 4,
+  },
+  writeReviewText: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '500',
+  },
+  filterContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 18,
+    backgroundColor: '#F5F5F5',
+    marginRight: 6,
+    gap: 3,
+  },
+  filterChipActive: {
+    backgroundColor: '#E8F5FF',
+    borderWidth: 1,
+    borderColor: Colors.primary + '30',
+  },
+  filterChipText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  filterChipTextActive: {
+    color: Colors.primary,
+  },
+  photoLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    gap: 12,
+  },
+  photoLoadingText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  photoEmptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    gap: 12,
+  },
+  photoEmptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  photoEmptySubText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  photoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 16,
+  },
+  photoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  photoUploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.primary + '10',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginTop: 16,
+  },
+  photoUploadButtonText: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '600',
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  photoItem: {
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#F0F0F0',
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoModalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 400,
+    overflow: 'hidden',
+  },
+  photoModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  photoModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  photoModalContent: {
+    padding: 20,
+  },
+  photoModalInstruction: {
+    fontSize: 16,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  photoOptionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    gap: 16,
+  },
+  photoOptionButton: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  photoOptionText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: Colors.textPrimary,
+    fontWeight: '500',
+  },
+  photoPreview: {
+    width: '100%',
+    height: 250,
+    borderRadius: 12,
+    marginBottom: 16,
+    backgroundColor: '#F0F0F0',
+  },
+  photoActionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  photoChangeButton: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  photoChangeButtonText: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    fontWeight: '500',
+  },
+  photoUploadModalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 12,
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+  },
+  photoUploadButtonDisabled: {
+    opacity: 0.6,
+  },
+  photoUploadModalButtonText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  photosPreviewSection: {
+    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  photosPreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 6,
+  },
+  photosPreviewTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    flex: 1,
+  },
+  photosPreviewMore: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '500',
+  },
+  photosPreviewScroll: {
+    flexDirection: 'row',
+  },
+  photoPreviewItem: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 8,
+    overflow: 'hidden',
+    backgroundColor: '#F0F0F0',
+  },
+  photoPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoPreviewMoreButton: {
+    backgroundColor: '#F8F9FA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  photoPreviewMoreText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
   },
 });

@@ -12,21 +12,49 @@ import { ReviewService, ParkingReview } from '@/services/review.service';
 
 interface ReviewListProps {
   parkingSpotId: number;
+  sortOrder?: 'relevance' | 'newest' | 'highest' | 'lowest';
 }
 
-export const ReviewList: React.FC<ReviewListProps> = ({ parkingSpotId }) => {
+export const ReviewList: React.FC<ReviewListProps> = ({ parkingSpotId, sortOrder = 'relevance' }) => {
   const [reviews, setReviews] = useState<ParkingReview[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadReviews();
-  }, [parkingSpotId]);
+  }, [parkingSpotId, sortOrder]);
 
   const loadReviews = async () => {
     setLoading(true);
     try {
       const reviewsData = await ReviewService.getReviews(parkingSpotId);
-      setReviews(reviewsData);
+      
+      // 感想（コンテンツ）があるレビューのみをフィルタリング
+      const reviewsWithContent = reviewsData.filter(review => review.content && review.content.trim().length > 0);
+      
+      // ソート処理
+      let sortedReviews = [...reviewsWithContent];
+      switch (sortOrder) {
+        case 'newest':
+          sortedReviews.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          break;
+        case 'highest':
+          sortedReviews.sort((a, b) => b.rating - a.rating);
+          break;
+        case 'lowest':
+          sortedReviews.sort((a, b) => a.rating - b.rating);
+          break;
+        case 'relevance':
+        default:
+          // 関連度：評価が高く、最近のものを優先
+          sortedReviews.sort((a, b) => {
+            const scoreA = a.rating + (1 / (Date.now() - new Date(a.created_at).getTime() + 1));
+            const scoreB = b.rating + (1 / (Date.now() - new Date(b.created_at).getTime() + 1));
+            return scoreB - scoreA;
+          });
+          break;
+      }
+      
+      setReviews(sortedReviews);
     } catch (error) {
       console.error('Error loading reviews:', error);
     } finally {
@@ -91,7 +119,7 @@ export const ReviewList: React.FC<ReviewListProps> = ({ parkingSpotId }) => {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>
-          利用者の感想 ({reviews.length}件)
+          利用者の感想 {reviews.length > 0 ? `(${reviews.length}件)` : ''}
         </Text>
       </View>
 

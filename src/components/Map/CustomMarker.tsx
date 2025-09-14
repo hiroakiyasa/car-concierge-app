@@ -52,7 +52,17 @@ const getMarkerIcon = (category: string): string => {
 
 export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress, calculatedFee, isSelected, isNearbyFacility }) => {
   const [calloutVisible, setCalloutVisible] = React.useState(false);
-  
+
+  // スポットのデータ検証
+  if (!spot ||
+      typeof spot.lat !== 'number' ||
+      typeof spot.lng !== 'number' ||
+      isNaN(spot.lat) ||
+      isNaN(spot.lng)) {
+    console.error('CustomMarker: Invalid spot data', spot);
+    return null;
+  }
+
   // 選択されたマーカーは自動的に吹き出しを表示
   React.useEffect(() => {
     if (isSelected) {
