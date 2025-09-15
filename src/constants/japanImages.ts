@@ -86,44 +86,6 @@ export const JAPAN_IMAGES = {
       photographer: 'Wenhao Ji',
       photographerUrl: 'https://unsplash.com/@zetaplusae',
     },
-    {
-      source: require('../../assets/japan/ranking_3.jpg'),
-      description: 'Tokyo Tower lighting up the night in Tokyo',
-      photographer: 'Frank Okay',
-      photographerUrl: 'https://unsplash.com/@frankokay',
-    },
-    {
-      source: require('../../assets/japan/ranking_4.jpg'),
-      description: 'Tokyo tower and city skyline lights photographed from above at night, Minato City area, Tokyo, Japan',
-      photographer: 'Rebecca Clarke',
-      photographerUrl: 'https://unsplash.com/@rebeccaclarke',
-    },
-    {
-      source: require('../../assets/japan/ranking_5.jpg'),
-      description: 'Cityscape of Tokyo at night, as seen from the top of one of the highest buildings in Roppongi Hills, with the illuminated Tokyo Tower glowing in the dark. Long exposure.',
-      photographer: 'Andres Garcia',
-      photographerUrl: 'https://unsplash.com/@andresgarcia',
-    },
-  ],
-  parking: [
-    {
-      source: require('../../assets/japan/parking_1.jpg'),
-      description: 'KYOTO TAXI',
-      photographer: 'chatnarin pramnapan',
-      photographerUrl: 'https://unsplash.com/@chatnarin',
-    },
-    {
-      source: require('../../assets/japan/parking_2.jpg'),
-      description: 'Parking robot that transports a car.',
-      photographer: 'Shoko Takahashi',
-      photographerUrl: 'https://unsplash.com/@incubion',
-    },
-    {
-      source: require('../../assets/japan/parking_3.jpg'),
-      description: 'Streets/highway in Roppongi',
-      photographer: 'Flo DC',
-      photographerUrl: 'https://unsplash.com/@flororoo',
-    },
   ],
   nature: [
     {

@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.carconciege.app",
-      "buildNumber": "17",
+      "buildNumber": "23",
       "infoPlist": {
         "NSCameraUsageDescription": "このアプリは駐車場や施設の写真を撮影するためにカメラを使用します。",
         "NSPhotoLibraryUsageDescription": "このアプリは駐車場や施設の写真を選択するために写真ライブラリへのアクセスが必要です。",

@@ -485,21 +485,25 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           displayedParkingSpots.forEach((parking: CoinParking) => {
             if ((currentFilter.convenienceStoreRadius || 0) > 0 && parking.nearestConvenienceStore) {
               const convenienceStore = parking.nearestConvenienceStore;
-              const id = convenienceStore.id || (convenienceStore as any).store_id;
+              // バックエンドからのデータ構造に対応（store_idフィールドを優先）
+              const id = (convenienceStore as any).store_id || convenienceStore.id;
               const distance = (convenienceStore as any).distance_m || convenienceStore.distance;
-              
+
               if (id) {
-                convenienceIds.add(id);
+                // IDを文字列として保存
+                convenienceIds.add(String(id));
                 console.log(`🏪 駐車場 ${parking.name} の最寄りコンビニ: ID=${id}, 距離=${distance}m`);
               }
             }
             if ((currentFilter.hotSpringRadius || 0) > 0 && parking.nearestHotspring) {
               const hotspring = parking.nearestHotspring;
-              const id = hotspring.id || (hotspring as any).spring_id;
+              // バックエンドからのデータ構造に対応（spring_idフィールドを優先）
+              const id = (hotspring as any).spring_id || hotspring.id;
               const distance = (hotspring as any).distance_m || hotspring.distance;
-              
+
               if (id) {
-                hotspringIds.add(id);
+                // IDを文字列として保存
+                hotspringIds.add(String(id));
                 console.log(`♨️ 駐車場 ${parking.name} の最寄り温泉: ID=${id}, 距離=${distance}m`);
               }
             }
@@ -509,24 +513,16 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           if (convenienceIds.size > 0) {
             const relatedStores = validSpots.filter(spot => {
               if (spot.category !== 'コンビニ') return false;
-              
-              // IDマッチングのバリエーションを試す
-              const spotId = spot.id;
-              const spotIdString = (spot as any).idString;
-              
+
+              // IDを文字列として比較
+              const spotId = String(spot.id);
+
               // デバッグ用
               if (validSpots.filter(s => s.category === 'コンビニ').indexOf(spot) < 3) {
-                console.log(`🏪 コンビニマッチング試行: spot.id=${spotId}, idString=${spotIdString}, 検索対象IDs:`, Array.from(convenienceIds));
+                console.log(`🏪 コンビニマッチング試行: spot.id=${spotId}, 検索対象IDs:`, Array.from(convenienceIds));
               }
-              
-              return convenienceIds.has(spotId) || 
-                     convenienceIds.has(spotIdString) ||
-                     Array.from(convenienceIds).some(id => 
-                       id === spotId || 
-                       id === spotIdString ||
-                       spotId === id ||
-                       spotIdString === id
-                     );
+
+              return convenienceIds.has(spotId);
             });
             
             if (relatedStores.length === 0 && convenienceIds.size > 0) {
@@ -542,19 +538,16 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           if (hotspringIds.size > 0) {
             const relatedSprings = validSpots.filter(spot => {
               if (spot.category !== '温泉') return false;
-              
-              const spotId = spot.id;
-              
+
+              // IDを文字列として比較
+              const spotId = String(spot.id);
+
               // デバッグ用
               if (validSpots.filter(s => s.category === '温泉').indexOf(spot) < 3) {
                 console.log(`♨️ 温泉マッチング試行: spot.id=${spotId}, 検索対象IDs:`, Array.from(hotspringIds));
               }
-              
-              return hotspringIds.has(spotId) ||
-                     Array.from(hotspringIds).some(id => 
-                       id === spotId ||
-                       spotId === id
-                     );
+
+              return hotspringIds.has(spotId);
             });
             
             if (relatedSprings.length === 0 && hotspringIds.size > 0) {
@@ -671,11 +664,41 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       計算南端: (region.latitude - region.latitudeDelta/2).toFixed(6),
     });
   };
+
+  // 指定したスポットを、画面上部の可視地図領域(例:40%)の中央に配置するためのユーティリティ
+  const animateMarkerToTopFractionCenter = (
+    spot: Spot,
+    visibleTopFraction = 0.4,
+    options?: { zoomScale?: number }
+  ) => {
+    if (!mapRef.current || !mapRegion) return;
+    const current = mapRegion;
+    const targetLatDelta = (current.latitudeDelta || 0.01) * (options?.zoomScale ?? 1);
+    const targetLngDelta = (current.longitudeDelta || 0.01) * (options?.zoomScale ?? 1);
+
+    // 目標スクリーン位置は「上部領域(visibleTopFraction)の上下中央」= 全体の visibleTopFraction/2
+    // 一般式: centerLat = markerLat - (0.5 - visibleTopFraction/2) * latDelta
+    const desired = Math.max(0, Math.min(1, visibleTopFraction / 2));
+    const centerLat = spot.lat - (0.5 - desired) * targetLatDelta; // 0.4のときは -0.3 * latDelta
+
+    mapRef.current.animateToRegion(
+      {
+        latitude: centerLat,
+        longitude: spot.lng,
+        latitudeDelta: targetLatDelta,
+        longitudeDelta: targetLngDelta,
+      },
+      500
+    );
+  };
   
   const handleMarkerPress = async (spot: Spot) => {
     selectSpot(spot);
     setShowDetailSheet(true);
-    
+
+    // 詳細シートが60%を占有 → 残り40%の中央にマーカーを配置
+    if (spot) animateMarkerToTopFractionCenter(spot, 0.4);
+
     // コインパーキングの場合、最寄りの施設を地図に表示
     if (spot.category === 'コインパーキング') {
       const parkingSpot = spot as CoinParking;
@@ -785,10 +808,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         let latDelta = Math.max((maxLat - minLat) * 2.5, 0.01);
         let lngDelta = Math.max((maxLng - minLng) * 2.5, 0.01);
         
-        // 駐車場を画面上部50%の中央に配置するための計算
-        // 詳細シートが50%なので、表示領域の上部50%の中心に駐車場を配置
-        // つまり、駐車場から下方向に latDelta * 0.75、上方向に latDelta * 0.25 の範囲を表示
-        const offsetCenterLat = spot.lat - latDelta * 0.25;
+        // 可視上部40%の上下中央(=全体の20%位置)にスポットを配置
+        const desired = 0.4 / 2; // 0.2
+        const offsetCenterLat = spot.lat - (0.5 - desired) * latDelta; // = spot.lat - 0.3*latDelta
         
         console.log('🗺️ 地図範囲調整:', {
           施設数: allSpots.length,
@@ -796,28 +818,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           地図中心: { lat: offsetCenterLat, lng: spot.lng },
           範囲: { latDelta, lngDelta }
         });
-        
         mapRef.current.animateToRegion({
           latitude: offsetCenterLat,
-          longitude: spot.lng,  // 駐車場の経度を中心に
+          longitude: spot.lng,
           latitudeDelta: latDelta,
           longitudeDelta: lngDelta,
-        }, 500);
+        }, 300);
       }
     } else {
       // コインパーキング以外の場合は最寄り施設をクリア
       setNearbyFacilities([]);
       
       // 通常の施設選択時の表示（上部50%の中央に配置）
-      if (mapRef.current) {
-        const offsetLatitude = spot.lat - 0.002;  // 画面上部50%の中央に配置
-        mapRef.current.animateToRegion({
-          latitude: offsetLatitude,
-          longitude: spot.lng,
-          latitudeDelta: 0.008,
-          longitudeDelta: 0.008,
-        }, 500);
-      }
+      // センタリングは既にhandleMarkerPressで実行済み
     }
   };
   
@@ -826,18 +839,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     // 詳細表示はしない（マーカータップで表示）
     setShowDetailSheet(false);
     
-    // 選択した駐車場を画面上部50%の中央に表示
-    if (mapRef.current) {
-      // 画面の上部50%の中央に配置するため、少し下にオフセット
-      const offsetLatitude = spot.lat - 0.002; // 緯度を少し下げて上部中央に配置
-      
-      mapRef.current.animateToRegion({
-        latitude: offsetLatitude,
-        longitude: spot.lng,
-        latitudeDelta: 0.008,
-        longitudeDelta: 0.008,
-      }, 500);
-    }
+    // 選択した駐車場を画面上部40%の中央に表示
+    animateMarkerToTopFractionCenter(spot, 0.4);
   };
   
   const renderMarkers = () => {
@@ -1238,10 +1241,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             // 表示範囲を計算（パディングを追加）
             let latDelta = Math.max((maxLat - minLat) * 2.5, 0.01);
             let lngDelta = Math.max((maxLng - minLng) * 2.5, 0.01);
-            
-            // 駐車場を画面上部50%の中央に配置するための計算
-            const offsetCenterLat = spot.lat - latDelta * 0.25;
-            
+
+            // 駐車場を画面上部40%の中央に配置するための計算
+            const offsetCenterLat = spot.lat - (0.5 - 0.4/2) * latDelta; // = spot.lat - 0.3 * latDelta
+
             mapRef.current.animateToRegion({
               latitude: offsetCenterLat,
               longitude: spot.lng,  // 駐車場の経度を中心に
@@ -1249,13 +1252,16 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
               longitudeDelta: lngDelta,
             }, 300);
           } else if (mapRef.current) {
-            // 施設がない場合は駐車場のみを表示（上部50%の中央に）
-            const offsetLatitude = spot.lat - 0.002;  // 画面上部50%の中央に配置
+            // 施設がない場合は駐車場のみを表示（上部40%の中央に）
+            const current = mapRegion;
+            const latDelta = (current?.latitudeDelta || 0.01);
+            const lngDelta = (current?.longitudeDelta || 0.01);
+            const centerLat = spot.lat - (0.5 - 0.4/2) * latDelta; // = spot.lat - 0.3 * latDelta
             mapRef.current.animateToRegion({
-              latitude: offsetLatitude,
+              latitude: centerLat,
               longitude: spot.lng,
-              latitudeDelta: 0.008,
-              longitudeDelta: 0.008,
+              latitudeDelta: latDelta,
+              longitudeDelta: lngDelta,
             }, 300);
           }
           

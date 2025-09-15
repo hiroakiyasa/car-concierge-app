@@ -1,5 +1,6 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Image, Platform } from 'react-native';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { Marker, Callout } from './CrossPlatformMap';
 import { Spot, ConvenienceStore, GasStation, CoinParking, HotSpring } from '@/types';
 import { getConvenienceStoreLogo, getGasStationLogo } from '@/utils/brandLogos';
@@ -12,16 +13,16 @@ interface CustomMarkerProps {
   onPress?: () => void;
   calculatedFee?: number;
   isSelected?: boolean;
-  isNearbyFacility?: boolean; // 最寄り施設フラグを追加
+  isNearbyFacility?: boolean;
 }
 
 const getMarkerColor = (category: string): string => {
   switch (category) {
-    case 'コインパーキング': return '#007AFF'; // iOSブルー
-    case 'コンビニ': return '#FF9500'; // オレンジ
-    case '温泉': return '#FFD700'; // 黄色（ゴールド）
-    case 'ガソリンスタンド': return '#FF3B30'; // 赤
-    case 'お祭り・花火大会': return '#AF52DE'; // 紫
+    case 'コインパーキング': return '#007AFF';
+    case 'コンビニ': return '#FF9500';
+    case '温泉': return '#FFD700';
+    case 'ガソリンスタンド': return '#FF3B30';
+    case 'お祭り・花火大会': return '#AF52DE';
     default: return '#8E8E93';
   }
 };
@@ -37,42 +38,25 @@ const getMarkerIcon = (category: string): string => {
   }
 };
 
-export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress, calculatedFee, isSelected, isNearbyFacility }) => {
-  const [calloutVisible, setCalloutVisible] = React.useState(false);
-
+export const CustomMarker: React.FC<CustomMarkerProps> = ({
+  spot,
+  rank,
+  onPress,
+  calculatedFee,
+  isSelected,
+  isNearbyFacility
+}) => {
   // スポットのデータ検証
-  if (!spot ||
-      typeof spot.lat !== 'number' ||
-      typeof spot.lng !== 'number' ||
-      isNaN(spot.lat) ||
-      isNaN(spot.lng)) {
+  if (!spot || typeof spot.lat !== 'number' || typeof spot.lng !== 'number' || isNaN(spot.lat) || isNaN(spot.lng)) {
     console.error('CustomMarker: Invalid spot data', spot);
     return null;
   }
 
-  // 選択されたマーカーは自動的に吹き出しを表示
-  React.useEffect(() => {
-    if (isSelected) {
-      setCalloutVisible(true);
-    }
-  }, [isSelected]);
+  // Androidの場合はデバッグログを追加
+  if (Platform.OS === 'android' && spot.category === 'コインパーキング' && rank && rank <= 3) {
+    console.log(`🤖 Android Marker: ${spot.name}, rank: ${rank}, lat: ${spot.lat}, lng: ${spot.lng}`);
+  }
 
-  // マーカータップ時の処理
-  const handleMarkerPress = () => {
-    if (!calloutVisible) {
-      // 初回タップ：吹き出しを表示
-      setCalloutVisible(true);
-    } else {
-      // 2回目タップ：詳細画面を表示
-      if (onPress) onPress();
-    }
-  };
-
-  // 吹き出しタップ時の処理
-  const handleCalloutPress = () => {
-    if (onPress) onPress();
-  };
-  
   // コンビニとガソリンスタンドのロゴを取得
   const getLogoForSpot = () => {
     if (spot.category === 'コンビニ') {
@@ -88,33 +72,137 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
     }
     return null;
   };
-  
+
   const logo = getLogoForSpot();
-  
-  // ガソリンスタンドでロゴがある場合 - 四角形マーカーに色付け
-  if (spot.category === 'ガソリンスタンド' && logo) {
+
+  // ANDROID専用の円描画（右下欠け対策: SVGで縁取り+塗りつぶしを描画）
+  const AndroidCircle: React.FC<{
+    size: number;
+    fill: string;
+    stroke?: string;
+    strokeWidth?: number;
+    children?: React.ReactNode;
+  }> = ({ size, fill, stroke = '#FFFFFF', strokeWidth = 2, children }) => {
+    // 余白は過度に広げず+6pxで解像度差によるブラーを最小化
+    const total = size + strokeWidth * 2 + 6;
+    const rOuter = (size / 2) + strokeWidth;
+    const rInner = size / 2;
+    return (
+      <View
+        style={{ width: total, height: total, alignItems: 'center', justifyContent: 'center' }}
+        renderToHardwareTextureAndroid
+        collapsable={false}
+        needsOffscreenAlphaCompositing
+        // レイアウトは特にフックしない（tracks常時true運用）
+      >
+        <Svg width={total} height={total}>
+          {/* 外側: ストローク分を塗る（ボーダーの代替） */}
+          <SvgCircle cx={total / 2} cy={total / 2} r={rOuter} fill={stroke} />
+          {/* 内側: 実際の塗り */}
+          <SvgCircle cx={total / 2} cy={total / 2} r={rInner} fill={fill} />
+        </Svg>
+        {children ? (
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              {children}
+            </View>
+          </View>
+        ) : null}
+      </View>
+    );
+  };
+
+  // 料金をフォーマット（駐車場用）
+  const formatPrice = () => {
+    if (calculatedFee !== undefined && calculatedFee !== null && calculatedFee >= 0) {
+      return calculatedFee === 0 ? '無料' : `¥${calculatedFee.toLocaleString()}`;
+    }
+
+    const parking = spot as CoinParking;
+    if (parking.calculatedFee !== undefined && parking.calculatedFee !== null && parking.calculatedFee >= 0) {
+      return parking.calculatedFee === 0 ? '無料' : `¥${parking.calculatedFee.toLocaleString()}`;
+    }
+
+    // hourly_priceフィールドは存在しないため削除
+
+    if (parking.rates && parking.rates.length > 0) {
+      const baseRate = parking.rates.find(r => r.type === 'base');
+      if (baseRate) {
+        return `${baseRate.minutes}分 ¥${baseRate.price}`;
+      }
+    }
+
+    return '料金情報なし';
+  };
+
+  // マーカーのスタイルを取得（駐車場用）
+  const getMarkerStyle = () => {
+    if (spot.category !== 'コインパーキング' || !rank || rank > 20) {
+      return styles.parkingMarker;
+    }
+
+    const baseStyle = (() => {
+      switch(rank) {
+        case 1: return styles.goldMarker;
+        case 2: return styles.silverMarker;
+        case 3: return styles.bronzeMarker;
+        default: return styles.parkingMarker;
+      }
+    })();
+
+    if (isSelected) {
+      return [baseStyle, styles.selectedMarker];
+    }
+    return baseStyle;
+  };
+
+  // ガソリンスタンドの情報取得
+  const getGasStationInfo = () => {
+    if (spot.category !== 'ガソリンスタンド') return null;
     const gasStation = spot as GasStation;
     const markerColor = getGasStationMarkerColor(gasStation.services);
     const priceDiff = formatPriceDifference(gasStation.services?.regular_price, NATIONAL_AVERAGE_PRICES.regular);
-    const isWhite = markerColor === '#FFFFFF';
-    
-    return (
-      <Marker
-        coordinate={{
-          latitude: spot.lat,
-          longitude: spot.lng,
-        }}
-        onPress={handleMarkerPress}
-        tracksViewChanges={true}
-        anchor={{ x: 0.5, y: 0.5 }}
-        title={spot.name}
-        description={gasStation.services?.regular_price ? `レギュラー: ${priceDiff}` : ''}
-      >
+    return { markerColor, priceDiff, isWhite: markerColor === '#FFFFFF' };
+  };
+
+  const gasInfo = getGasStationInfo();
+
+  // Androidでのカスタムビューの問題を回避するため、シンプルな実装にする
+  const renderMarkerContent = () => {
+    // Androidの場合はマーカーをラップするコンテナを追加
+    const wrapInContainer = (content: React.ReactNode) => {
+      if (Platform.OS === 'android') {
+        return (
+          <View
+            style={styles.androidMarkerContainer}
+            // Androidでのビットマップ化時の端欠けを防止
+            renderToHardwareTextureAndroid
+            collapsable={false}
+          >
+            {content}
+          </View>
+        );
+      }
+      return content;
+    };
+    // ガソリンスタンドでロゴがある場合
+    if (spot.category === 'ガソリンスタンド' && logo && gasInfo) {
+      // Androidではシンプルな円形マーカーを使用
+      if (Platform.OS === 'android') {
+        return (
+          <AndroidCircle size={32} fill={gasInfo.markerColor} stroke="#FFFFFF" strokeWidth={2}>
+            <Text style={styles.simpleMarkerText}>⛽</Text>
+          </AndroidCircle>
+        );
+      }
+
+      // iOSでは詳細なデザインを使用
+      return (
         <View style={[
           styles.gasStationLogoMarker,
-          { 
-            backgroundColor: markerColor,
-            borderColor: isWhite ? '#CCCCCC' : '#FFFFFF'
+          {
+            backgroundColor: gasInfo.markerColor,
+            borderColor: gasInfo.isWhite ? '#CCCCCC' : '#FFFFFF'
           },
           isNearbyFacility && styles.nearbyFacilityGasLogoMarker
         ]}>
@@ -122,369 +210,437 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({ spot, rank, onPress,
             <Image source={logo} style={styles.gasLogoImage} resizeMode="contain" />
           </View>
         </View>
-        <Callout onPress={handleCalloutPress}>
-          <View style={styles.gasStationCallout}>
-            <Text style={styles.gasStationCalloutName} numberOfLines={2}>
-              {spot.name}
-            </Text>
-            {gasStation.services?.regular_price && (
-              <View style={styles.gasCalloutPriceRow}>
-                <Text style={styles.gasCalloutPriceLabel}>レギュラー</Text>
-                <Text style={[
-                  styles.gasCalloutPriceDiff,
-                  { color: markerColor }
-                ]}>
-                  {priceDiff}
-                </Text>
-              </View>
-            )}
-          </View>
-        </Callout>
-      </Marker>
-    );
-  }
-  
-  // コンビニでロゴがある場合 - 丸形マーカー
-  if (spot.category === 'コンビニ' && logo) {
-    return (
-      <Marker
-        coordinate={{
-          latitude: spot.lat,
-          longitude: spot.lng,
-        }}
-        onPress={handleMarkerPress}
-        tracksViewChanges={true}
-        anchor={{ x: 0.5, y: 0.5 }}
-        title={spot.name}
-        description={''}
-      >
+      );
+    }
+
+    // コンビニでロゴがある場合
+    if (spot.category === 'コンビニ' && logo) {
+      // Androidではシンプルな円形マーカーを使用
+      if (Platform.OS === 'android') {
+        return (
+          <AndroidCircle size={32} fill={'#FF9500'} stroke="#FFFFFF" strokeWidth={2}>
+            <Text style={styles.simpleMarkerText}>🏪</Text>
+          </AndroidCircle>
+        );
+      }
+
+      // iOSでは詳細なデザインを使用
+      return (
         <View style={[
           styles.logoMarker,
-          isNearbyFacility && styles.nearbyFacilityLogoMarker // 最寄り施設の場合は青い枠を追加
+          isNearbyFacility && styles.nearbyFacilityLogoMarker
         ]}>
           <Image source={logo} style={styles.logoImage} resizeMode="contain" />
         </View>
-        <Callout onPress={handleCalloutPress}>
-          <View style={styles.calloutContainer}>
-            <Text style={styles.calloutName} numberOfLines={1}>{spot.name}</Text>
-          </View>
-        </Callout>
-      </Marker>
-    );
-  }
-  
-  // For parking spots with ranking, show custom marker with rank-based color
-  if (spot.category === 'コインパーキング' && rank && rank <= 20) {
-    // 1位=ゴールド、2位=シルバー、3位=ブロンズ、その他=ブルー
-    const getMarkerStyle = () => {
-      const baseStyle = (() => {
-        switch(rank) {
-          case 1: return styles.goldMarker;
-          case 2: return styles.silverMarker;
-          case 3: return styles.bronzeMarker;
-          default: return styles.parkingMarker;
-        }
-      })();
-      
-      // 選択されている場合は強調表示
-      if (isSelected) {
-        return [baseStyle, styles.selectedMarker];
+      );
+    }
+
+    // 駐車場（ランキング表示）
+    if (spot.category === 'コインパーキング' && rank && rank <= 20) {
+      if (Platform.OS === 'android') {
+        // 色は順位に応じて切替
+        let fill = '#007AFF';
+        if (rank === 1) fill = '#FFD700';
+        else if (rank === 2) fill = '#C0C0C0';
+        else if (rank === 3) fill = '#CD7F32';
+        const stroke = isSelected ? '#FF0000' : '#FFFFFF';
+        return (
+          <AndroidCircle size={36} fill={fill} stroke={stroke} strokeWidth={3}>
+            <Text style={styles.parkingMarkerText}>{rank}</Text>
+          </AndroidCircle>
+        );
       }
-      return baseStyle;
-    };
-    
-    // 料金をフォーマット
-    const formatPrice = () => {
-      // calculatedFeeが渡されている場合（ランキング表示時）
-      if (calculatedFee !== undefined && calculatedFee !== null && calculatedFee >= 0) {
-        return calculatedFee === 0 ? '無料' : `¥${calculatedFee.toLocaleString()}`;
-      }
-      
-      // spotにcalculatedFeeが含まれている場合
-      const parking = spot as CoinParking;
-      if (parking.calculatedFee !== undefined && parking.calculatedFee !== null && parking.calculatedFee >= 0) {
-        return parking.calculatedFee === 0 ? '無料' : `¥${parking.calculatedFee.toLocaleString()}`;
-      }
-      
-      // hourly_priceがある場合（レガシーフィールド）
-      if (parking.hourly_price) {
-        return `¥${parking.hourly_price}/時間`;
-      }
-      
-      // rates配列から基本料金を取得
-      if (parking.rates && parking.rates.length > 0) {
-        const baseRate = parking.rates.find(r => r.type === 'base');
-        if (baseRate) {
-          return `${baseRate.minutes}分 ¥${baseRate.price}`;
-        }
-      }
-      
-      return '料金情報なし';
-    };
-    
-    return (
-      <Marker
-        coordinate={{
-          latitude: spot.lat,
-          longitude: spot.lng,
-        }}
-        onPress={handleMarkerPress}
-        tracksViewChanges={true}
-        anchor={{ x: 0.5, y: 1 }}
-        title={spot.name}
-        description={formatPrice()}
-      >
+      return (
         <View style={getMarkerStyle()}>
           <Text style={styles.parkingMarkerText}>{rank}</Text>
         </View>
-        <Callout onPress={handleCalloutPress}>
-          <View style={styles.parkingCalloutContainer}>
-            <View style={styles.parkingCalloutHeader}>
-              <View style={[styles.calloutRankBadge, 
-                rank === 1 && styles.goldBadge,
-                rank === 2 && styles.silverBadge,
-                rank === 3 && styles.bronzeBadge
-              ]}>
-                <Text style={styles.calloutRankText}>{rank}</Text>
-              </View>
-              <Text style={styles.parkingCalloutPrice}>{formatPrice()}</Text>
-            </View>
-            <Text style={styles.parkingCalloutName}>{spot.name}</Text>
-          </View>
-        </Callout>
-      </Marker>
-    );
-  }
+      );
+    }
 
-  // For gas stations, show square marker with gradient color
-  if (spot.category === 'ガソリンスタンド') {
-    const gasStation = spot as GasStation;
-    const markerColor = getGasStationMarkerColor(gasStation.services);
-    const priceDiff = formatPriceDifference(gasStation.services?.regular_price, NATIONAL_AVERAGE_PRICES.regular);
-    const isWhite = markerColor === '#FFFFFF';
-    
-    return (
-      <Marker
-        coordinate={{
-          latitude: spot.lat,
-          longitude: spot.lng,
-        }}
-        onPress={handleMarkerPress}
-        tracksViewChanges={true}
-        anchor={{ x: 0.5, y: 1 }}
-        title={spot.name}
-        description={gasStation.services?.regular_price ? `レギュラー: ${priceDiff}` : ''}
-      >
+    // ガソリンスタンド（ロゴなし）
+    if (spot.category === 'ガソリンスタンド' && gasInfo) {
+      // Androidではシンプルな円形マーカーを使用
+      if (Platform.OS === 'android') {
+        return (
+          <AndroidCircle size={32} fill={gasInfo.markerColor} stroke="#FFFFFF" strokeWidth={2}>
+            <Text style={styles.simpleMarkerText}>⛽</Text>
+          </AndroidCircle>
+        );
+      }
+
+      // iOSでは詳細なデザインを使用
+      return (
         <View style={[
           styles.gasStationMarker,
-          { 
-            backgroundColor: markerColor,
-            borderColor: isWhite ? '#CCCCCC' : '#FFFFFF'
+          {
+            backgroundColor: gasInfo.markerColor,
+            borderColor: gasInfo.isWhite ? '#CCCCCC' : '#FFFFFF'
           },
           isNearbyFacility && styles.nearbyFacilityGasMarker
         ]}>
           <Text style={styles.gasStationMarkerIcon}>⛽</Text>
         </View>
-        <Callout onPress={handleCalloutPress}>
-          <View style={styles.gasStationCallout}>
-            <Text style={styles.gasStationCalloutName} numberOfLines={2}>
-              {spot.name}
-            </Text>
-            {gasStation.services?.regular_price && (
-              <View style={styles.gasCalloutPriceRow}>
-                <Text style={styles.gasCalloutPriceLabel}>レギュラー</Text>
-                <Text style={[
-                  styles.gasCalloutPriceDiff,
-                  { color: markerColor }
-                ]}>
-                  {priceDiff}
-                </Text>
-              </View>
-            )}
-          </View>
-        </Callout>
-      </Marker>
-    );
-  }
+      );
+    }
 
-  // For other categories, show colored marker with icon
+    // その他のカテゴリー
+    if (Platform.OS === 'android') {
+      return (
+        <AndroidCircle
+          size={32}
+          fill={getMarkerColor(spot.category)}
+          stroke={isNearbyFacility ? '#007AFF' : '#FFFFFF'}
+          strokeWidth={isNearbyFacility ? 3 : 2}
+        >
+          <Text style={styles.categoryMarkerIcon}>{getMarkerIcon(spot.category)}</Text>
+        </AndroidCircle>
+      );
+    }
+    return (
+      <View style={[
+        styles.categoryMarker,
+        { backgroundColor: getMarkerColor(spot.category) },
+        isNearbyFacility && styles.nearbyFacilityMarker
+      ]}>
+        <Text style={styles.categoryMarkerIcon}>{getMarkerIcon(spot.category)}</Text>
+      </View>
+    );
+  };
+
+  // Calloutのコンテンツを生成
+  const renderCalloutContent = () => {
+    // 駐車場用のCallout
+    if (spot.category === 'コインパーキング' && rank && rank <= 20) {
+      return (
+        <View style={styles.parkingCalloutContainer}>
+          <View style={styles.parkingCalloutHeader}>
+            <View style={[styles.calloutRankBadge,
+              rank === 1 && styles.goldBadge,
+              rank === 2 && styles.silverBadge,
+              rank === 3 && styles.bronzeBadge
+            ]}>
+              <Text style={styles.calloutRankText}>{rank}</Text>
+            </View>
+            <Text style={styles.parkingCalloutPrice}>{formatPrice()}</Text>
+          </View>
+          <Text style={styles.parkingCalloutName}>{spot.name}</Text>
+        </View>
+      );
+    }
+
+    // ガソリンスタンド用のCallout
+    if (spot.category === 'ガソリンスタンド' && gasInfo) {
+      const gasStation = spot as GasStation;
+      return (
+        <View style={styles.gasStationCallout}>
+          <Text style={styles.gasStationCalloutName} numberOfLines={2}>
+            {spot.name}
+          </Text>
+          {gasStation.services?.regular_price && (
+            <View style={styles.gasCalloutPriceRow}>
+              <Text style={styles.gasCalloutPriceLabel}>レギュラー</Text>
+              <Text style={[
+                styles.gasCalloutPriceDiff,
+                { color: gasInfo.markerColor }
+              ]}>
+                {gasInfo.priceDiff}
+              </Text>
+            </View>
+          )}
+        </View>
+      );
+    }
+
+    // その他のカテゴリー用のCallout
+    return (
+      <View style={styles.calloutContainer}>
+        <Text style={styles.calloutName}>{spot.name}</Text>
+        {spot.category === '温泉' && (spot as HotSpring).price && (
+          <Text style={styles.calloutPrice}>{(spot as HotSpring).price}</Text>
+        )}
+      </View>
+    );
+  };
+
+  // マーカータイトルと説明の生成
+  const getMarkerTitle = () => spot.name;
+  const getMarkerDescription = () => {
+    if (spot.category === 'コインパーキング' && rank) {
+      return formatPrice();
+    }
+    if (spot.category === 'ガソリンスタンド' && gasInfo) {
+      const gasStation = spot as GasStation;
+      return gasStation.services?.regular_price ? `レギュラー: ${gasInfo.priceDiff}` : '';
+    }
+    if (spot.category === '温泉') {
+      return (spot as HotSpring).price || '';
+    }
+    return '';
+  };
+
+  // Android: 初回だけtracksViewChangesを有効にし、安定後にfalseへ
+  const [tracks, setTracks] = useState(Platform.OS === 'android');
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const t = setTimeout(() => setTracks(false), 500);
+      return () => clearTimeout(t);
+    }
+  }, [spot?.id, rank]);
+
   return (
     <Marker
       coordinate={{
         latitude: spot.lat,
         longitude: spot.lng,
       }}
-      onPress={handleMarkerPress}
-      tracksViewChanges={true}
-      anchor={{ x: 0.5, y: 1 }}
-      title={spot.name}
-      description={spot.category === '温泉' && (spot as HotSpring).price ? (spot as HotSpring).price : ''}
+      onPress={onPress}
+      // 初回のみtrue、以降falseにしてスナップショット安定
+      tracksViewChanges={Platform.OS === 'android' ? tracks : undefined}
+      // 円は中心アンカーでクリッピングを抑制
+      anchor={Platform.OS === 'android' ? { x: 0.5, y: 0.5 } : { x: 0.5, y: 1 }}
+      // Androidでの重なり順を安定化
+      zIndex={Platform.OS === 'android' ? (isSelected ? 1000 : (rank ? 900 - (rank as number) : 500)) : undefined}
+      title={getMarkerTitle()}
+      description={getMarkerDescription()}
     >
-      <View style={[
-        styles.categoryMarker, 
-        { backgroundColor: getMarkerColor(spot.category) },
-        isNearbyFacility && styles.nearbyFacilityMarker // 最寄り施設の場合は目立つ枠を追加
-      ]}>
-        <Text style={styles.categoryMarkerIcon}>{getMarkerIcon(spot.category)}</Text>
-      </View>
-      <Callout tooltip onPress={handleCalloutPress}>
-        <View style={styles.calloutContainer}>
-          <Text style={styles.calloutName}>{spot.name}</Text>
-          {spot.category === '温泉' && (spot as HotSpring).price && (
-            <Text style={styles.calloutPrice}>{(spot as HotSpring).price}</Text>
-          )}
-        </View>
+      {renderMarkerContent()}
+      <Callout>
+        {renderCalloutContent()}
       </Callout>
     </Marker>
   );
 };
 
 const styles = StyleSheet.create({
+  // Androidマーカーコンテナ
+  androidMarkerContainer: {
+    // Androidのビットマップ化で右下が欠ける問題への対策
+    // マーカーより大きめのコンテナで余裕を持たせる
+    width: 50,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    padding: 5, // 周囲に余白を追加して切れを防ぐ
+  },
+  // シンプルなマーカー（Android用）
+  simpleMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    // elevation削除（Androidのマーカーで問題を起こす）
+  },
+  simpleMarkerText: {
+    fontSize: 16,
+    lineHeight: 16,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    textAlignVertical: 'center', // Android
+    includeFontPadding: false as any, // Android専用
+  },
+  // 駐車場マーカー
   parkingMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: Platform.OS === 'android' ? 28 : 32,
+    height: Platform.OS === 'android' ? 28 : 32,
+    borderRadius: Platform.OS === 'android' ? 14 : 16,
     backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 3,
-    overflow: 'visible',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+      },
+      android: {
+        // elevationなし - Androidのマーカー切れ問題を防ぐ
+      },
+    }),
   },
   goldMarker: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: Platform.OS === 'android' ? 32 : 36,
+    height: Platform.OS === 'android' ? 32 : 36,
+    borderRadius: Platform.OS === 'android' ? 16 : 18,
     backgroundColor: '#FFD700',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#FFFFFF',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 4,
-    overflow: 'visible',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#FFD700',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.3,
+        shadowRadius: 2,
+      },
+      android: {
+        // elevationなし
+      },
+    }),
   },
   silverMarker: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: Platform.OS === 'android' ? 32 : 36,
+    height: Platform.OS === 'android' ? 32 : 36,
+    borderRadius: Platform.OS === 'android' ? 16 : 18,
     backgroundColor: '#C0C0C0',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 2,
-    elevation: 4,
-    overflow: 'visible',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.25,
+        shadowRadius: 2,
+      },
+      android: {
+        // elevationなし
+      },
+    }),
   },
   bronzeMarker: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: Platform.OS === 'android' ? 32 : 36,
+    height: Platform.OS === 'android' ? 32 : 36,
+    borderRadius: Platform.OS === 'android' ? 16 : 18,
     backgroundColor: '#CD7F32',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#FFFFFF',
-    shadowColor: '#CD7F32',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 2,
-    elevation: 4,
-    overflow: 'visible',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#CD7F32',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.25,
+        shadowRadius: 2,
+      },
+      android: {
+        // elevationなし
+      },
+    }),
   },
   selectedMarker: {
-    transform: [{ scale: 1.3 }],
+    // transform削除 - Androidでの切れを防ぐ
     borderColor: '#FF0000',
     borderWidth: 4,
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 10,
+    ...Platform.select({
+      ios: {
+        transform: [{ scale: 1.2 }],
+        shadowOpacity: 0.5,
+        shadowRadius: 6,
+      },
+      android: {
+        // elevationとtransformなし
+      },
+    }),
   },
   parkingMarkerText: {
     color: '#FFFFFF',
     fontSize: 14,
+    lineHeight: 14,
     fontWeight: 'bold',
+    textAlign: 'center',
+    textAlignVertical: 'center', // Android
+    includeFontPadding: false as any,
   },
   categoryMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: Platform.OS === 'android' ? 28 : 32,
+    height: Platform.OS === 'android' ? 28 : 32,
+    borderRadius: Platform.OS === 'android' ? 14 : 16,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+      },
+      android: {
+        // elevationなし - マーカー切れを防ぐ
+      },
+    }),
   },
   categoryMarkerIcon: {
     fontSize: 18,
+    lineHeight: 18,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false as any,
   },
   nearbyFacilityMarker: {
-    borderWidth: 4,
-    borderColor: '#007AFF', // 青色の太い枠
-    shadowColor: '#007AFF',
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 8,
-    transform: [{ scale: 1.1 }], // 少し大きく表示
+    borderWidth: 3,
+    borderColor: '#007AFF',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#007AFF',
+        shadowOpacity: 0.4,
+        shadowRadius: 6,
+      },
+      android: {
+        // elevationなし
+      },
+    }),
+    // transform削除 - Androidで切れを防ぐ
   },
   logoMarker: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderRadius: 18,
+    padding: 3,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+      },
+      android: {
+        // elevationなし
+      },
+    }),
   },
   nearbyFacilityLogoMarker: {
-    borderWidth: 4,
-    borderColor: '#007AFF', // 青色の太い枠
-    shadowColor: '#007AFF',
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 8,
-    transform: [{ scale: 1.1 }], // 少し大きく表示
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    borderWidth: 3,
+    borderColor: '#007AFF',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#007AFF',
+        shadowOpacity: 0.4,
+        shadowRadius: 6,
+      },
+      android: {
+        // elevationとtransformなし
+      },
+    }),
   },
   logoImage: {
     width: 32,
     height: 32,
   },
-  // 駐車場用の吹き出しスタイル
+  // 駐車場用のCallout
   parkingCalloutContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 10,
-    minWidth: 150,
-    maxWidth: 280,  // 最大幅を広げて長い名前に対応
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 8,
+    padding: 12,
+    minWidth: Platform.OS === 'android' ? 160 : 180,
+    maxWidth: Platform.OS === 'android' ? 260 : 280,
   },
   parkingCalloutHeader: {
     flexDirection: 'row',
@@ -493,9 +649,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   calloutRankBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -511,98 +667,93 @@ const styles = StyleSheet.create({
   },
   calloutRankText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
   },
   parkingCalloutPrice: {
-    fontSize: 16,
+    fontSize: Platform.OS === 'android' ? 16 : 18,
     fontWeight: '700',
     color: Colors.primary,
     flex: 1,
   },
   parkingCalloutName: {
-    fontSize: 12,
+    fontSize: Platform.OS === 'android' ? 13 : 14,
     color: '#333',
-    lineHeight: 16,
-    flexWrap: 'wrap',  // 長い名前を折り返し表示
+    lineHeight: Platform.OS === 'android' ? 16 : 18,
+    flexWrap: 'wrap',
   },
-  calloutTapHint: {
-    fontSize: 11,
-    color: '#666',
-    fontStyle: 'italic',
-    marginTop: 4,
-  },
-  // その他のカテゴリー用の吹き出しスタイル
+  // その他のCallout
   calloutContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
-    padding: 10,
-    minWidth: 120,
-    maxWidth: 280,  // 最大幅を広げて長い名前に対応
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 2,
+    padding: Platform.OS === 'android' ? 10 : 12,
+    minWidth: Platform.OS === 'android' ? 140 : 160,
+    maxWidth: Platform.OS === 'android' ? 240 : 260,
   },
   calloutName: {
-    fontSize: 14,
+    fontSize: Platform.OS === 'android' ? 14 : 16,
     fontWeight: '600',
     color: '#333',
-    flexWrap: 'wrap',  // 長い名前を折り返し表示
-    lineHeight: 18,    // 読みやすい行間
+    flexWrap: 'wrap',
+    lineHeight: Platform.OS === 'android' ? 18 : 20,
   },
   calloutPrice: {
-    fontSize: 13,
+    fontSize: Platform.OS === 'android' ? 13 : 14,
     fontWeight: '500',
     color: Colors.primary,
     marginTop: 4,
   },
-  // Gas Station Square Marker Styles
+  // ガソリンスタンドマーカー
   gasStationMarker: {
-    width: 34,
-    height: 34,
-    borderRadius: 6, // Square with slightly rounded corners
+    width: 32,
+    height: 32,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        // elevationなし
+      },
+    }),
   },
   nearbyFacilityGasMarker: {
     borderWidth: 3,
     borderColor: '#007AFF',
-    shadowColor: '#007AFF',
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 8,
-    transform: [{ scale: 1.1 }],
+    ...Platform.select({
+      ios: {
+        shadowColor: '#007AFF',
+        shadowOpacity: 0.4,
+        shadowRadius: 6,
+      },
+      android: {
+        // elevationとtransformなし
+      },
+    }),
   },
   gasStationMarkerIcon: {
     fontSize: 20,
   },
   gasStationCallout: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    minWidth: 180,
-    maxWidth: 280,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 8,
+    padding: Platform.OS === 'android' ? 10 : 12,
+    minWidth: Platform.OS === 'android' ? 160 : 180,
+    maxWidth: Platform.OS === 'android' ? 260 : 280,
   },
   gasStationCalloutName: {
-    fontSize: 14,
+    fontSize: Platform.OS === 'android' ? 14 : 16,
     fontWeight: '600',
     color: '#1A1A1A',
-    marginBottom: 8,
-    lineHeight: 18,
+    marginBottom: Platform.OS === 'android' ? 6 : 8,
+    lineHeight: Platform.OS === 'android' ? 18 : 20,
   },
   gasCalloutPriceRow: {
     flexDirection: 'row',
@@ -614,45 +765,51 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   gasCalloutPriceLabel: {
-    fontSize: 11,
+    fontSize: Platform.OS === 'android' ? 11 : 12,
     color: '#666',
     fontWeight: '500',
   },
-  gasCalloutPrice: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FF6B35',
-  },
   gasCalloutPriceDiff: {
-    fontSize: 15,
+    fontSize: Platform.OS === 'android' ? 14 : 16,
     fontWeight: '700',
   },
-  // Gas Station Logo Marker Styles
+  // ガソリンスタンドロゴマーカー
   gasStationLogoMarker: {
-    width: 42,
-    height: 42,
-    borderRadius: 6, // Square with rounded corners
+    width: 38,
+    height: 38,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-    padding: 4,
+    padding: 3,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        // elevationなし
+      },
+    }),
   },
   nearbyFacilityGasLogoMarker: {
     borderWidth: 3,
     borderColor: '#007AFF',
-    shadowColor: '#007AFF',
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 8,
-    transform: [{ scale: 1.1 }],
-    width: 46,
-    height: 46,
+    width: 42,
+    height: 42,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#007AFF',
+        shadowOpacity: 0.4,
+        shadowRadius: 6,
+      },
+      android: {
+        // elevationとtransformなし
+      },
+    }),
   },
   gasLogoInnerContainer: {
     width: '100%',
