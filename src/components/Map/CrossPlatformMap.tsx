@@ -23,6 +23,7 @@ interface CrossPlatformMapProps {
   onMarkerPress?: (event: any) => void;
   showsCompass?: boolean;
   showsScale?: boolean;
+  rotateEnabled?: boolean;
 }
 
 export const CrossPlatformMap: React.FC<CrossPlatformMapProps> = ({
@@ -38,6 +39,7 @@ export const CrossPlatformMap: React.FC<CrossPlatformMapProps> = ({
   onMarkerPress,
   showsCompass = true,
   showsScale = true,
+  rotateEnabled = true,
 }) => {
   // Web版の場合は未対応（モバイルアプリ専用）
   if (Platform.OS === 'web') {
@@ -59,6 +61,7 @@ export const CrossPlatformMap: React.FC<CrossPlatformMapProps> = ({
       showsMyLocationButton={showsMyLocationButton}
       showsCompass={showsCompass}
       showsScale={showsScale}
+      rotateEnabled={rotateEnabled}
     >
       {children}
     </MapView>

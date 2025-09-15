@@ -1121,6 +1121,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           showsUserLocation={true}
           showsMyLocationButton={false}
           showsCompass={false}
+          rotateEnabled={false}
         >
           {isMapReady && !isLoading && (() => {
             try {

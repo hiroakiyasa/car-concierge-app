@@ -398,8 +398,19 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
       tracksViewChanges={Platform.OS === 'android' ? tracks : undefined}
       // 円は中心アンカーでクリッピングを抑制
       anchor={Platform.OS === 'android' ? { x: 0.5, y: 0.5 } : { x: 0.5, y: 1 }}
-      // Androidでの重なり順を安定化
-      zIndex={Platform.OS === 'android' ? (isSelected ? 1000 : (rank ? 900 - (rank as number) : 500)) : undefined}
+      // 重なり順を制御（ランク1が最前面、2、3と順番に後ろへ）
+      zIndex={(() => {
+        if (isSelected) return 1000;
+        if (rank) {
+          if (rank === 1) return 999;
+          if (rank === 2) return 998;
+          if (rank === 3) return 997;
+          // その他のランク (4位以降)
+          return 500 - rank;
+        }
+        // ランクなしの施設
+        return isNearbyFacility ? 300 : 400;
+      })()}
       title={getMarkerTitle()}
       description={getMarkerDescription()}
     >
