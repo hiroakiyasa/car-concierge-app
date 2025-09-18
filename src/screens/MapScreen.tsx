@@ -142,78 +142,61 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     }
   };
   
-  // 起動時に駐車場を見つけるまで地図を拡大する関数
+  // 起動時に駐車場を検索する関数
   const searchParkingWithExpansion = async () => {
     console.log('🔍 駐車場自動検索開始');
     setIsLoading(true);
     setSearchStatus('searching');
 
-    let currentRegion = { ...mapRegion };
-    const maxAttempts = 5;
-    const minParkingCount = 3; // 最低3件の駐車場を表示
+    const currentRegion = { ...mapRegion };
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        console.log(`🔍 検索試行 ${attempt}/${maxAttempts} - 範囲:`, {
-          latDelta: currentRegion.latitudeDelta.toFixed(4),
-          lngDelta: currentRegion.longitudeDelta.toFixed(4)
-        });
+    try {
+      console.log('🔍 現在の地図範囲で検索中:', {
+        latDelta: currentRegion.latitudeDelta.toFixed(4),
+        lngDelta: currentRegion.longitudeDelta.toFixed(4)
+      });
 
-        // 駐車場を検索
-        const parkingData = await SupabaseService.fetchParkingSpots(currentRegion);
-        console.log(`📍 ${parkingData.length}件の駐車場を発見`);
+      // 駐車場を検索
+      const parkingData = await SupabaseService.fetchParkingSpots(currentRegion);
+      console.log(`📍 ${parkingData.length}件の駐車場を発見`);
 
-        if (parkingData.length >= minParkingCount) {
-          // 料金計算
-          const parkingWithFees = parkingData.map(spot => ({
-            ...spot,
-            id: spot.id.toString(),
-            category: 'コインパーキング' as const,
-            calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration),
-          }));
+      if (parkingData.length > 0) {
+        // 料金計算
+        const parkingWithFees = parkingData.map(spot => ({
+          ...spot,
+          id: spot.id.toString(),
+          category: 'コインパーキング' as const,
+          calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration),
+        }));
 
-          // 料金でソートしてトップ20のみ表示
-          const results = parkingWithFees
-            .sort((a, b) => (a.calculatedFee || 999999) - (b.calculatedFee || 999999))
-            .slice(0, 20);
+        // 料金でソートしてトップ20のみ表示
+        const results = parkingWithFees
+          .sort((a, b) => (a.calculatedFee || 999999) - (b.calculatedFee || 999999))
+          .slice(0, 20);
 
-          setSearchResults(results);
-          console.log(`✅ 駐車場検索成功: ${results.length}件を表示`);
+        setSearchResults(results);
+        console.log(`✅ 駐車場検索成功: ${results.length}件を表示`);
+      } else {
+        // 駐車場が見つからない場合
+        setSearchResults([]);
+        console.log('⚠️ この範囲には駐車場が見つかりませんでした');
 
-          // 地図を適切なズームレベルにアニメーション
-          if (mapRef.current && attempt > 1) {
-            mapRef.current.animateToRegion(currentRegion, 1000);
-          }
-
-          setSearchStatus('complete');
-          setIsLoading(false);
-          return;
-        }
-
-        // 駐車場が少ない場合は地図を拡大
-        if (attempt < maxAttempts) {
-          const expansionFactor = 1.5; // 1.5倍ずつ拡大
-          currentRegion = {
-            ...currentRegion,
-            latitudeDelta: Math.min(currentRegion.latitudeDelta * expansionFactor, 1.0),
-            longitudeDelta: Math.min(currentRegion.longitudeDelta * expansionFactor, 1.0)
-          };
-
-          // 地図の表示範囲を更新
-          setMapRegion(currentRegion);
-
-          console.log(`📐 地図を拡大: ${expansionFactor}倍`);
-        }
-
-      } catch (error) {
-        console.error(`検索エラー (試行 ${attempt}):`, error);
+        // ユーザーに通知
+        Alert.alert(
+          'この範囲では検索結果なし',
+          '地図を縮小して、より広い範囲で検索してみてください。',
+          [{ text: 'OK' }]
+        );
       }
-    }
 
-    // 最大試行回数に達しても見つからない場合
-    console.log('⚠️ 十分な駐車場が見つかりませんでした');
-    setSearchStatus('complete');
-    setIsLoading(false);
+      setSearchStatus('complete');
+      setIsLoading(false);
+
+    } catch (error) {
+      console.error('検索エラー:', error);
+      setSearchStatus('complete');
+      setIsLoading(false);
+    }
   };
 
   const handleSearchForCategory = async (category: string, region?: Region) => {
