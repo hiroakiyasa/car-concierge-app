@@ -1,9 +1,11 @@
 {
   "name": "car-concierge-app",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "index.tsx",
   "scripts": {
     "start": "expo start",
+    "start:prod": "expo start --no-dev --minify",
+    "build:devclient:ios": "eas build -p ios --profile development",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web"
@@ -49,12 +51,14 @@
     "react-native-web": "^0.21.0",
     "react-native-worklets": "^0.5.1",
     "ts-node": "^10.9.2",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.8",
+    "typescript": "~5.9.2",
+    "@types/react": "~19.1.10"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
-    "@types/react": "^18.2.0",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "@types/react": "~19.1.10"
   },
   "private": true
 }

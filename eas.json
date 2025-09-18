@@ -15,20 +15,24 @@
     "production": {
       "ios": {
         "buildConfiguration": "Release",
-        "distribution": "store",
-        "autoIncrement": "buildNumber"
+        "distribution": "store"
       },
       "env": {
         "APPLE_API_KEY_BASE64": "$APPLE_API_KEY_BASE64",
         "APPLE_API_KEY_ID": "$APPLE_API_KEY_ID",
-        "APPLE_API_KEY_ISSUER_ID": "$APPLE_API_KEY_ISSUER_ID"
+        "APPLE_API_KEY_ISSUER_ID": "$APPLE_API_KEY_ISSUER_ID",
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
+        "EXPO_PUBLIC_SUPABASE_URL": "$EXPO_PUBLIC_SUPABASE_URL",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
       }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "hiroakiya1981@gmail.com",
+        "ascApiKeyPath": "./AuthKey_CUS2H49U5Y.p8",
+        "ascApiKeyId": "CUS2H49U5Y",
+        "ascApiKeyIssuerId": "16651899-0897-4d44-ac7e-6e5a262f2286",
         "ascAppId": "6738971619",
         "appleTeamId": "8BXN9CYUCD"
       }

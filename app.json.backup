@@ -1,0 +1,108 @@
+{
+  "expo": {
+    "name": "車旅コンシェルジュ",
+    "slug": "car-concierge-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "car-concierge-app",
+    "jsEngine": "jsc",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1976d2"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.carconciege.app",
+      "buildNumber": "39",
+      "infoPlist": {
+        "NSCameraUsageDescription": "このアプリは駐車場や施設の写真を撮影するためにカメラを使用します。",
+        "NSPhotoLibraryUsageDescription": "このアプリは駐車場や施設の写真を選択するために写真ライブラリへのアクセスが必要です。",
+        "NSPhotoLibraryAddUsageDescription": "このアプリは撮影した写真を保存するために写真ライブラリへの書き込み権限が必要です。",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "car-concierge-app"
+            ]
+          }
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.carconciege.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "car-concierge-app",
+              "host": "auth",
+              "pathPrefix": "/callback"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "このアプリは駐車場や施設の写真を選択するために写真ライブラリへのアクセスが必要です。",
+          "cameraPermission": "このアプリは駐車場や施設の写真を撮影するためにカメラを使用します。"
+        }
+      ],
+      [
+        "expo-asset",
+        {
+          "assets": [
+            "./assets/flush_movie.mp4",
+            "./assets/flush_movie.MOV"
+          ]
+        }
+      ],
+      "expo-video",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "faf23c02-6ed4-4585-bd02-6c6e5130890c"
+      }
+    },
+    "owner": "hiroakiyasa"
+  }
+}
