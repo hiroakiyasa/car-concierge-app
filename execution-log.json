@@ -1,0 +1,12 @@
+{
+  "startTime": "2025-09-20T10:58:14.083Z",
+  "totalBatches": 1248,
+  "totalRecords": 62400,
+  "groupsGenerated": 20,
+  "executionPlan": {
+    "phase1": "Groups 1-10 (5,000 records)",
+    "phase2": "Groups 11-20 (5,000 records)",
+    "phase3": "Groups 21+ (remaining records)"
+  },
+  "status": "ready_for_execution"
+}

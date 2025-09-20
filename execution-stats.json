@@ -1,0 +1,132 @@
+{
+  "timestamp": "2025-09-20T11:00:32.775Z",
+  "totalGroups": 20,
+  "totalQueries": 200,
+  "estimatedRecords": 10000,
+  "executionPlan": [
+    {
+      "group": 1,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-001.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 2,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-002.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 3,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-003.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 4,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-004.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 5,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-005.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 6,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-006.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 7,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-007.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 8,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-008.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 9,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-009.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 10,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-010.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 11,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-011.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 12,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-012.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 13,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-013.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 14,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-014.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 15,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-015.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 16,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-016.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 17,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-017.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 18,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-018.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 19,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-019.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    },
+    {
+      "group": 20,
+      "filePath": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-group-020.sql",
+      "queryCount": 10,
+      "estimatedRecords": 500
+    }
+  ],
+  "files": {
+    "consolidatedSql": "/Users/user/React/Car_concierge_react2/car-concierge-app/consolidated-batch-update.sql",
+    "logFile": "/Users/user/React/Car_concierge_react2/car-concierge-app/batch-execution-log.txt"
+  }
+}

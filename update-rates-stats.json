@@ -1,0 +1,123 @@
+{
+  "timestamp": "2025-09-20T10:43:00.496Z",
+  "totalSpots": 62360,
+  "batchCount": 1248,
+  "batchSize": 50,
+  "idRange": {
+    "min": 1,
+    "max": 64483
+  },
+  "sampleData": [
+    {
+      "id": 1,
+      "name": "ショウワパーク小樽メルヘン交差点前",
+      "rates": [
+        {
+          "type": "base",
+          "price": 200,
+          "minutes": 30
+        },
+        {
+          "type": "max",
+          "price": 700,
+          "minutes": 1440
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "パーキング紅葉園小樽入船町",
+      "rates": [
+        {
+          "type": "base",
+          "price": 200,
+          "minutes": 60,
+          "timeRange": "8:00～20:00",
+          "dayType": "月～金"
+        },
+        {
+          "type": "base",
+          "price": 300,
+          "minutes": 60,
+          "timeRange": "8:00～20:00",
+          "dayType": "土日祝"
+        },
+        {
+          "type": "base",
+          "price": 100,
+          "minutes": 120,
+          "timeRange": "20:00～8:00"
+        },
+        {
+          "type": "max",
+          "price": 300,
+          "minutes": 720,
+          "timeRange": "20:00～8:00"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "ナビパーク小樽堺町第１",
+      "rates": [
+        {
+          "type": "base",
+          "price": 200,
+          "minutes": 30,
+          "timeRange": "8:00～22:00"
+        },
+        {
+          "type": "base",
+          "price": 100,
+          "minutes": 60,
+          "timeRange": "22:00～8:00"
+        },
+        {
+          "type": "max",
+          "price": 800,
+          "minutes": 1440,
+          "dayType": "月～金"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "パラカ小樽市堺町第１",
+      "rates": [
+        {
+          "type": "base",
+          "price": 500,
+          "minutes": 20
+        },
+        {
+          "type": "max",
+          "price": 2000,
+          "minutes": 240,
+          "dayType": "月～金"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "ザ・パーク小樽市山田町",
+      "rates": [
+        {
+          "type": "base",
+          "price": 200,
+          "minutes": 30
+        },
+        {
+          "type": "max",
+          "price": 1000,
+          "minutes": 1440
+        },
+        {
+          "type": "max",
+          "price": 500,
+          "minutes": 840,
+          "timeRange": "18:00～8:00"
+        }
+      ]
+    }
+  ]
+}
