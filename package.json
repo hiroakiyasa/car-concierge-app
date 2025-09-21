@@ -8,7 +8,8 @@
     "build:devclient:ios": "eas build -p ios --profile development",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "mcp:supabase": "ts-node mcp/supabase-server.ts"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -53,7 +54,9 @@
     "ts-node": "^10.9.2",
     "zustand": "^5.0.8",
     "typescript": "~5.9.2",
-    "@types/react": "~19.1.10"
+    "@types/react": "~19.1.10",
+    "@modelcontextprotocol/sdk": "^0.1.2",
+    "dotenv": "^17.2.2"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
