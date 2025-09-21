@@ -3,7 +3,10 @@
   Run: npm run mcp:supabase
 */
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+// Load base .env, then overlay .env.mcp.local if present
+dotenv.config();
+dotenv.config({ path: '.env.mcp.local' });
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 // MCP SDK imports (paths may vary by version); if you see import errors,
 // install @modelcontextprotocol/sdk and adjust the import paths accordingly.
@@ -254,4 +257,3 @@ main().catch((err) => {
   console.error('[supabase-mcp] fatal:', msg);
   process.exit(1);
 });
-
