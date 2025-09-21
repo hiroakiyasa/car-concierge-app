@@ -123,12 +123,36 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
       return parking.calculatedFee === 0 ? '無料' : `¥${parking.calculatedFee.toLocaleString()}`;
     }
 
-    // hourly_priceフィールドは存在しないため削除
-
+    // 料金ラベル（簡易版）
     if (parking.rates && parking.rates.length > 0) {
-      const baseRate = parking.rates.find(r => r.type === 'base');
-      if (baseRate) {
-        return `${baseRate.minutes}分 ¥${baseRate.price}`;
+      const baseRates = parking.rates.filter(r => r.type === 'base');
+      const progressiveRates = parking.rates.filter(r => r.type === 'progressive');
+
+      // 最初の無料時間 + 以降プログレッシブのパターンを優先表示
+      if (baseRates.length > 0 && progressiveRates.length > 0) {
+        const firstBase = [...baseRates].sort((a, b) => a.minutes - b.minutes)[0];
+        // 適用開始がbase無料時間と一致するprogressiveを選ぶ
+        const sortedProgs = [...progressiveRates].sort((a: any, b: any) => (
+          (a.apply_after ?? a.applyAfter ?? 0) - (b.apply_after ?? b.applyAfter ?? 0)
+        ));
+        const matchedProg = sortedProgs.find((p: any) => (p.apply_after ?? p.applyAfter ?? 0) === firstBase.minutes) || sortedProgs[0];
+
+        if (firstBase.price === 0 && matchedProg) {
+          // マーカーは短く表記
+          return `最初${firstBase.minutes}分無料/以降${matchedProg.minutes}分¥${matchedProg.price}`;
+        }
+      }
+
+      // 通常の基本料金（無料でない）
+      const paidBase = baseRates.find(r => r.price > 0);
+      if (paidBase) {
+        return `${paidBase.minutes}分 ¥${paidBase.price}`;
+      }
+
+      // 基本料金が0円のみの場合は無料時間として表記
+      const freeBase = baseRates.find(r => r.price === 0);
+      if (freeBase) {
+        return `最初${freeBase.minutes}分無料`;
       }
     }
 

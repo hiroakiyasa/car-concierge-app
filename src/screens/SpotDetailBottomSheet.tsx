@@ -379,8 +379,12 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
             {/* まず「最初の◯分無料 / 以降◯分¥◯」のパターンに対応 */}
             {(() => {
               const firstBase = baseRates.sort((a,b)=>a.minutes-b.minutes)[0];
-              const prog = progressiveRates[0];
-              if (firstBase && prog && firstBase.price === 0 && (prog as any).apply_after === firstBase.minutes) {
+              // progressiveはapply_after/applyAfterでソートし、baseの無料時間と一致するものを優先
+              const sortedProgs = [...progressiveRates].sort((a: any, b: any) => (
+                (a.apply_after ?? a.applyAfter ?? 0) - (b.apply_after ?? b.applyAfter ?? 0)
+              ));
+              const prog = sortedProgs.find((p: any) => (p.apply_after ?? p.applyAfter ?? 0) === firstBase?.minutes) || sortedProgs[0];
+              if (firstBase && prog && firstBase.price === 0 && ((prog as any).apply_after ?? (prog as any).applyAfter) === firstBase.minutes) {
                 return (
                   <>
                     <Text style={styles.rateItem}>
