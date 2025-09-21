@@ -621,9 +621,10 @@ export class SupabaseService {
 
   // Fetch parking spots sorted by calculated fee (backend calculation)
   static async fetchParkingSpotsSortedByFee(
-    region: Region, 
+    region: Region,
     durationMinutes: number,
-    minElevation?: number
+    minElevation?: number,
+    entryAt?: Date // 追加: 入庫日時（ユーザー指定）
   ): Promise<CoinParking[]> {
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
     
@@ -649,6 +650,11 @@ export class SupabaseService {
 
     if (minElevation !== undefined && minElevation > 0) {
       rpcParams.min_elevation = minElevation;
+    }
+
+    // 入庫時間が指定されていればRPCに渡す（DB側にパラメータが定義されている場合のみ有効）
+    if (entryAt instanceof Date) {
+      rpcParams.parking_start = entryAt.toISOString();
     }
 
     console.log('🚀 RPC呼び出し実行:', { function: 'get_parking_spots_sorted_by_fee', params: rpcParams });
@@ -702,8 +708,8 @@ export class SupabaseService {
       const result = {
         id: spot.id,
         name: spot.name,
-        lat: spot.lat,
-        lng: spot.lng,
+        lat: spot.latitude || spot.lat,  // RPCからはlatitude、通常のクエリからはlat
+        lng: spot.longitude || spot.lng,  // RPCからはlongitude、通常のクエリからはlng
         category: 'コインパーキング' as const,
         address: spot.address,
         capacity: spot.capacity,
@@ -719,7 +725,7 @@ export class SupabaseService {
           name: spot.nearest_hotspring.name,
           distance: spot.nearest_hotspring.distance
         } : undefined,
-        calculatedFee: spot.calculated_fee, // バックエンドで計算された料金  
+        calculatedFee: spot.calculated_fee, // バックエンドで計算された料金
         rank: spot.rank // バックエンドで付与されたランキング
       } as CoinParking;
 

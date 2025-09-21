@@ -43,7 +43,7 @@ const createDefaultSearchFilter = (): SearchFilter => ({
   showMechanicalParking: true,
   parkingDuration: {
     startDate: new Date(),
-    duration: 3600,
+    duration: 3600, // デフォルトを1時間に戻す
     get endDate() {
       return new Date(this.startDate.getTime() + this.duration * 1000);
     },

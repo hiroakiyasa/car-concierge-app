@@ -77,24 +77,37 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
     
     const rates = parkingSpot.rates;
     const baseRates = rates.filter(r => r.type === 'base').sort((a, b) => a.minutes - b.minutes);
+    const progRate = rates.find(r => r.type === 'progressive');
     const maxRate = rates.find(r => r.type === 'max');
-    
-    let priceText = '';
+
+    // 表示用のテキストを組み立て
+    const parts: string[] = [];
+
     if (baseRates.length > 0) {
-      const firstRate = baseRates[0];
-      if (firstRate.price === 0) {
-        priceText = `最初の${firstRate.minutes}分無料`;
+      const first = baseRates[0];
+      // progressive と組み合わせて「最初～分無料 / 以降～分¥～」の表現にする
+      if (progRate && first.price === 0 && (progRate as any).apply_after === first.minutes) {
+        parts.push(`最初の${first.minutes}分無料`);
+        parts.push(`以降${progRate.minutes}分¥${progRate.price}`);
       } else {
-        priceText = `${firstRate.minutes}分¥${firstRate.price}`;
+        // 通常の基本料金表示
+        parts.push(`${first.minutes}分¥${first.price}`);
+      }
+    } else if (progRate) {
+      // base が無く progressive のみ
+      if ((progRate as any).apply_after && (progRate as any).apply_after > 0) {
+        parts.push(`最初の${(progRate as any).apply_after}分基本料金`);
+        parts.push(`以降${progRate.minutes}分¥${progRate.price}`);
+      } else {
+        parts.push(`${progRate.minutes}分¥${progRate.price}`);
       }
     }
-    
+
     if (maxRate) {
-      if (priceText) priceText += ' / ';
-      priceText += `最大¥${maxRate.price}`;
+      parts.push(`最大¥${maxRate.price}`);
     }
-    
-    return priceText || '料金情報なし';
+
+    return parts.join(' / ') || '料金情報なし';
   };
   
   const formatOperatingHours = (): string => {

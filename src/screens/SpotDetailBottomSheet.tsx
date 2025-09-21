@@ -346,6 +346,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     const baseRates = rates.filter(r => r.type === 'base');
     const maxRates = rates.filter(r => r.type === 'max');
     const conditionalFreeRates = rates.filter(r => r.type === 'conditional_free');
+    const progressiveRates = rates.filter(r => r.type === 'progressive');
     
     const formatTimeRange = (timeRange?: string) => {
       if (!timeRange || timeRange === 'not_specified') return '';
@@ -371,15 +372,46 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
           </View>
         )}
         
-        {/* 基本料金 */}
-        {baseRates.length > 0 && (
+        {/* 基本料金/プログレッシブのまとめ表示 */}
+        {(baseRates.length > 0 || progressiveRates.length > 0) && (
           <View style={styles.rateSection}>
             <Text style={styles.rateSectionTitle}>💰 通常料金</Text>
-            {baseRates.map((rate, index) => (
-              <Text key={index} style={styles.rateItem}>
-                {formatDayType(rate.day_type)}{rate.minutes}分毎 ¥{rate.price?.toLocaleString()}{formatTimeRange(rate.time_range)}
-              </Text>
-            ))}
+            {/* まず「最初の◯分無料 / 以降◯分¥◯」のパターンに対応 */}
+            {(() => {
+              const firstBase = baseRates.sort((a,b)=>a.minutes-b.minutes)[0];
+              const prog = progressiveRates[0];
+              if (firstBase && prog && firstBase.price === 0 && (prog as any).apply_after === firstBase.minutes) {
+                return (
+                  <>
+                    <Text style={styles.rateItem}>
+                      {formatDayType(firstBase.day_type)}最初{firstBase.minutes}分無料{formatTimeRange(firstBase.time_range)}
+                    </Text>
+                    <Text style={styles.rateItem}>
+                      {formatDayType(prog.day_type)}以降{prog.minutes}分毎 ¥{prog.price?.toLocaleString()}{formatTimeRange(prog.time_range)}
+                    </Text>
+                  </>
+                );
+              }
+              // それ以外は個別に列挙
+              return (
+                <>
+                  {baseRates.map((rate, index) => (
+                    <Text key={`base-${index}`} style={styles.rateItem}>
+                      {rate.price === 0
+                        ? `${formatDayType(rate.day_type)}最初${rate.minutes}分無料${formatTimeRange(rate.time_range)}`
+                        : `${formatDayType(rate.day_type)}${rate.minutes}分毎 ¥${rate.price?.toLocaleString()}${formatTimeRange(rate.time_range)}`}
+                    </Text>
+                  ))}
+                  {progressiveRates.map((rate, index) => (
+                    <Text key={`prog-${index}`} style={styles.rateItem}>
+                      {formatDayType(rate.day_type)}以降{rate.minutes}分毎 ¥{rate.price?.toLocaleString()}
+                      {(rate as any).apply_after ? `（最初${(rate as any).apply_after}分後から）` : ''}
+                      {formatTimeRange(rate.time_range)}
+                    </Text>
+                  ))}
+                </>
+              );
+            })()}
           </View>
         )}
         

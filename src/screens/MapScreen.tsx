@@ -448,7 +448,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           parkingSpots = await SupabaseService.fetchParkingSpotsSortedByFee(
             searchRegion,
             currentFilter.parkingDuration.durationInMinutes,
-            minElevation
+            minElevation,
+            currentFilter.parkingDuration.startDate // 入庫日時を渡す
           );
           console.log(`🅿️ 料金フィルター結果: ${parkingSpots.length}件`);
           displaySpots.push(...parkingSpots);

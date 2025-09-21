@@ -8,11 +8,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 dotenv.config({ path: '.env.mcp.local' });
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-// MCP SDK imports (paths may vary by version); if you see import errors,
-// install @modelcontextprotocol/sdk and adjust the import paths accordingly.
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { JSONSchema } from '@modelcontextprotocol/sdk/types.js';
+// MCP SDK imports (pin to dist/esm paths for TS/ts-node compatibility)
+// eslint-disable-next-line import/no-unresolved
+import { Server } from '@modelcontextprotocol/sdk/dist/esm/server/index.js';
+// eslint-disable-next-line import/no-unresolved
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/dist/esm/server/stdio.js';
 
 type FilterOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'like' | 'ilike' | 'is' | 'in';
 
@@ -79,7 +79,7 @@ function applyFilters<T>(q: any, filters?: BasicFilter[]) {
   return query;
 }
 
-const selectSchema: JSONSchema = {
+const selectSchema: any = {
   type: 'object',
   required: ['table'],
   properties: {
@@ -110,7 +110,7 @@ const selectSchema: JSONSchema = {
   }
 };
 
-const modifySchema: JSONSchema = {
+const modifySchema: any = {
   type: 'object',
   required: ['table', 'values'],
   properties: {
@@ -134,7 +134,7 @@ const modifySchema: JSONSchema = {
   }
 };
 
-const deleteSchema: JSONSchema = {
+const deleteSchema: any = {
   type: 'object',
   required: ['table'],
   properties: {
@@ -155,7 +155,7 @@ const deleteSchema: JSONSchema = {
   }
 };
 
-const rpcSchema: JSONSchema = {
+const rpcSchema: any = {
   type: 'object',
   required: ['fn'],
   properties: {
@@ -168,83 +168,113 @@ async function main() {
   const projectId = process.env.SUPABASE_PROJECT_ID || '(unknown)';
   const supabase = buildClient();
 
-  const server = new Server({
-    name: 'supabase-mcp',
-    version: '0.1.0'
-  }, {
-    capabilities: { tools: {} }
+  const server = new Server({ name: 'supabase-mcp', version: '1.0.0' }, {
+    capabilities: { tools: {}, logging: {} },
+    instructions: 'Supabase tools: supabase.ping/select/insert/update/delete/rpc'
   });
 
-  server.tool('supabase.ping', {
-    description: 'Validate connection and return project info (no secrets).',
-    inputSchema: { type: 'object', properties: {} }
-  }, async () => {
+  type ToolDef = {
+    name: string;
+    description?: string;
+    inputSchema: any;
+    handler: (args: any) => Promise<any>;
+  };
+
+  const tools: ToolDef[] = [
+    {
+      name: 'supabase.ping',
+      description: 'Validate connection and return project info (no secrets).',
+      inputSchema: { type: 'object', properties: {} },
+      handler: async () => ({ projectId, url: process.env.SUPABASE_URL, ok: true })
+    },
+    {
+      name: 'supabase.select',
+      description: 'Select rows with optional filters/order/limit',
+      inputSchema: selectSchema,
+      handler: async (input: any) => {
+        const { table, columns = '*', filters, order, limit = 100, offset = 0 } = input;
+        let q: any = supabase.from(table).select(columns, { count: 'exact' }).range(offset, offset + Math.max(0, limit - 1));
+        q = applyFilters(q, filters);
+        if (order?.column) {
+          q = q.order(order.column, { ascending: order.ascending !== false, nullsFirst: !!order.nullsFirst });
+        }
+        const { data, error, count } = await q;
+        if (error) throw new Error(error.message);
+        return { count, data };
+      }
+    },
+    {
+      name: 'supabase.insert',
+      description: 'Insert or upsert rows',
+      inputSchema: modifySchema,
+      handler: async (input: any) => {
+        const { table, values, upsert = false, onConflict, returning = 'representation' } = input;
+        let q: any = upsert
+          ? supabase.from(table).upsert(values, { onConflict, ignoreDuplicates: false })
+          : supabase.from(table).insert(values);
+        if (returning === 'representation') q = q.select();
+        const { data, error } = await q;
+        if (error) throw new Error(error.message);
+        return { data };
+      }
+    },
+    {
+      name: 'supabase.update',
+      description: 'Update rows matching filters',
+      inputSchema: modifySchema,
+      handler: async (input: any) => {
+        const { table, values, filters, returning = 'representation' } = input;
+        let q: any = supabase.from(table).update(values);
+        q = applyFilters(q, filters);
+        if (returning === 'representation') q = q.select();
+        const { data, error } = await q;
+        if (error) throw new Error(error.message);
+        return { data };
+      }
+    },
+    {
+      name: 'supabase.delete',
+      description: 'Delete rows matching filters',
+      inputSchema: deleteSchema,
+      handler: async (input: any) => {
+        const { table, filters, returning = 'representation' } = input;
+        let q: any = supabase.from(table).delete();
+        q = applyFilters(q, filters);
+        if (returning === 'representation') q = q.select();
+        const { data, error } = await q;
+        if (error) throw new Error(error.message);
+        return { data };
+      }
+    },
+    {
+      name: 'supabase.rpc',
+      description: 'Call a Postgres function via RPC',
+      inputSchema: rpcSchema,
+      handler: async (input: any) => {
+        const { fn, args = {} } = input;
+        const { data, error } = await supabase.rpc(fn, args as any);
+        if (error) throw new Error(error.message);
+        return { data };
+      }
+    }
+  ];
+
+  // tools/list
+  server.setRequestHandler({ method: 'tools/list', params: {} } as any, async () => {
     return {
-      projectId,
-      url: process.env.SUPABASE_URL,
-      ok: true
+      tools: tools.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }))
     };
   });
 
-  server.tool('supabase.select', {
-    description: 'Select rows from a table with optional filters and ordering',
-    inputSchema: selectSchema
-  }, async (input: any) => {
-    const { table, columns = '*', filters, order, limit = 100, offset = 0 } = input;
-    let q: any = supabase.from(table).select(columns, { count: 'exact' }).range(offset, offset + Math.max(0, limit - 1));
-    q = applyFilters(q, filters);
-    if (order?.column) {
-      q = q.order(order.column, { ascending: order.ascending !== false, nullsFirst: !!order.nullsFirst });
+  // tools/call
+  server.setRequestHandler({ method: 'tools/call', params: { name: '', arguments: {} } } as any, async (request: any) => {
+    const { name, arguments: args } = request.params;
+    const tool = tools.find(t => t.name === name);
+    if (!tool) {
+      throw new Error(`Unknown tool: ${name}`);
     }
-    const { data, error, count } = await q;
-    if (error) throw new Error(error.message);
-    return { count, data };
-  });
-
-  server.tool('supabase.insert', {
-    description: 'Insert rows into a table',
-    inputSchema: modifySchema
-  }, async (input: any) => {
-    const { table, values, upsert = false, onConflict, returning = 'representation' } = input;
-    let q: any = supabase.from(table).insert(values, { returning });
-    if (upsert) q = q.upsert(values, { onConflict, ignoreDuplicates: false });
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
-    return { data };
-  });
-
-  server.tool('supabase.update', {
-    description: 'Update rows in a table matching filters',
-    inputSchema: modifySchema
-  }, async (input: any) => {
-    const { table, values, filters, returning = 'representation' } = input;
-    let q: any = supabase.from(table).update(values, { returning });
-    q = applyFilters(q, filters);
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
-    return { data };
-  });
-
-  server.tool('supabase.delete', {
-    description: 'Delete rows from a table matching filters',
-    inputSchema: deleteSchema
-  }, async (input: any) => {
-    const { table, filters, returning = 'representation' } = input;
-    let q: any = supabase.from(table).delete({ returning });
-    q = applyFilters(q, filters);
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
-    return { data };
-  });
-
-  server.tool('supabase.rpc', {
-    description: 'Call a Postgres function via RPC',
-    inputSchema: rpcSchema
-  }, async (input: any) => {
-    const { fn, args = {} } = input;
-    const { data, error } = await supabase.rpc(fn, args as any);
-    if (error) throw new Error(error.message);
-    return { data };
+    const result = await tool.handler(args || {});
+    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
   });
 
   const transport = new StdioServerTransport();

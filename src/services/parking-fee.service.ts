@@ -17,10 +17,18 @@ export class ParkingFeeCalculator {
       return -1;
     }
 
+    // データベースのsnake_caseをcamelCaseに変換
+    const normalizedRates = parking.rates.map(rate => ({
+      ...rate,
+      applyAfter: rate.applyAfter ?? (rate as any).apply_after ?? rate.applyAfter,
+      dayType: rate.dayType ?? (rate as any).day_type ?? rate.dayType,
+      timeRange: rate.timeRange ?? (rate as any).time_range ?? rate.timeRange,
+    }));
+
     // 料金データのバリデーション
-    const baseRates = parking.rates.filter(r => r.type === 'base');
-    const progressiveRates = parking.rates.filter(r => r.type === 'progressive');
-    const maxRates = parking.rates.filter(r => r.type === 'max');
+    const baseRates = normalizedRates.filter(r => r.type === 'base');
+    const progressiveRates = normalizedRates.filter(r => r.type === 'progressive');
+    const maxRates = normalizedRates.filter(r => r.type === 'max');
 
     // base料金もprogressive料金もない場合
     if (baseRates.length === 0 && progressiveRates.length === 0) {
@@ -49,8 +57,17 @@ export class ParkingFeeCalculator {
     const endTime = duration.endDate;
     const totalDurationMinutes = duration.durationInMinutes;
 
+    // デバッグ用：土日祝の無料時間がある駐車場
+    if (parking.id === 22298 || parking.id === 22314 || parking.id === 22443) {
+      console.log(`🔍 [${parking.id}] ${parking.name} 料金計算デバッグ:`);
+      console.log(`  - 開始時刻: ${startTime.toLocaleString('ja-JP')}`);
+      console.log(`  - 曜日: ${this.getDayOfWeek(startTime)}`);
+      console.log(`  - 駐車時間: ${totalDurationMinutes}分`);
+      console.log(`  - rates:`, JSON.stringify(normalizedRates));
+    }
+
     // 駐車時間を時間帯別セグメントに分割
-    const segments = this.splitIntoTimeSegments(parking.rates, startTime, endTime);
+    const segments = this.splitIntoTimeSegments(normalizedRates, startTime, endTime);
 
     // 各セグメントの料金を計算
     let totalFee = 0;
@@ -78,36 +95,62 @@ export class ParkingFeeCalculator {
 
       let segmentFee = 0;
 
-      // progressive料金の処理（初回料金後の追加料金）
+      // 料金計算のロジック改善
+      const currentMinutes = accumulatedMinutes + segmentMinutes;
+
+      // デバッグログ
+      if (parking.id === 22443) {
+        console.log(`    セグメント計算: 累積${accumulatedMinutes}分, セグメント${segmentMinutes}分, 合計${currentMinutes}分`);
+        console.log(`    適用料金: base=${baseRate?.price || 'なし'}円/${baseRate?.minutes || 'なし'}分, progressive=${progressiveRate?.price || 'なし'}円 (after=${progressiveRate?.applyAfter || 'なし'})`);
+      }
+
+      // progressive料金の処理（ID 22443のような複数段階料金に対応）
       if (progressiveRate && progressiveRate.applyAfter !== undefined) {
-        // apply_after時間を超えている部分だけprogressive料金を適用
         if (accumulatedMinutes >= progressiveRate.applyAfter) {
-          // すべてprogressive料金
+          // すでにprogressive料金の範囲内
           const units = Math.ceil(segmentMinutes / progressiveRate.minutes);
           segmentFee = units * progressiveRate.price;
-        } else if (accumulatedMinutes + segmentMinutes > progressiveRate.applyAfter) {
-          // 一部がprogressive料金
+
+          if (parking.id === 22443) {
+            console.log(`    ➡️ Progressive料金適用: ${segmentMinutes}分 ÷ ${progressiveRate.minutes} = ${units}単位 × ${progressiveRate.price}円 = ${segmentFee}円`);
+          }
+        } else if (currentMinutes > progressiveRate.applyAfter) {
+          // このセグメントでprogressive料金に移行
           const baseMinutes = progressiveRate.applyAfter - accumulatedMinutes;
           const progressiveMinutes = segmentMinutes - baseMinutes;
 
           // 初回料金部分
           if (baseRate) {
             const baseUnits = Math.ceil(baseMinutes / baseRate.minutes);
-            segmentFee += baseUnits * baseRate.price;
+            const baseFee = baseUnits * baseRate.price;
+            segmentFee += baseFee;
+
+            if (parking.id === 22443) {
+              console.log(`    ➡️ Base料金: ${baseMinutes}分 = ${baseFee}円`);
+            }
           }
 
           // progressive料金部分
           const progressiveUnits = Math.ceil(progressiveMinutes / progressiveRate.minutes);
-          segmentFee += progressiveUnits * progressiveRate.price;
+          const progressiveFee = progressiveUnits * progressiveRate.price;
+          segmentFee += progressiveFee;
+
+          if (parking.id === 22443) {
+            console.log(`    ➡️ Progressive料金: ${progressiveMinutes}分 = ${progressiveFee}円`);
+          }
         } else {
-          // まだ初回料金期間内
+          // まだprogressive料金に達していない
           if (baseRate) {
             const units = Math.ceil(segmentMinutes / baseRate.minutes);
             segmentFee = units * baseRate.price;
+
+            if (parking.id === 22443) {
+              console.log(`    ➡️ Base料金のみ: ${segmentMinutes}分 = ${segmentFee}円`);
+            }
           }
         }
       } else if (baseRate) {
-        // 通常の基本料金で計算
+        // progressive料金がない場合、通常の基本料金で計算
         const units = Math.ceil(segmentMinutes / baseRate.minutes);
         segmentFee = units * baseRate.price;
 
@@ -142,7 +185,7 @@ export class ParkingFeeCalculator {
     }
 
     // 全体の最大料金チェック（時間帯指定なし）
-    const overallMaxRates = parking.rates.filter(r =>
+    const overallMaxRates = normalizedRates.filter(r =>
       r.type === 'max' &&
       !r.timeRange &&
       !r.dayType
@@ -178,8 +221,35 @@ export class ParkingFeeCalculator {
     let progressiveRate: ParkingRate | undefined;
     let maxRate: ParkingRate | undefined;
 
-    // base料金の選択（時間帯と曜日を考慮）
-    const baseRates = rates.filter(r => r.type === 'base');
+    // 現在時刻の曜日を取得
+    const dayOfWeek = this.getDayOfWeek(segmentStart);
+    const isWeekend = dayOfWeek === '土' || dayOfWeek === '日';
+    const isHoliday = false; // 祝日判定は別途実装が必要
+
+    // 曜日に応じた料金をフィルタリング
+    const filterByDayType = (rate: ParkingRate): boolean => {
+      if (!rate.dayType) return true; // 曜日指定なしは常に適用
+
+      if (rate.dayType === '月～金' || rate.dayType === '平日') {
+        return !isWeekend && !isHoliday;
+      }
+      if (rate.dayType === '土日祝') {
+        return isWeekend || isHoliday;
+      }
+      if (rate.dayType === '土') {
+        return dayOfWeek === '土';
+      }
+      if (rate.dayType === '日祝') {
+        return dayOfWeek === '日' || isHoliday;
+      }
+      if (rate.dayType === '土日') {
+        return isWeekend;
+      }
+      return true;
+    };
+
+    // base料金の選択（曜日を考慮）
+    const baseRates = rates.filter(r => r.type === 'base' && filterByDayType(r));
     if (baseRates.length > 0) {
       // より具体的な条件を持つ料金を優先
       baseRate = baseRates.sort((a, b) => {
@@ -189,18 +259,72 @@ export class ParkingFeeCalculator {
       })[0];
     }
 
-    // progressive料金の選択（apply_after条件を確認）
+    // progressive料金の選択（apply_after条件と曜日を確認）
+    // 複数のprogressive料金がある場合、現在の累積時間に最も適したものを選択
     const progressiveRates = rates.filter(r =>
       r.type === 'progressive' &&
       r.applyAfter !== undefined &&
-      accumulatedMinutes + segmentMinutes > r.applyAfter
+      filterByDayType(r)
     );
-    if (progressiveRates.length > 0) {
-      progressiveRate = progressiveRates[0];
+
+    // 現在の累積時間に最も適したprogressive料金を選択
+    // apply_afterが小さい順（早い段階の料金から）にソートして適用
+    const sortedProgressiveRates = progressiveRates.sort((a, b) => (a.applyAfter || 0) - (b.applyAfter || 0));
+
+    // 現在のセグメントの終了時間
+    const segmentEnd = accumulatedMinutes + segmentMinutes;
+
+    // 適切なprogressive料金を見つける
+    // 累積時間に基づいて適用されるprogressive料金を選択
+    for (const rate of sortedProgressiveRates) {
+      // 累積時間がこのprogressive料金の適用開始時間に達している場合
+      if (accumulatedMinutes >= rate.applyAfter!) {
+        // 次のprogressive料金を確認
+        const nextRateIndex = sortedProgressiveRates.indexOf(rate) + 1;
+        const nextRate = sortedProgressiveRates[nextRateIndex];
+
+        // 次の料金帯が存在しない、または累積時間が次の料金帯に達していない場合
+        if (!nextRate || accumulatedMinutes < nextRate.applyAfter!) {
+          progressiveRate = rate;
+        }
+      }
     }
 
-    // max料金の選択
-    const maxRates = rates.filter(r => r.type === 'max');
+    // Progressive料金を持つ駐車場の詳細デバッグ
+    if (rates.find(r => r.type === 'progressive' && (r.applyAfter === 30 || r.timeRange))) {
+      console.log(`  [Progressive料金デバッグ] 累積:${accumulatedMinutes}分, セグメント:${segmentMinutes}分`);
+      console.log(`    - 全rates:`, rates.map(r => ({
+        type: r.type,
+        price: r.price,
+        minutes: r.minutes,
+        applyAfter: r.applyAfter,
+        dayType: r.dayType,
+        timeRange: r.timeRange
+      })));
+      console.log(`    - filterByDayType結果:`, rates.map(r => ({
+        type: r.type,
+        applyAfter: r.applyAfter,
+        dayType: r.dayType,
+        timeRange: r.timeRange,
+        passed: filterByDayType(r)
+      })));
+      console.log(`    - progressiveRatesフィルタ後:`, progressiveRates.length, '件');
+      console.log(`    - 選択されたprogressiveRate:`, progressiveRate ?
+        `${progressiveRate.minutes}分${progressiveRate.price}円 (after:${progressiveRate.applyAfter}, timeRange:${progressiveRate.timeRange})` :
+        'なし');
+    }
+
+    // デバッグ用：選択された料金を確認
+    if (rates.some(r => r.type === 'progressive' || (r.dayType === '土日祝' && r.price === 0))) {
+      console.log(`  [適用料金] 曜日:${dayOfWeek}, 累積:${accumulatedMinutes}分, セグメント:${segmentMinutes}分`);
+      console.log(`    - segmentEnd: ${accumulatedMinutes + segmentMinutes}分`);
+      console.log(`    - 利用可能なprogressive料金:`, sortedProgressiveRates.map(r => `after=${r.applyAfter}, price=${r.price}`));
+      console.log(`    - baseRate:`, baseRate ? `${baseRate.minutes}分${baseRate.price}円` : 'なし');
+      console.log(`    - progressiveRate:`, progressiveRate ? `${progressiveRate.minutes}分${progressiveRate.price}円 (after:${progressiveRate.applyAfter})` : 'なし');
+    }
+
+    // max料金の選択（曜日を考慮）
+    const maxRates = rates.filter(r => r.type === 'max' && filterByDayType(r));
     if (maxRates.length > 0) {
       // 時間帯指定のmax料金を優先
       const timeSpecificMax = maxRates.filter(r => r.timeRange);
@@ -415,40 +539,116 @@ export class ParkingFeeCalculator {
       return '料金情報なし';
     }
 
-    const baseRate = parking.rates.find(r => r.type === 'base');
-    const progressiveRate = parking.rates.find(r => r.type === 'progressive');
-    const maxRate = parking.rates.find(r => r.type === 'max');
+    // データベースのsnake_caseをcamelCaseに変換
+    const normalizedRates = parking.rates.map(rate => ({
+      ...rate,
+      applyAfter: rate.applyAfter ?? (rate as any).apply_after ?? rate.applyAfter,
+      dayType: rate.dayType ?? (rate as any).day_type ?? rate.dayType,
+      timeRange: rate.timeRange ?? (rate as any).time_range ?? rate.timeRange,
+    }));
+
+    const baseRates = normalizedRates.filter(r => r.type === 'base');
+    const progressiveRates = normalizedRates.filter(r => r.type === 'progressive');
+    const maxRates = normalizedRates.filter(r => r.type === 'max');
 
     let info = '';
 
-    if (baseRate) {
-      // 分刻み料金の表示を適切にフォーマット
-      if (baseRate.minutes < 60) {
-        info += `${baseRate.minutes}分毎 ${baseRate.price}円`;
-      } else if (baseRate.minutes === 60) {
-        info += `1時間 ${baseRate.price}円`;
-      } else {
-        const hours = baseRate.minutes / 60;
-        if (Number.isInteger(hours)) {
-          info += `${hours}時間 ${baseRate.price}円`;
+    // 時間帯別にグループ化
+    const timeRanges = [...new Set(normalizedRates.filter(r => r.timeRange).map(r => r.timeRange))];
+
+    if (timeRanges.length > 0) {
+      // 時間帯別料金がある場合
+      const timeRangeInfos: string[] = [];
+
+      for (const timeRange of timeRanges) {
+        const rangeRates = normalizedRates.filter(r => r.timeRange === timeRange);
+        const baseRate = rangeRates.find(r => r.type === 'base');
+        const progressiveRate = rangeRates.find(r => r.type === 'progressive');
+
+        if (progressiveRate && progressiveRate.applyAfter === 30 && baseRate && baseRate.price === 0) {
+          // 30分未満無料、30分以降の料金表示（original_feesの形式に合わせる）
+          timeRangeInfos.push(`${timeRange} 30分未満無料､30分以降入庫から${progressiveRate.minutes}分毎¥${progressiveRate.price}`);
+        } else if (progressiveRate && baseRate && baseRate.price === 0) {
+          // その他のprogressive料金パターン
+          timeRangeInfos.push(`${timeRange} ${progressiveRate.applyAfter}分未満無料､${progressiveRate.applyAfter}分以降${progressiveRate.minutes}分毎¥${progressiveRate.price}`);
+        } else if (baseRate && baseRate.price > 0) {
+          timeRangeInfos.push(`${timeRange} ${baseRate.minutes}分毎¥${baseRate.price}`);
+        } else if (baseRate && baseRate.price === 0 && !progressiveRate) {
+          // progressive料金が本当にない場合のみ0円表示
+          timeRangeInfos.push(`${timeRange} ${baseRate.minutes}分毎¥0`);
+        }
+      }
+
+      info = timeRangeInfos.join('\n');
+    } else {
+      // 時間帯指定なしの通常料金
+      const displayBaseRate = baseRates.find(r => r.price > 0) || baseRates[0];
+
+      if (progressiveRates.length > 0) {
+        const firstProgressive = progressiveRates.sort((a, b) => (a.applyAfter || 0) - (b.applyAfter || 0))[0];
+
+        // 基本料金が無料でprogressive料金がある場合
+        if ((!displayBaseRate || displayBaseRate.price === 0) && firstProgressive) {
+          if (firstProgressive.applyAfter === 30) {
+            if (progressiveRates.length > 1 && progressiveRates[1].applyAfter === 60) {
+              info = `30分～60分 ¥${firstProgressive.price} / 60分以降 ${progressiveRates[1].minutes}分毎 ¥${progressiveRates[1].price}`;
+            } else {
+              info = `最初の30分無料 / 30分以降 ${firstProgressive.minutes}分毎 ¥${firstProgressive.price}`;
+            }
+          } else if (firstProgressive.applyAfter === 60) {
+            info = `60分以降 ${firstProgressive.minutes}分毎 ¥${firstProgressive.price}`;
+          } else {
+            info = `${firstProgressive.applyAfter}分以降 ${firstProgressive.minutes}分毎 ¥${firstProgressive.price}`;
+          }
+        } else if (displayBaseRate) {
+          // 通常の基本料金
+          if (displayBaseRate.minutes < 60) {
+            info = `${displayBaseRate.minutes}分毎 ¥${displayBaseRate.price}`;
+          } else if (displayBaseRate.minutes === 60) {
+            info = `1時間 ¥${displayBaseRate.price}`;
+          } else {
+            const hours = displayBaseRate.minutes / 60;
+            if (Number.isInteger(hours)) {
+              info = `${hours}時間 ¥${displayBaseRate.price}`;
+            } else {
+              info = `${displayBaseRate.minutes}分 ¥${displayBaseRate.price}`;
+            }
+          }
+
+          // progressive料金も追加表示
+          if (firstProgressive) {
+            info += `\n${firstProgressive.applyAfter}分以降: ${firstProgressive.minutes}分毎 ¥${firstProgressive.price}`;
+          }
+        }
+      } else if (displayBaseRate) {
+        // progressive料金なしの場合
+        // 基本料金が0円の場合は表示しない（無料期間として扱う）
+        if (displayBaseRate.price === 0) {
+          info = `最初の${displayBaseRate.minutes}分無料`;
+        } else if (displayBaseRate.minutes < 60) {
+          info = `${displayBaseRate.minutes}分毎 ¥${displayBaseRate.price}`;
+        } else if (displayBaseRate.minutes === 60) {
+          info = `1時間 ¥${displayBaseRate.price}`;
         } else {
-          info += `${baseRate.minutes}分 ${baseRate.price}円`;
+          const hours = displayBaseRate.minutes / 60;
+          if (Number.isInteger(hours)) {
+            info = `${hours}時間 ¥${displayBaseRate.price}`;
+          } else {
+            info = `${displayBaseRate.minutes}分 ¥${displayBaseRate.price}`;
+          }
         }
       }
     }
 
-    if (progressiveRate) {
+    // 最大料金の表示
+    if (maxRates.length > 0) {
+      const firstMax = maxRates[0];
       if (info) info += '\n';
-      info += `${progressiveRate.applyAfter}分以降: ${progressiveRate.minutes}分 ${progressiveRate.price}円`;
-    }
-
-    if (maxRate) {
-      if (info) info += '\n';
-      if (maxRate.minutes === 0 || maxRate.minutes === 1440) {
-        info += `最大料金 ${maxRate.price}円`;
+      if (firstMax.minutes === 0 || firstMax.minutes === 1440) {
+        info += `最大料金 ¥${firstMax.price}`;
       } else {
-        const hours = maxRate.minutes / 60;
-        info += `最大料金 (${hours}時間) ${maxRate.price}円`;
+        const hours = firstMax.minutes / 60;
+        info += `最大料金 (${hours}時間) ¥${firstMax.price}`;
       }
     }
 

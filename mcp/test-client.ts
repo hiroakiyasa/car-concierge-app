@@ -6,8 +6,8 @@ dotenv.config();
 dotenv.config({ path: '.env.mcp.local' });
 
 // MCP client SDK
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { Client } from '@modelcontextprotocol/sdk/client';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio';
 
 async function main() {
   const cwd = process.cwd();
@@ -43,4 +43,3 @@ main().catch(err => {
   console.error('[test-client] error:', err?.message || String(err));
   process.exit(1);
 });
-
