@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { NavigationContainer } from '@react-navigation/native';
@@ -7,7 +7,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MapScreen } from '@/screens/MapScreen';
 import { SpotDetailScreen } from '@/screens/SpotDetailScreen';
-import { SplashScreen } from '@/screens/SplashScreen';
 import { TestMapBounds } from '@/screens/TestMapBounds';
 import { TestDataFetch } from '@/screens/TestDataFetch';
 import { DebugSupabase } from '@/screens/DebugSupabase';
@@ -43,7 +42,6 @@ const queryClient = new QueryClient({
 });
 
 export default function App() {
-  const [isSplashComplete, setIsSplashComplete] = useState(false);
   const initializeAuth = useAuthStore(state => state.initializeAuth);
 
   useEffect(() => {
@@ -57,15 +55,9 @@ export default function App() {
         console.error('🚀 App: 認証初期化エラー:', error);
       }
     };
-    
+
     initAuth();
   }, [initializeAuth]);
-
-  if (!isSplashComplete) {
-    return (
-      <SplashScreen onComplete={() => setIsSplashComplete(true)} />
-    );
-  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

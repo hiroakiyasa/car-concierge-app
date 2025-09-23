@@ -43,8 +43,8 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const [convenienceSelected, setConvenienceSelected] = useState(false); // コンビニ選択状態
   const [hotspringSelected, setHotspringSelected] = useState(false); // 温泉選択状態
   
-  // チェックボックス状態（各タブの有効/無効）
-  const [parkingEnabled, setParkingEnabled] = useState(true);
+  // チェックボックス状態（各タブの有効/無効） - フィルター適用を制御
+  const [parkingEnabled, setParkingEnabled] = useState(false);
   const [nearbyEnabled, setNearbyEnabled] = useState(false);
   const [elevationEnabled, setElevationEnabled] = useState(false);
   
@@ -154,30 +154,47 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const handleSearch = () => {
     // 複数のフィルターをAND条件で適用
     let newFilter = { ...searchFilter };
-    
-    // 駐車料金フィルター
+
+    // 駐車料金フィルター（チェックボックスが有効な場合のみ適用）
     newFilter.parkingTimeFilterEnabled = parkingEnabled;
-    
-    // 周辺検索フィルター
+
+    // 周辺検索フィルター（チェックボックスが有効な場合のみ適用）
     if (nearbyEnabled) {
       const effectiveConvenienceRadius = convenienceSelected ? convenienceRadius : 0;
       const effectiveHotspringRadius = hotspringSelected ? hotspringRadius : 0;
       newFilter.nearbyFilterEnabled = effectiveConvenienceRadius > 0 || effectiveHotspringRadius > 0;
       newFilter.convenienceStoreRadius = effectiveConvenienceRadius;
       newFilter.hotSpringRadius = effectiveHotspringRadius;
+
+      // チェックされた施設を絞り込み条件に反映（AND 条件）
+      const categories = new Set<string>();
+      if (effectiveConvenienceRadius > 0) categories.add('コンビニ');
+      if (effectiveHotspringRadius > 0) categories.add('温泉');
+      newFilter.nearbyCategories = categories;
     } else {
       newFilter.nearbyFilterEnabled = false;
       newFilter.convenienceStoreRadius = 0;
       newFilter.hotSpringRadius = 0;
+      newFilter.nearbyCategories = new Set();
     }
-    
-    // 標高フィルター
+
+    // 標高フィルター（チェックボックスが有効な場合のみ適用）
     newFilter.elevationFilterEnabled = elevationEnabled;
     newFilter.minElevation = elevationEnabled ? minElevation : 0;
-    
+
+    // デバッグ出力
+    console.log('🔍 検索フィルター設定:', {
+      駐車料金: parkingEnabled ? '有効' : '無効',
+      周辺検索: nearbyEnabled ? '有効' : '無効',
+      標高: elevationEnabled ? '有効' : '無効',
+      コンビニ: nearbyEnabled && convenienceSelected ? `${convenienceRadius}m` : '無効',
+      温泉: nearbyEnabled && hotspringSelected ? `${hotspringRadius}m` : '無効',
+      最低標高: elevationEnabled ? `${minElevation}m` : '無効'
+    });
+
     // Zustandストアを更新
     setSearchFilter(newFilter);
-    
+
     // 新しいフィルター設定を直接MapScreenに渡す
     if (onSearch) {
       onSearch(false, newFilter);
@@ -282,24 +299,26 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
           </Text>
           <TouchableOpacity
             style={styles.checkbox}
-            onPress={() => setParkingEnabled(!parkingEnabled)}
+            onPress={(e) => {
+              e.stopPropagation();
+              setParkingEnabled(!parkingEnabled);
+            }}
           >
-            <Ionicons 
-              name={parkingEnabled ? "checkbox" : "square-outline"} 
-              size={18} 
-              color={activeTab === 'parking' ? Colors.white : (parkingEnabled ? Colors.primary : '#999')} 
+            <Ionicons
+              name={parkingEnabled ? "checkbox" : "square-outline"}
+              size={18}
+              color={parkingEnabled ? (activeTab === 'parking' ? Colors.white : Colors.primary) : '#999'}
             />
           </TouchableOpacity>
         </TouchableOpacity>
         
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.filterTab, activeTab === 'nearby' && styles.activeTab]}
           onPress={() => {
             setActiveTab('nearby');
-            // 周辺検索を有効化し、デフォルトでコンビニ30mを設定
-            setNearbyEnabled(true);
+            // タブ選択時は表示を切り替えるだけで、フィルターは有効化しない
             if (!convenienceSelected && !hotspringSelected) {
-              // 初回選択時はデフォルトでコンビニ30mを選択
+              // 初回選択時はデフォルトでコンビニ30mを準備（表示のみ）
               setConvenienceSelected(true);
               setConvenienceSlider(radiusToSlider(30));
               setConvenienceRadius(30);
@@ -316,12 +335,15 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
           </Text>
           <TouchableOpacity
             style={styles.checkbox}
-            onPress={() => setNearbyEnabled(!nearbyEnabled)}
+            onPress={(e) => {
+              e.stopPropagation();
+              setNearbyEnabled(!nearbyEnabled);
+            }}
           >
-            <Ionicons 
-              name={nearbyEnabled ? "checkbox" : "square-outline"} 
-              size={18} 
-              color={activeTab === 'nearby' ? Colors.white : (nearbyEnabled ? Colors.primary : '#999')} 
+            <Ionicons
+              name={nearbyEnabled ? "checkbox" : "square-outline"}
+              size={18}
+              color={nearbyEnabled ? (activeTab === 'nearby' ? Colors.white : Colors.primary) : '#999'}
             />
           </TouchableOpacity>
         </TouchableOpacity>
@@ -340,12 +362,15 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
           </Text>
           <TouchableOpacity
             style={styles.checkbox}
-            onPress={() => setElevationEnabled(!elevationEnabled)}
+            onPress={(e) => {
+              e.stopPropagation();
+              setElevationEnabled(!elevationEnabled);
+            }}
           >
-            <Ionicons 
-              name={elevationEnabled ? "checkbox" : "square-outline"} 
-              size={18} 
-              color={activeTab === 'elevation' ? Colors.white : (elevationEnabled ? Colors.primary : '#999')} 
+            <Ionicons
+              name={elevationEnabled ? "checkbox" : "square-outline"}
+              size={18}
+              color={elevationEnabled ? (activeTab === 'elevation' ? Colors.white : Colors.primary) : '#999'}
             />
           </TouchableOpacity>
         </TouchableOpacity>

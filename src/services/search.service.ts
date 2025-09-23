@@ -92,29 +92,33 @@ export class SearchService {
     }
 
     // 近隣施設フィルター
-    if (filter.nearbyCategories.size > 0) {
+    if (filter.nearbyFilterEnabled && (filter.convenienceStoreRadius > 0 || filter.hotSpringRadius > 0)) {
       filteredSpots = filteredSpots.filter(spot => {
+        // 駐車場以外はフィルタリングしない（関連施設として表示）
         if (spot.category !== 'コインパーキング') return true;
-        
+
         const parking = spot as CoinParking;
-        
-        // コンビニ近くフィルター
-        if (filter.nearbyCategories.has('コンビニ')) {
-          if (!parking.nearestConvenienceStore || 
-              parking.nearestConvenienceStore.distance > filter.convenienceStoreRadius) {
-            return false;
+        let passesFilter = true;
+
+        // コンビニ近くフィルター（AND条件）
+        if (filter.convenienceStoreRadius > 0) {
+          const hasNearbyStore = parking.nearestConvenienceStore &&
+                                 parking.nearestConvenienceStore.distance <= filter.convenienceStoreRadius;
+          if (!hasNearbyStore) {
+            passesFilter = false;
           }
         }
-        
-        // 温泉近くフィルター
-        if (filter.nearbyCategories.has('温泉')) {
-          if (!parking.nearestHotspring || 
-              parking.nearestHotspring.distance > filter.hotSpringRadius) {
-            return false;
+
+        // 温泉近くフィルター（AND条件）
+        if (filter.hotSpringRadius > 0) {
+          const hasNearbySpring = parking.nearestHotspring &&
+                                  parking.nearestHotspring.distance <= filter.hotSpringRadius;
+          if (!hasNearbySpring) {
+            passesFilter = false;
           }
         }
-        
-        return true;
+
+        return passesFilter;
       });
     }
 
@@ -131,17 +135,17 @@ export class SearchService {
   ): Spot[] {
     const sortedSpots = [...spots];
 
-    // 駐車料金でソート（駐車時間が設定されている場合）
-    if (filter.parkingTimeFilterEnabled) {
+    // 駐車料金でソート（駐車時間が設定されている場合、または周辺検索が有効な場合も料金順）
+    if (filter.parkingTimeFilterEnabled || filter.nearbyFilterEnabled) {
       // まず有効な料金が計算できる駐車場をフィルタリング
       const validParkingSpots = sortedSpots.filter(spot => {
         if (spot.category !== 'コインパーキング') return true;
-        
+
         const parking = spot as CoinParking;
         const fee = ParkingFeeCalculator.calculateFee(parking, filter.parkingDuration);
         return fee >= 0; // 有効な料金のみ通す（0円の無料駐車場も含む）
       });
-      
+
       // 有効な駐車場を料金でソート
       validParkingSpots.sort((a, b) => {
         if (a.category !== 'コインパーキング' || b.category !== 'コインパーキング') {
@@ -156,9 +160,9 @@ export class SearchService {
 
         return feeA - feeB;
       });
-      
+
       return validParkingSpots;
-    } 
+    }
     // 距離でソート（ユーザー位置がある場合）
     else if (userLocation) {
       sortedSpots.sort((a, b) => {

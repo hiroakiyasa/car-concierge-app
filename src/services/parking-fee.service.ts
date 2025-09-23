@@ -532,6 +532,28 @@ export class ParkingFeeCalculator {
   }
 
   /**
+   * 駐車場が指定期間中ずっと営業しているかチェック
+   */
+  static isParkingOpenForEntireDuration(
+    parking: CoinParking,
+    duration: ParkingDuration
+  ): boolean {
+    // 24時間営業の場合は常にtrue
+    if (parking.hours?.is_24h || parking.hours?.is24h) {
+      return true;
+    }
+
+    // 営業時間情報がない場合はtrueとする（データ不足の場合は表示）
+    if (!parking.hours?.hours) {
+      return true;
+    }
+
+    // TODO: 実際の営業時間チェックロジックを実装
+    // 現在は簡易実装として常にtrueを返す
+    return true;
+  }
+
+  /**
    * 料金情報を文字列でフォーマット
    */
   static formatFeeInfo(parking: CoinParking): string {

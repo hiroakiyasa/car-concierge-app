@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMainStore } from '@/stores/useMainStore';
 import { LocationService } from '@/services/location.service';
 import { SupabaseService } from '@/services/supabase.service';
+import { SearchService } from '@/services/search.service';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { CustomMarker } from '@/components/Map/CustomMarker';
 import { CategoryButtons } from '@/components/Map/CategoryButtons';
@@ -45,6 +46,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     setMapRegion,
     searchResults,
     setSearchResults,
+    userLocation,
     setUserLocation,
     isLoading,
     setIsLoading,
@@ -608,7 +610,17 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         new Map(displaySpots.map(spot => [spot.id, spot])).values()
       );
       console.log(`🗺️ 合計${uniqueDisplaySpots.length}件を地図に表示（重複除去前: ${displaySpots.length}件）`);
-      setSearchResults(uniqueDisplaySpots);
+      // すべての有効結果に対して、パネルで有効なチェック項目を AND で適用
+      // 注意: 周辺検索フィルターは既にバックエンドで適用済みなので、フロントエンドでの再フィルタリングは不要
+      // ただし、他のフィルター（標高など）は適用する必要がある
+      let finalResults = uniqueDisplaySpots;
+
+      // 標高フィルターのみフロントエンドで適用（周辺検索と駐車料金はバックエンドで処理済み）
+      if (currentFilter.elevationFilterEnabled && !currentFilter.nearbyFilterEnabled && !currentFilter.parkingTimeFilterEnabled) {
+        finalResults = SearchService.filterSpots(uniqueDisplaySpots, currentFilter, userLocation);
+      }
+
+      setSearchResults(finalResults);
       setSearchStatus('complete');
       // 3秒後に状態をリセット
       setTimeout(() => setSearchStatus('idle'), 3000);
