@@ -237,25 +237,10 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
       );
     }
 
-    // コンビニでロゴがある場合
+    // コンビニ（ロゴのみ表示）
     if (spot.category === 'コンビニ' && logo) {
-      // Androidではシンプルな円形マーカーを使用
-      if (Platform.OS === 'android') {
-        return (
-          <AndroidCircle size={32} fill={'#FF9500'} stroke="#FFFFFF" strokeWidth={2}>
-            <Text style={styles.simpleMarkerText}>🏪</Text>
-          </AndroidCircle>
-        );
-      }
-
-      // iOSでは詳細なデザインを使用
       return (
-        <View style={[
-          styles.logoMarker,
-          isNearbyFacility && styles.nearbyFacilityLogoMarker
-        ]}>
-          <Image source={logo} style={styles.logoImage} resizeMode="contain" />
-        </View>
+        <Image source={logo} style={styles.logoOnlyImage} resizeMode="contain" />
       );
     }
 
@@ -432,9 +417,8 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
           // その他のランク (4位以降)
           return 500 - rank;
         }
-        // ランクなしの施設
-        // 近隣施設は駐車場マーカーより前面に出す
-        return isNearbyFacility ? 650 : 400;
+        // ランクなしの施設（近隣施設は駐車場より背面）
+        return isNearbyFacility ? 300 : 400;
       })()}
       title={getMarkerTitle()}
       description={getMarkerDescription()}
@@ -669,6 +653,10 @@ const styles = StyleSheet.create({
   logoImage: {
     width: 32,
     height: 32,
+  },
+  logoOnlyImage: {
+    width: 28,
+    height: 28,
   },
   // 駐車場用のCallout
   parkingCalloutContainer: {
