@@ -900,12 +900,15 @@ export class SupabaseService {
       if (!error && data) {
         results.conveniences = data.map(store => ({
           ...store,
+          id: store.id,
           idString: store.id,
-          category: 'コンビニ',
+          category: 'コンビニ' as const,
+          lat: store.lat || store.latitude,
+          lng: store.lng || store.longitude,
           brand: store.brand || store.name,
           operatingHours: store.Hours || store.operating_hours || store.operatingHours,
         })) as ConvenienceStore[];
-        
+
         console.log(`🏪 ${results.conveniences.length}件のコンビニ詳細を取得`);
       }
     }
@@ -920,10 +923,13 @@ export class SupabaseService {
       if (!error && data) {
         results.hotsprings = data.map(spring => ({
           ...spring,
-          category: '温泉',
+          id: spring.id,
+          category: '温泉' as const,
+          lat: spring.lat || spring.latitude,
+          lng: spring.lng || spring.longitude,
           operatingHours: spring.Hours || spring.operating_hours || spring.operatingHours,
         })) as HotSpring[];
-        
+
         console.log(`♨️ ${results.hotsprings.length}件の温泉詳細を取得`);
       }
     }

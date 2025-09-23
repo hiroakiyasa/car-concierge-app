@@ -611,9 +611,45 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                 Array.from(convenienceIdsToFetch),
                 Array.from(hotspringIdsToFetch)
               );
-              [...fetched.conveniences, ...fetched.hotsprings].forEach((f: any) => {
-                const exists = nearbyFacilities.some(x => x.id === f.id) || displaySpots.some(x => x.id === f.id);
-                if (!exists) nearbyFacilities.push(f as Spot);
+
+              // コンビニを追加
+              fetched.conveniences.forEach((store: any) => {
+                const exists = nearbyFacilities.some(f =>
+                  f.id === store.id ||
+                  (Math.abs(f.lat - (store.lat || 0)) < 0.0001 && Math.abs(f.lng - (store.lng || 0)) < 0.0001)
+                );
+                if (!exists && store.lat && store.lng) {
+                  nearbyFacilities.push({
+                    id: store.id,
+                    name: store.name,
+                    category: 'コンビニ' as const,
+                    lat: store.lat,
+                    lng: store.lng,
+                    address: store.address || '',
+                    description: store.brand || '',
+                  } as Spot);
+                  console.log(`🏪 IDベースでコンビニ追加: ${store.name} (${store.lat}, ${store.lng})`);
+                }
+              });
+
+              // 温泉を追加
+              fetched.hotsprings.forEach((spring: any) => {
+                const exists = nearbyFacilities.some(f =>
+                  f.id === spring.id ||
+                  (Math.abs(f.lat - (spring.lat || 0)) < 0.0001 && Math.abs(f.lng - (spring.lng || 0)) < 0.0001)
+                );
+                if (!exists && spring.lat && spring.lng) {
+                  nearbyFacilities.push({
+                    id: spring.id,
+                    name: spring.name,
+                    category: '温泉' as const,
+                    lat: spring.lat,
+                    lng: spring.lng,
+                    address: spring.address || '',
+                    description: spring.description || '',
+                  } as Spot);
+                  console.log(`♨️ IDベースで温泉追加: ${spring.name} (${spring.lat}, ${spring.lng})`);
+                }
               });
             } catch (e) {
               console.warn('❗ 施設一括取得エラー:', e);
