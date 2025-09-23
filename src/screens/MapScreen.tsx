@@ -745,16 +745,13 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             const hotspringCount = nearbyFacilities.filter(f => f.category === '温泉').length;
             console.log(`🏪♨️ 関連施設: 合計${nearbyFacilities.length}件を表示（コンビニ: ${convenienceCount}件、温泉: ${hotspringCount}件）`);
             console.log(`📍 駐車場${displayedParkingSpots.length}件 + 施設${nearbyFacilities.length}件 = 合計${displayedParkingSpots.length + nearbyFacilities.length}件のマーカーを地図に表示`);
-            // 重要: nearbyFacilities ステートを更新して地図上に表示
-            setNearbyFacilities(nearbyFacilities);
+            // 注意: nearbyFacilitiesステートは設定しない（searchResultsに含まれるため）
           } else {
             console.log('⚠️ 関連施設が見つかりませんでした');
-            setNearbyFacilities([]);
           }
-        } else {
-          // 周辺検索が無効の場合、施設をクリア
-          setNearbyFacilities([]);
         }
+        // 周辺検索時はnearbyFacilitiesステートをクリア（個別選択用のため）
+        setNearbyFacilities([]);
       }
       
       // 駐車場以外のカテゴリーは絞り込みに関係なく全て表示（最大100件）
@@ -1138,14 +1135,28 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       // 1. カテゴリーを表示順序で追加（後ろから順に：花火大会 → ガソリン → 温泉 → コンビニ）
       const categoryOrder = ['お祭り・花火大会', 'ガソリンスタンド', '温泉', 'コンビニ'];
-      
+
+      // デバッグ: searchResultsの内容を確認
+      const categoryCounts = searchResults.reduce((acc, spot) => {
+        acc[spot.category] = (acc[spot.category] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log('🔍 renderMarkers開始 - searchResultsカテゴリ別:', categoryCounts);
+
+      let categoryMarkerCounts: Record<string, number> = {};
+
       categoryOrder.forEach((category) => {
         const spotsInCategory = searchResults.filter(spot => spot.category === category);
+        let validMarkersInCategory = 0;
+
         if (spotsInCategory.length > 0 && (category === 'コンビニ' || category === '温泉')) {
-          console.log(`📍 renderMarkers: ${category} ${spotsInCategory.length}件をレンダリング`);
-          spotsInCategory.slice(0, 3).forEach(s => {
-            console.log(`  - ${s.name}: lat=${s.lat}, lng=${s.lng}, id=${s.id}`);
-          });
+          console.log(`📍 renderMarkers: ${category} ${spotsInCategory.length}件を処理開始`);
+          if (category === 'コンビニ') {
+            console.log('🏪 コンビニ詳細（全件）:');
+            spotsInCategory.forEach((s, idx) => {
+              console.log(`  ${idx + 1}. ${s.name}: lat=${s.lat}, lng=${s.lng}, id=${s.id}`);
+            });
+          }
         }
         spotsInCategory.forEach((spot) => {
           try {
@@ -1185,6 +1196,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             // マーカーがnullでないことを確認してから追加
             if (marker && React.isValidElement(marker)) {
               markers.push(marker);
+              validMarkersInCategory++;
             } else {
               console.log('⚠️ Invalid marker element created for spot:', spot.id);
             }
@@ -1192,7 +1204,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             console.error('⚠️ Error processing spot for marker:', spotError, spot);
           }
         });
+
+        // カテゴリーごとのマーカー作成数を記録
+        categoryMarkerCounts[category] = validMarkersInCategory;
+        if (validMarkersInCategory > 0 && (category === 'コンビニ' || category === '温泉')) {
+          console.log(`✅ ${category}: ${validMarkersInCategory}件のマーカーを作成（元データ: ${spotsInCategory.length}件）`);
+        }
       });
+
+      console.log('📊 カテゴリー別マーカー作成数:', categoryMarkerCounts);
     
       // 2. 最寄り施設を追加（駐車場選択時のみ表示される個別施設）
       if (nearbyFacilities && nearbyFacilities.length > 0) {
