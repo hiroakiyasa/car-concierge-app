@@ -6,6 +6,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CrossPlatformMap } from '@/components/Map/CrossPlatformMap';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useMainStore } from '@/stores/useMainStore';
@@ -90,8 +91,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           }, 1500);
         }
         
-        // そのカテゴリーのスポットを検索
-        handleSearchForCategory(spotFromFavorites.category, newRegion);
+        // 自動検索は行わない（ユーザーが手動で検索ボタンを押すまで待つ）
+        console.log('📍 お気に入りから選択されたスポットの位置に移動完了');
       }
       
       // パラメータをクリア（再度実行されないように）
@@ -99,168 +100,105 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     }
   }, [route?.params?.selectedSpot, isMapReady]);
   
-  // 地図がレンダリングされて初期位置が設定されたら自動検索
+  // 地図がレンダリングされたときの処理（自動検索は無効化）
   useEffect(() => {
     if (isMapReady && mapRegion.latitude && mapRegion.longitude &&
         mapRegion.latitude !== 0 && mapRegion.longitude !== 0 &&
         !isNaN(mapRegion.latitude) && !isNaN(mapRegion.longitude) &&
         !hasInitialized) {
-      // 初回のみ自動検索を実行
       setHasInitialized(true);
-      const timer = setTimeout(() => {
-        console.log('🚀 初回自動検索実行');
-        // デフォルトでコインパーキングのみ選択されているか確認
-        console.log('選択されているカテゴリー:', Array.from(searchFilter.selectedCategories));
-        searchParkingWithExpansion();
-      }, 2000); // 少し待ってから実行
-      return () => clearTimeout(timer);
+      console.log('📍 地図の準備完了 - 現在の位置:', mapRegion);
+      // 自動検索は行わない
     }
   }, [isMapReady, mapRegion.latitude, mapRegion.longitude, hasInitialized]);
   
   const initializeLocation = async () => {
-    const location = await LocationService.getCurrentLocation();
-    if (location) {
-      setUserLocation(location);
-      const newRegion = {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        latitudeDelta: 0.02,
-        longitudeDelta: 0.02,
-      };
-      console.log('📍 初期位置設定:', newRegion);
-      setMapRegion(newRegion);
-    } else {
-      // デフォルト位置（東京駅）を設定
+    try {
+      // まず前回保存した地図範囲を取得
+      const savedRegion = await AsyncStorage.getItem('lastMapRegion');
+
+      if (savedRegion) {
+        // 保存された地図範囲がある場合は即座にそれを使用
+        const initialRegion = JSON.parse(savedRegion);
+        console.log('📍 前回の地図範囲を復元:', initialRegion);
+        setMapRegion(initialRegion);
+
+        // バックグラウンドで現在地を取得（地図は動かさない）
+        LocationService.getCurrentLocation().then(location => {
+          if (location) {
+            setUserLocation(location);
+            console.log('📍 現在地を取得（地図は移動しない）:', location);
+          }
+        }).catch(error => {
+          console.log('📍 現在地取得エラー（地図はそのまま）:', error);
+        });
+      } else {
+        // 初回起動時のみ地図範囲を設定
+        console.log('📍 初回起動 - 地図範囲を設定中...');
+
+        // デフォルト位置（東京駅）をまず設定
+        const defaultRegion = {
+          latitude: 35.6812,
+          longitude: 139.7671,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        };
+        setMapRegion(defaultRegion);
+
+        // 現在地の取得を試みる（成功したら地図を移動）
+        try {
+          const location = await LocationService.getCurrentLocation();
+          if (location) {
+            setUserLocation(location);
+            // 初回起動時のみ現在地に移動
+            const newRegion = {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              latitudeDelta: 0.02,
+              longitudeDelta: 0.02,
+            };
+            console.log('📍 初回起動 - 現在地を中心に設定:', newRegion);
+            setMapRegion(newRegion);
+            await saveMapRegion(newRegion);
+
+            // 地図のアニメーション
+            if (mapRef.current && isMapReady) {
+              mapRef.current.animateToRegion(newRegion, 1000);
+            }
+          } else {
+            console.log('📍 初回起動 - 現在地取得失敗、デフォルト位置を使用');
+            await saveMapRegion(defaultRegion);
+          }
+        } catch (error) {
+          console.log('📍 初回起動 - 現在地取得エラー、デフォルト位置を使用:', error);
+          await saveMapRegion(defaultRegion);
+        }
+      }
+    } catch (error) {
+      console.error('❌ 初期位置の設定エラー:', error);
+      // エラー時はデフォルト位置を設定
       const defaultRegion = {
         latitude: 35.6812,
         longitude: 139.7671,
         latitudeDelta: 0.02,
         longitudeDelta: 0.02,
       };
-      console.log('📍 デフォルト位置設定:', defaultRegion);
       setMapRegion(defaultRegion);
     }
   };
+
+  // 地図範囲をAsyncStorageに保存
+  const saveMapRegion = async (region: Region) => {
+    try {
+      await AsyncStorage.setItem('lastMapRegion', JSON.stringify(region));
+    } catch (error) {
+      console.error('❌ 地図範囲の保存エラー:', error);
+    }
+  };
   
-  // 起動時に駐車場を検索する関数
-  const searchParkingWithExpansion = async () => {
-    console.log('🔍 駐車場自動検索開始');
-    setIsLoading(true);
-    setSearchStatus('searching');
+  // searchParkingWithExpansion関数は削除（自動検索は使用しない）
 
-    const currentRegion = { ...mapRegion };
-
-    try {
-      console.log('🔍 現在の地図範囲で検索中:', {
-        latDelta: currentRegion.latitudeDelta.toFixed(4),
-        lngDelta: currentRegion.longitudeDelta.toFixed(4)
-      });
-
-      // 駐車場を検索
-      const parkingData = await SupabaseService.fetchParkingSpots(currentRegion);
-      console.log(`📍 ${parkingData.length}件の駐車場を発見`);
-
-      if (parkingData.length > 0) {
-        // 料金計算
-        const parkingWithFees = parkingData.map(spot => ({
-          ...spot,
-          id: spot.id.toString(),
-          category: 'コインパーキング' as const,
-          calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration),
-        }));
-
-        // 料金でソートしてトップ20のみ表示
-        const results = parkingWithFees
-          .sort((a, b) => (a.calculatedFee || 999999) - (b.calculatedFee || 999999))
-          .slice(0, 20);
-
-        setSearchResults(results);
-        console.log(`✅ 駐車場検索成功: ${results.length}件を表示`);
-      } else {
-        // 駐車場が見つからない場合
-        setSearchResults([]);
-        console.log('⚠️ この範囲には駐車場が見つかりませんでした');
-
-        // ユーザーに通知
-        Alert.alert(
-          'この範囲では検索結果なし',
-          '地図を縮小して、より広い範囲で検索してみてください。',
-          [{ text: 'OK' }]
-        );
-      }
-
-      setSearchStatus('complete');
-      setIsLoading(false);
-
-    } catch (error) {
-      console.error('検索エラー:', error);
-      setSearchStatus('complete');
-      setIsLoading(false);
-    }
-  };
-
-  const handleSearchForCategory = async (category: string, region?: Region) => {
-    // 特定のカテゴリーのみを検索
-    const searchRegion = region || mapRegion;
-    setIsLoading(true);
-    
-    try {
-      console.log(`🔍 ${category}を検索中...`);
-      
-      // カテゴリーに応じて検索
-      let results: Spot[] = [];
-      
-      switch (category) {
-        case 'コインパーキング':
-          const parkingData = await SupabaseService.fetchParkingSpots(searchRegion);
-          
-          // 料金計算
-          const parkingWithFees = parkingData.map(spot => ({
-            ...spot,
-            id: spot.id.toString(),
-            category: 'コインパーキング' as const,
-            calculatedFee: ParkingFeeCalculator.calculateFee(spot, searchFilter.parkingDuration),
-          }));
-          
-          // 料金でソートしてトップ20のみ表示
-          results = parkingWithFees
-            .sort((a, b) => (a.calculatedFee || 999999) - (b.calculatedFee || 999999))
-            .slice(0, 20);
-          break;
-          
-        case 'コンビニ':
-          const convenienceData = await SupabaseService.fetchConvenienceStores(searchRegion);
-          results = convenienceData.map(spot => ({
-            ...spot,
-            category: 'コンビニ' as const,
-          }));
-          break;
-          
-        case '温泉':
-          const hotSpringData = await SupabaseService.fetchHotSprings(searchRegion);
-          results = hotSpringData.map(spot => ({
-            ...spot,
-            category: '温泉' as const,
-          }));
-          break;
-          
-        case 'ガソリンスタンド':
-          const gasStationData = await SupabaseService.fetchGasStations(searchRegion);
-          results = gasStationData.map(spot => ({
-            ...spot,
-            category: 'ガソリンスタンド' as const,
-          }));
-          break;
-      }
-      
-      setSearchResults(results);
-      console.log(`✅ ${category}検索完了: ${results.length}件`);
-    } catch (error) {
-      console.error(`${category}検索エラー:`, error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // handleSearchForCategory関数は削除（使用されていない）
 
   const handleSearch = async (isExpanded?: boolean, overrideFilter?: any) => {
     setIsLoading(true);
@@ -701,10 +639,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       };
       setMapRegion(newRegion);
       mapRef.current?.animateToRegion(newRegion, 500);
-      // 現在地に移動後、自動で検索を実行
-      setTimeout(() => {
-        handleSearch();
-      }, 600);
+      // 自動検索は行わない（ユーザーが手動で検索ボタンを押すまで待つ）
+      console.log('📍 現在地に移動完了');
     } else {
       Alert.alert('位置情報', '現在地を取得できませんでした');
     }
@@ -713,6 +649,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   const handleRegionChangeComplete = (region: Region) => {
     // 地図の移動が完了したら最新のregionを保存
     setMapRegion(region);
+
+    // AsyncStorageに現在の地図範囲を保存
+    saveMapRegion(region);
+
     console.log('📱 地図移動完了 (この値を検索に使用):', {
       中心緯度: region.latitude.toFixed(6),
       中心経度: region.longitude.toFixed(6),
@@ -1151,29 +1091,17 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     }
   };
   
-  // アプリ起動時に現在地を取得して自動検索
-  useEffect(() => {
-    const initializeMap = async () => {
-      if (isMapReady) {
-        await handleLocationPress();
-      }
-    };
-    initializeMap();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMapReady]);
-  
+  // 起動時の自動移動はしない（ユーザー操作か初回のみ）
+  // - 初回は initializeLocation 内で現在地へ一度だけ移動
+  // - 2回目以降は保存した地図範囲を復元し、地図は動かさない
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.mapWrapper}>
         <CrossPlatformMap
           mapRef={mapRef}
           style={styles.map}
-          region={{
-            latitude: 35.6812,
-            longitude: 139.7671,
-            latitudeDelta: 0.02,
-            longitudeDelta: 0.02,
-          }}
+          region={mapRegion}
           onRegionChangeComplete={handleRegionChangeComplete}
           onMapReady={() => setIsMapReady(true)}
           showsUserLocation={true}
