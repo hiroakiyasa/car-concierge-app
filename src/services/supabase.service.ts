@@ -445,10 +445,14 @@ export class SupabaseService {
     });
 
     try {
-      // まず地図範囲内の駐車場を取得
+      // まず地図範囲内の駐車場を取得（関連施設の詳細情報も含む）
       let query = supabase
         .from('parking_spots')
-        .select('*, nearest_convenience_store, nearest_hotspring')
+        .select(`
+          *,
+          nearest_convenience_store,
+          nearest_hotspring
+        `)
         .gte('lat', minLat)
         .lte('lat', maxLat)
         .gte('lng', minLng)
@@ -597,12 +601,88 @@ export class SupabaseService {
       }) as CoinParking[];
       
       console.log(`✅ 周辺検索結果: ${results.length}件（料金順上位20件）`);
-      
+
+      // 関連施設のIDを収集
+      const convenienceIds = new Set<string>();
+      const hotspringIds = new Set<string>();
+
+      results.forEach(spot => {
+        if (spot.nearestConvenienceStore && spot.nearestConvenienceStore.store_id) {
+          convenienceIds.add(String(spot.nearestConvenienceStore.store_id));
+        }
+        if (spot.nearestHotspring && spot.nearestHotspring.spring_id) {
+          hotspringIds.add(String(spot.nearestHotspring.spring_id));
+        }
+      });
+
+      // 関連施設の詳細情報を取得
+      const facilitiesPromises = [];
+
+      if (convenienceIds.size > 0) {
+        const convenienceQuery = supabase
+          .from('convenience_stores')
+          .select('*')
+          .in('id', Array.from(convenienceIds));
+        facilitiesPromises.push(convenienceQuery);
+      }
+
+      if (hotspringIds.size > 0) {
+        const hotspringQuery = supabase
+          .from('hot_springs')
+          .select('*')
+          .in('id', Array.from(hotspringIds));
+        facilitiesPromises.push(hotspringQuery);
+      }
+
+      // 関連施設を取得して結果に追加
+      const facilitiesResults = await Promise.all(facilitiesPromises);
+      const convenienceStores = convenienceIds.size > 0 && facilitiesResults[0]?.data ? facilitiesResults[0].data : [];
+      const hotSprings = hotspringIds.size > 0 ?
+        (convenienceIds.size > 0 ? facilitiesResults[1]?.data : facilitiesResults[0]?.data) || [] : [];
+
+      // nearestConvenienceStoreとnearestHotspringに座標情報を追加
+      results.forEach(spot => {
+        if (spot.nearestConvenienceStore && spot.nearestConvenienceStore.store_id) {
+          const store = convenienceStores.find((s: any) => s.id === spot.nearestConvenienceStore.store_id);
+          if (store) {
+            spot.nearestConvenienceStore = {
+              ...spot.nearestConvenienceStore,
+              id: store.id,
+              store_id: store.id,
+              lat: store.lat || store.latitude,
+              lng: store.lng || store.longitude,
+              latitude: store.lat || store.latitude,
+              longitude: store.lng || store.longitude,
+              name: store.name,
+              brand: store.brand,
+              address: store.address
+            };
+          }
+        }
+
+        if (spot.nearestHotspring && spot.nearestHotspring.spring_id) {
+          const spring = hotSprings.find((s: any) => s.id === spot.nearestHotspring.spring_id);
+          if (spring) {
+            spot.nearestHotspring = {
+              ...spot.nearestHotspring,
+              id: spring.id,
+              spring_id: spring.id,
+              lat: spring.lat || spring.latitude,
+              lng: spring.lng || spring.longitude,
+              latitude: spring.lat || spring.latitude,
+              longitude: spring.lng || spring.longitude,
+              name: spring.name,
+              address: spring.address
+            };
+          }
+        }
+      });
+
       // 上位5件の詳細をログ出力
       if (results.length > 0) {
         console.log('💰 上位5件の詳細:');
         results.slice(0, 5).forEach((spot, idx) => {
-          const convenienceInfo = spot.nearestConvenienceStore 
+          const convenienceInfo = spot.nearestConvenienceStore
             ? `🏪${spot.nearestConvenienceStore.distance_m || spot.nearestConvenienceStore.distance}m`
             : '❌';
           const hotspringInfo = spot.nearestHotspring
@@ -611,7 +691,7 @@ export class SupabaseService {
           console.log(`  ${idx + 1}. ${spot.name}: ¥${spot.calculatedFee} (${convenienceInfo}, ${hotspringInfo})`);
         });
       }
-      
+
       return results;
     } catch (error) {
       console.error('❌ 周辺検索エラー:', error);
