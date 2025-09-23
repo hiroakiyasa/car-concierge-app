@@ -817,52 +817,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
 
       setSearchResults(finalResults);
 
-      // 周辺検索時に全マーカーが表示されるよう地図範囲を調整
-      if (currentFilter.nearbyFilterEnabled && finalResults.length > 0) {
-        // すべてのマーカーの座標から最適な表示範囲を計算
-        const lats = finalResults.map(s => s.lat);
-        const lngs = finalResults.map(s => s.lng);
-
-        const minLat = Math.min(...lats);
-        const maxLat = Math.max(...lats);
-        const minLng = Math.min(...lngs);
-        const maxLng = Math.max(...lngs);
-
-        // 中心点を計算
-        const centerLat = (minLat + maxLat) / 2;
-        const centerLng = (minLng + maxLng) / 2;
-
-        // デルタを計算（少し余白を持たせる）
-        const latDelta = (maxLat - minLat) * 1.2 || 0.01;
-        const lngDelta = (maxLng - minLng) * 1.2 || 0.01;
-
-        // 最小デルタを設定（ズームしすぎ防止）
-        const adjustedLatDelta = Math.max(latDelta, 0.005);
-        const adjustedLngDelta = Math.max(lngDelta, 0.005);
-
-        const newRegion = {
-          latitude: centerLat,
-          longitude: centerLng,
-          latitudeDelta: adjustedLatDelta,
-          longitudeDelta: adjustedLngDelta,
-        };
-
-        console.log(`🗺️ 全施設が表示されるよう地図範囲を調整:`, {
-          施設数: finalResults.length,
-          北端: maxLat.toFixed(6),
-          南端: minLat.toFixed(6),
-          東端: maxLng.toFixed(6),
-          西端: minLng.toFixed(6),
-          新しい中心: `${centerLat.toFixed(6)}, ${centerLng.toFixed(6)}`,
-          新しいデルタ: `${adjustedLatDelta.toFixed(6)}, ${adjustedLngDelta.toFixed(6)}`
-        });
-
-        // 地図を新しい範囲にアニメーション
-        if (mapRef.current) {
-          mapRef.current.animateToRegion(newRegion, 500);
-        }
-        setMapRegion(newRegion);
-      }
+      // 周辺検索時は地図のズームを変更しない（ユーザーの操作を尊重）
 
       // デバッグ: カテゴリ別の内訳を確認
       const categoryCounts = finalResults.reduce((acc, spot) => {
@@ -877,16 +832,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         console.log(`🏪 searchResultsのコンビニ ${convenienceStores.length}件:`,
           convenienceStores.map(s => ({ id: s.id, name: s.name, lat: s.lat, lng: s.lng }))
         );
-
-        // 重複IDチェック
-        const idCounts = convenienceStores.reduce((acc, store) => {
-          acc[store.id] = (acc[store.id] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-        const duplicateIds = Object.entries(idCounts).filter(([_, count]) => count > 1);
-        if (duplicateIds.length > 0) {
-          console.warn('⚠️ 重複IDを持つコンビニが存在:', duplicateIds);
-        }
       }
 
       setSearchStatus('complete');
@@ -1191,73 +1136,27 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       // 1. カテゴリーを表示順序で追加（後ろから順に：花火大会 → ガソリン → 温泉 → コンビニ）
       const categoryOrder = ['お祭り・花火大会', 'ガソリンスタンド', '温泉', 'コンビニ'];
 
-      // カテゴリー別にマーカーを追加
+      // メモリ効率化のためにログを最小化
       categoryOrder.forEach((category) => {
         const spotsInCategory = searchResults.filter(spot => spot.category === category);
         let validMarkersInCategory = 0;
-        let skippedInCategory = 0;
-
-        // コンビニの場合は詳細ログ
-        if (category === 'コンビニ') {
-          console.log(`🏪 コンビニマーカー処理開始: ${spotsInCategory.length}件`);
-        }
-
-        spotsInCategory.forEach((spot, index) => {
+        spotsInCategory.forEach((spot) => {
           try {
             // スポットのデータ検証を強化
-            if (!spot || !spot.id) {
-              if (category === 'コンビニ') {
-                console.log(`  ❌ [${index}] ID無し:`, spot);
-              }
-              skippedInCategory++;
+            if (!spot ||
+                !spot.id ||
+                typeof spot.id !== 'string' && typeof spot.id !== 'number' ||
+                spot.lat == null ||
+                spot.lng == null ||
+                typeof spot.lat !== 'number' ||
+                typeof spot.lng !== 'number' ||
+                isNaN(spot.lat) ||
+                isNaN(spot.lng) ||
+                !spot.category) {
+              // ログを削除（メモリ節約）
               return;
             }
-
-            if (typeof spot.id !== 'string' && typeof spot.id !== 'number') {
-              if (category === 'コンビニ') {
-                console.log(`  ❌ [${index}] ID型が不正:`, typeof spot.id, spot.id);
-              }
-              skippedInCategory++;
-              return;
-            }
-
-            if (spot.lat == null || spot.lng == null) {
-              if (category === 'コンビニ') {
-                console.log(`  ❌ [${index}] 座標無し:`, spot.id, spot.lat, spot.lng);
-              }
-              skippedInCategory++;
-              return;
-            }
-
-            if (typeof spot.lat !== 'number' || typeof spot.lng !== 'number') {
-              if (category === 'コンビニ') {
-                console.log(`  ❌ [${index}] 座標型が不正:`, spot.id, typeof spot.lat, typeof spot.lng);
-              }
-              skippedInCategory++;
-              return;
-            }
-
-            if (isNaN(spot.lat) || isNaN(spot.lng)) {
-              if (category === 'コンビニ') {
-                console.log(`  ❌ [${index}] 座標がNaN:`, spot.id, spot.lat, spot.lng);
-              }
-              skippedInCategory++;
-              return;
-            }
-
-            if (!spot.category) {
-              if (category === 'コンビニ') {
-                console.log(`  ❌ [${index}] カテゴリー無し:`, spot.id);
-              }
-              skippedInCategory++;
-              return;
-            }
-
-            // コンビニの場合は正常データをログ
-            if (category === 'コンビニ') {
-              console.log(`  ✅ [${index}] マーカー作成: ${spot.id} - ${spot.name} (${spot.lat}, ${spot.lng})`);
-            }
-
+            
             const marker = (
               <CustomMarker
                 key={`${category}-${spot.id}`}
@@ -1267,30 +1166,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                 isNearbyFacility={searchFilter.nearbyFilterEnabled && (category === 'コンビニ' || category === '温泉')}
               />
             );
-
+            
             // マーカーがnullでないことを確認してから追加
             if (marker && React.isValidElement(marker)) {
               markers.push(marker);
               validMarkersInCategory++;
-              if (category === 'コンビニ') {
-                console.log(`    → マーカー配列に追加完了 (現在の総数: ${markers.length})`);
-              }
-            } else {
-              if (category === 'コンビニ') {
-                console.log(`  ❌ [${index}] 無効なReact要素:`, spot.id);
-              }
-              skippedInCategory++;
             }
           } catch (spotError) {
-            console.error(`⚠️ ${category}マーカー作成エラー:`, spotError, spot);
-            skippedInCategory++;
+            // エラーログを削除（メモリ節約）
           }
         });
 
-        // カテゴリーごとの結果を出力
-        if (category === 'コンビニ' || validMarkersInCategory > 0) {
-          console.log(`📊 ${category}: ${validMarkersInCategory}/${spotsInCategory.length}件作成 (スキップ: ${skippedInCategory}件)`);
-        }
+        // カテゴリーごとのマーカー作成数を記録
+        validMarkersInCategory = 0; // メモリリーク防止のためリセット
       });
     
       // 2. 最寄り施設を追加（駐車場選択時のみ表示される個別施設）
@@ -1500,62 +1388,18 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           {isMapReady && !isLoading && (() => {
             try {
               const allMarkers = renderMarkers();
-              const validMarkers = allMarkers.filter((marker, index) => {
+              const validMarkers = allMarkers.filter(marker => {
                 if (!marker) {
-                  console.log(`⚠️ Null marker detected at index ${index}`);
+                  console.log('⚠️ Null marker detected');
                   return false;
                 }
                 if (!React.isValidElement(marker)) {
-                  console.log(`⚠️ Invalid React element marker detected at index ${index}`);
+                  console.log('⚠️ Invalid React element marker detected');
                   return false;
                 }
                 return true;
               });
-
-              // マーカーのキーをチェックして重複を検出
-              const markerKeys = validMarkers.map(m => m.key);
-              const uniqueKeys = new Set(markerKeys);
-              if (markerKeys.length !== uniqueKeys.size) {
-                console.warn(`⚠️ 重複するマーカーキーが検出されました: ${markerKeys.length}個中${uniqueKeys.size}個がユニーク`);
-                const keyCount: Record<string, number> = {};
-                markerKeys.forEach(key => {
-                  if (key) keyCount[key] = (keyCount[key] || 0) + 1;
-                });
-                const duplicates = Object.entries(keyCount).filter(([_, count]) => count > 1);
-                console.warn('重複キー:', duplicates);
-              }
-
               console.log(`🗺️ Rendering ${validMarkers.length} valid markers out of ${allMarkers.length} total`);
-
-              // 現在の地図範囲を確認
-              if (mapRegion) {
-                const bounds = {
-                  minLat: mapRegion.latitude - mapRegion.latitudeDelta / 2,
-                  maxLat: mapRegion.latitude + mapRegion.latitudeDelta / 2,
-                  minLng: mapRegion.longitude - mapRegion.longitudeDelta / 2,
-                  maxLng: mapRegion.longitude + mapRegion.longitudeDelta / 2
-                };
-
-                // コンビニマーカーの表示範囲を確認
-                const convenienceMarkers = searchResults.filter(s => s.category === 'コンビニ');
-                const inBounds = convenienceMarkers.filter(s =>
-                  s.lat >= bounds.minLat && s.lat <= bounds.maxLat &&
-                  s.lng >= bounds.minLng && s.lng <= bounds.maxLng
-                );
-                const outOfBounds = convenienceMarkers.filter(s =>
-                  s.lat < bounds.minLat || s.lat > bounds.maxLat ||
-                  s.lng < bounds.minLng || s.lng > bounds.maxLng
-                );
-
-                if (outOfBounds.length > 0) {
-                  console.log(`📍 地図範囲: ${bounds.minLat.toFixed(4)}-${bounds.maxLat.toFixed(4)}, ${bounds.minLng.toFixed(4)}-${bounds.maxLng.toFixed(4)}`);
-                  console.log(`✅ 範囲内のコンビニ: ${inBounds.length}件`);
-                  console.log(`❌ 範囲外のコンビニ: ${outOfBounds.length}件`,
-                    outOfBounds.map(s => ({ name: s.name, lat: s.lat, lng: s.lng }))
-                  );
-                }
-              }
-
               return validMarkers;
             } catch (renderError) {
               console.error('⚠️ Error rendering markers:', renderError);
