@@ -785,6 +785,29 @@ export class SupabaseService {
         }
       }
 
+      // nearest_convenience_storeとnearest_hotspringをパース
+      let nearestConvenienceStore = null;
+      if (spot.nearest_convenience_store) {
+        try {
+          nearestConvenienceStore = typeof spot.nearest_convenience_store === 'string'
+            ? JSON.parse(spot.nearest_convenience_store)
+            : spot.nearest_convenience_store;
+        } catch (e) {
+          console.warn(`コンビニデータパース失敗 for ${spot.name}:`, e);
+        }
+      }
+
+      let nearestHotspring = null;
+      if (spot.nearest_hotspring) {
+        try {
+          nearestHotspring = typeof spot.nearest_hotspring === 'string'
+            ? JSON.parse(spot.nearest_hotspring)
+            : spot.nearest_hotspring;
+        } catch (e) {
+          console.warn(`温泉データパース失敗 for ${spot.name}:`, e);
+        }
+      }
+
       const result = {
         id: spot.id,
         name: spot.name,
@@ -796,15 +819,8 @@ export class SupabaseService {
         rates: ratesData,
         hours: hoursData,
         elevation: spot.elevation,
-        nearestConvenienceStore: spot.nearest_convenience_store ? {
-          name: spot.nearest_convenience_store.name,
-          distance: spot.nearest_convenience_store.distance,
-          brand: spot.nearest_convenience_store.brand
-        } : undefined,
-        nearestHotspring: spot.nearest_hotspring ? {
-          name: spot.nearest_hotspring.name,
-          distance: spot.nearest_hotspring.distance
-        } : undefined,
+        nearestConvenienceStore: nearestConvenienceStore,
+        nearestHotspring: nearestHotspring,
         calculatedFee: spot.calculated_fee, // バックエンドで計算された料金
         rank: spot.rank // バックエンドで付与されたランキング
       } as CoinParking;
