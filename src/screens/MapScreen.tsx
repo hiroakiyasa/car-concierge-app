@@ -494,7 +494,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           // 表示される駐車場に紐づく施設を収集（座標ベースでマッチング）
           const displayedParkingSpots = displaySpots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
 
-          displayedParkingSpots.forEach((parking: CoinParking) => {
+          displayedParkingSpots.forEach((parking: CoinParking, idx: number) => {
+            let addedConvenience = false;
+            let addedHotspring = false;
             // コンビニを追加
             if ((currentFilter.convenienceStoreRadius || 0) > 0 && parking.nearestConvenienceStore) {
               const convenienceStore = parking.nearestConvenienceStore;
@@ -524,6 +526,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                   if (!alreadyAdded) {
                     nearbyFacilities.push(foundStore);
                     console.log(`🏪 駐車場 ${parking.name} の最寄りコンビニを追加: ${foundStore.name}, 距離=${distance}m`);
+                    addedConvenience = true;
                   }
                 } else {
                   // 座標で見つからない場合、nearestConvenienceStoreの情報から直接スポットを作成
@@ -547,6 +550,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                   if (!alreadyAdded) {
                     nearbyFacilities.push(newStore);
                     console.log(`🏪 駐車場 ${parking.name} の最寄りコンビニを新規追加: ${newStore.name}`);
+                    addedConvenience = true;
                   }
                 }
               } else if (storeId) {
@@ -584,6 +588,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                   if (!alreadyAdded) {
                     nearbyFacilities.push(foundSpring);
                     console.log(`♨️ 駐車場 ${parking.name} の最寄り温泉を追加: ${foundSpring.name}, 距離=${distance}m`);
+                    addedHotspring = true;
                   }
                 } else {
                   // 座標で見つからない場合、nearestHotspringの情報から直接スポットを作成
@@ -607,6 +612,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                   if (!alreadyAdded) {
                     nearbyFacilities.push(newSpring);
                     console.log(`♨️ 駐車場 ${parking.name} の最寄り温泉を新規追加: ${newSpring.name}`);
+                    addedHotspring = true;
                   }
                 }
               } else if (springId) {
@@ -614,6 +620,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                 console.log(`♨️ 温泉座標なしのためID収集: ${springId}`);
               }
             }
+
+            // フォールバックは削除（awaitがforEach内で使えないため）
+            // 座標が取得できない施設は後でIDで一括取得する
           });
 
           // 座標が無い施設はIDでまとめて取得
@@ -743,6 +752,23 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       }
 
       setSearchResults(finalResults);
+
+      // 周辺検索ON時は、駐車場と関連施設が画面内に収まるように自動フィット
+      if (currentFilter.nearbyFilterEnabled && mapRef.current) {
+        try {
+          const coords = finalResults
+            .filter(s => s && typeof s.lat === 'number' && typeof s.lng === 'number')
+            .map(s => ({ latitude: s.lat, longitude: s.lng }));
+          if (coords.length > 0 && (mapRef.current as any).fitToCoordinates) {
+            (mapRef.current as any).fitToCoordinates(coords, {
+              edgePadding: { top: 80, right: 80, bottom: 200, left: 80 },
+              animated: true
+            });
+          }
+        } catch (e) {
+          console.warn('fitToCoordinates failed:', e);
+        }
+      }
 
       // デバッグ: カテゴリ別の内訳を確認
       const categoryCounts = finalResults.reduce((acc, spot) => {
@@ -1006,8 +1032,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       categoryOrder.forEach((category) => {
         const spotsInCategory = searchResults.filter(spot => spot.category === category);
-        if (spotsInCategory.length > 0 && category === 'コンビニ') {
-          console.log(`🏪 renderMarkers: ${category} ${spotsInCategory.length}件をレンダリング`);
+        if (spotsInCategory.length > 0 && (category === 'コンビニ' || category === '温泉')) {
+          console.log(`📍 renderMarkers: ${category} ${spotsInCategory.length}件をレンダリング`);
+          spotsInCategory.slice(0, 3).forEach(s => {
+            console.log(`  - ${s.name}: lat=${s.lat}, lng=${s.lng}, id=${s.id}`);
+          });
         }
         spotsInCategory.forEach((spot) => {
           try {
@@ -1040,6 +1069,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                 spot={spot}
                 onPress={() => handleMarkerPress(spot)}
                 isSelected={false}
+                isNearbyFacility={searchFilter.nearbyFilterEnabled && (category === 'コンビニ' || category === '温泉')}
               />
             );
             
@@ -1055,48 +1085,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         });
       });
     
-      // 2. 最寄り施設を追加（コンビニと温泉）
-      if (nearbyFacilities && nearbyFacilities.length > 0) {
-        console.log('🗺️ 最寄り施設をマーカーに追加:', nearbyFacilities.length, '件');
-        nearbyFacilities.forEach((facility) => {
-          try {
-            // 施設のデータ検証を強化
-            if (!facility ||
-                !facility.id ||
-                typeof facility.id !== 'string' && typeof facility.id !== 'number' ||
-                facility.lat == null ||
-                facility.lng == null ||
-                typeof facility.lat !== 'number' ||
-                typeof facility.lng !== 'number' ||
-                isNaN(facility.lat) ||
-                isNaN(facility.lng) ||
-                !facility.category) {
-              console.log('⚠️ Invalid facility data skipped:', facility);
-              return;
-            }
-            
-            console.log(`  - ${facility.category}: ${facility.name} (${facility.lat}, ${facility.lng})`);
-            const marker = (
-              <CustomMarker
-                key={`nearby-${facility.id}`}
-                spot={facility}
-                onPress={() => {}} // 最寄り施設はタップ無効
-                isSelected={false}
-                isNearbyFacility={true} // 最寄り施設フラグを追加
-              />
-            );
-            
-            // マーカーがnullでないことを確認してから追加
-            if (marker && React.isValidElement(marker)) {
-              markers.push(marker);
-            } else {
-              console.log('⚠️ Invalid facility marker element created for:', facility.id);
-            }
-          } catch (facilityError) {
-            console.error('⚠️ Error processing facility for marker:', facilityError, facility);
-          }
-        });
-      }
+      // 2. 最寄り施設は既にsearchResultsに含まれているため、ここでの追加は不要
+      // （handleSearchで nearbyFacilities が displaySpots -> finalResults -> searchResults に追加済み）
     
       // 3. コインパーキングをランキング順に追加（順位の低い方から高い方へ）
       // まず、ランキング外（4位以下）の駐車場を追加

@@ -433,7 +433,8 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
           return 500 - rank;
         }
         // ランクなしの施設
-        return isNearbyFacility ? 300 : 400;
+        // 近隣施設は駐車場マーカーより前面に出す
+        return isNearbyFacility ? 650 : 400;
       })()}
       title={getMarkerTitle()}
       description={getMarkerDescription()}

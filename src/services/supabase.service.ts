@@ -879,7 +879,7 @@ export class SupabaseService {
     
     return null;
   }
-  
+
   // Batch fetch facilities by IDs
   static async fetchFacilitiesByIds(
     convenienceIds: string[] = [],
@@ -935,5 +935,96 @@ export class SupabaseService {
     }
     
     return results;
+  }
+
+  // Fetch nearby convenience stores around a lat/lng within radius (meters)
+  static async fetchNearbyConvenienceStoresAround(
+    lat: number,
+    lng: number,
+    radiusMeters: number,
+    limit: number = 1
+  ): Promise<ConvenienceStore[]> {
+    if (!lat || !lng || !radiusMeters || radiusMeters <= 0) return [];
+
+    const latDelta = radiusMeters / 111000; // approx meters to degrees
+    const lngDelta = radiusMeters / (111000 * Math.cos((lat * Math.PI) / 180));
+
+    const minLat = lat - latDelta;
+    const maxLat = lat + latDelta;
+    const minLng = lng - lngDelta;
+    const maxLng = lng + lngDelta;
+
+    const { data, error } = await supabase
+      .from('convenience_stores')
+      .select('*')
+      .gte('lat', minLat)
+      .lte('lat', maxLat)
+      .gte('lng', minLng)
+      .lte('lng', maxLng)
+      .limit(200);
+
+    if (error || !data) return [];
+
+    // Compute distance and return nearest
+    const withDist = data.map((s: any) => ({
+      ...s,
+      _dist: Math.hypot((s.lat - lat) * 111000, (s.lng - lng) * 111000 * Math.cos((lat * Math.PI) / 180))
+    }))
+      .filter(s => s._dist <= radiusMeters)
+      .sort((a, b) => a._dist - b._dist)
+      .slice(0, limit)
+      .map(store => ({
+        ...store,
+        idString: store.id,
+        category: 'コンビニ',
+        brand: store.brand || store.name,
+        operatingHours: store.Hours || store.operating_hours || store.operatingHours,
+      } as ConvenienceStore));
+
+    return withDist;
+  }
+
+  // Fetch nearby hot springs around a lat/lng within radius (meters)
+  static async fetchNearbyHotSpringsAround(
+    lat: number,
+    lng: number,
+    radiusMeters: number,
+    limit: number = 1
+  ): Promise<HotSpring[]> {
+    if (!lat || !lng || !radiusMeters || radiusMeters <= 0) return [];
+
+    const latDelta = radiusMeters / 111000;
+    const lngDelta = radiusMeters / (111000 * Math.cos((lat * Math.PI) / 180));
+
+    const minLat = lat - latDelta;
+    const maxLat = lat + latDelta;
+    const minLng = lng - lngDelta;
+    const maxLng = lng + lngDelta;
+
+    const { data, error } = await supabase
+      .from('hot_springs')
+      .select('*')
+      .gte('lat', minLat)
+      .lte('lat', maxLat)
+      .gte('lng', minLng)
+      .lte('lng', maxLng)
+      .limit(200);
+
+    if (error || !data) return [];
+
+    const withDist = data.map((s: any) => ({
+      ...s,
+      _dist: Math.hypot((s.lat - lat) * 111000, (s.lng - lng) * 111000 * Math.cos((lat * Math.PI) / 180))
+    }))
+      .filter(s => s._dist <= radiusMeters)
+      .sort((a, b) => a._dist - b._dist)
+      .slice(0, limit)
+      .map(spring => ({
+        ...spring,
+        category: '温泉',
+        operatingHours: spring.Hours || spring.operating_hours || spring.operatingHours,
+      } as HotSpring));
+
+    return withDist;
   }
 }
