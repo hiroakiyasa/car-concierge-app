@@ -475,86 +475,155 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         
         // 周辺検索が有効でバックエンド処理済みの場合、関連施設も地図に表示
         if (currentFilter.nearbyFilterEnabled) {
-          const convenienceIds = new Set<string>();
-          const hotspringIds = new Set<string>();
-          
-          // 表示される駐車場に紐づく施設のIDを収集
+          const nearbyFacilities: Spot[] = [];
+          const convenienceIdsToFetch = new Set<string>();
+          const hotspringIdsToFetch = new Set<string>();
+
+          // 表示される駐車場に紐づく施設を収集（座標ベースでマッチング）
           const displayedParkingSpots = displaySpots.filter(spot => spot.category === 'コインパーキング') as CoinParking[];
+
           displayedParkingSpots.forEach((parking: CoinParking) => {
+            // コンビニを追加
             if ((currentFilter.convenienceStoreRadius || 0) > 0 && parking.nearestConvenienceStore) {
               const convenienceStore = parking.nearestConvenienceStore;
-              // バックエンドからのデータ構造に対応（store_idフィールドを優先）
-              const id = (convenienceStore as any).store_id || convenienceStore.id;
+
+              // nearestConvenienceStoreオブジェクトから座標を取得
+              const storeLat = (convenienceStore as any).lat || (convenienceStore as any).latitude;
+              const storeLng = (convenienceStore as any).lng || (convenienceStore as any).longitude;
+              const storeName = (convenienceStore as any).name || (convenienceStore as any).store_name;
+              const storeId = (convenienceStore as any).store_id || (convenienceStore as any).id;
               const distance = (convenienceStore as any).distance_m || convenienceStore.distance;
 
-              if (id) {
-                // IDを文字列として保存
-                convenienceIds.add(String(id));
-                console.log(`🏪 駐車場 ${parking.name} の最寄りコンビニ: ID=${id}, 距離=${distance}m`);
+              if (storeLat && storeLng) {
+                // 座標ベースで施設を検索
+                const foundStore = validSpots.find(spot =>
+                  spot.category === 'コンビニ' &&
+                  Math.abs(spot.lat - storeLat) < 0.0001 &&
+                  Math.abs(spot.lng - storeLng) < 0.0001
+                );
+
+                if (foundStore) {
+                  // 重複チェック
+                  const alreadyAdded = nearbyFacilities.some(f =>
+                    f.id === foundStore.id ||
+                    (Math.abs(f.lat - foundStore.lat) < 0.0001 && Math.abs(f.lng - foundStore.lng) < 0.0001)
+                  );
+
+                  if (!alreadyAdded) {
+                    nearbyFacilities.push(foundStore);
+                    console.log(`🏪 駐車場 ${parking.name} の最寄りコンビニを追加: ${foundStore.name}, 距離=${distance}m`);
+                  }
+                } else {
+                  // 座標で見つからない場合、nearestConvenienceStoreの情報から直接スポットを作成
+                  console.log(`⚠️ コンビニが見つかりません（座標検索失敗）: lat=${storeLat}, lng=${storeLng}, name=${storeName}`);
+
+                  // 新しいスポットとして追加（バックエンドから取得した情報を元に）
+                  const newStore: Spot = {
+                    id: storeId || `conv_${parking.id}_${Date.now()}`,
+                    name: storeName || 'コンビニ',
+                    category: 'コンビニ',
+                    lat: storeLat,
+                    lng: storeLng,
+                    address: (convenienceStore as any).address || '',
+                    description: `${parking.name}から${distance}m`,
+                  };
+
+                  const alreadyAdded = nearbyFacilities.some(f =>
+                    (Math.abs(f.lat - newStore.lat) < 0.0001 && Math.abs(f.lng - newStore.lng) < 0.0001)
+                  );
+
+                  if (!alreadyAdded) {
+                    nearbyFacilities.push(newStore);
+                    console.log(`🏪 駐車場 ${parking.name} の最寄りコンビニを新規追加: ${newStore.name}`);
+                  }
+                }
+              } else if (storeId) {
+                convenienceIdsToFetch.add(String(storeId));
+                console.log(`🏪 コンビニ座標なしのためID収集: ${storeId}`);
               }
             }
+
+            // 温泉を追加
             if ((currentFilter.hotSpringRadius || 0) > 0 && parking.nearestHotspring) {
               const hotspring = parking.nearestHotspring;
-              // バックエンドからのデータ構造に対応（spring_idフィールドを優先）
-              const id = (hotspring as any).spring_id || hotspring.id;
+
+              // nearestHotspringオブジェクトから座標を取得
+              const springLat = (hotspring as any).lat || (hotspring as any).latitude;
+              const springLng = (hotspring as any).lng || (hotspring as any).longitude;
+              const springName = (hotspring as any).name || (hotspring as any).spring_name;
+              const springId = (hotspring as any).spring_id || (hotspring as any).id;
               const distance = (hotspring as any).distance_m || hotspring.distance;
 
-              if (id) {
-                // IDを文字列として保存
-                hotspringIds.add(String(id));
-                console.log(`♨️ 駐車場 ${parking.name} の最寄り温泉: ID=${id}, 距離=${distance}m`);
+              if (springLat && springLng) {
+                // 座標ベースで施設を検索
+                const foundSpring = validSpots.find(spot =>
+                  spot.category === '温泉' &&
+                  Math.abs(spot.lat - springLat) < 0.0001 &&
+                  Math.abs(spot.lng - springLng) < 0.0001
+                );
+
+                if (foundSpring) {
+                  // 重複チェック
+                  const alreadyAdded = nearbyFacilities.some(f =>
+                    f.id === foundSpring.id ||
+                    (Math.abs(f.lat - foundSpring.lat) < 0.0001 && Math.abs(f.lng - foundSpring.lng) < 0.0001)
+                  );
+
+                  if (!alreadyAdded) {
+                    nearbyFacilities.push(foundSpring);
+                    console.log(`♨️ 駐車場 ${parking.name} の最寄り温泉を追加: ${foundSpring.name}, 距離=${distance}m`);
+                  }
+                } else {
+                  // 座標で見つからない場合、nearestHotspringの情報から直接スポットを作成
+                  console.log(`⚠️ 温泉が見つかりません（座標検索失敗）: lat=${springLat}, lng=${springLng}, name=${springName}`);
+
+                  // 新しいスポットとして追加（バックエンドから取得した情報を元に）
+                  const newSpring: Spot = {
+                    id: springId || `hot_${parking.id}_${Date.now()}`,
+                    name: springName || '温泉',
+                    category: '温泉',
+                    lat: springLat,
+                    lng: springLng,
+                    address: (hotspring as any).address || '',
+                    description: `${parking.name}から${distance}m`,
+                  };
+
+                  const alreadyAdded = nearbyFacilities.some(f =>
+                    (Math.abs(f.lat - newSpring.lat) < 0.0001 && Math.abs(f.lng - newSpring.lng) < 0.0001)
+                  );
+
+                  if (!alreadyAdded) {
+                    nearbyFacilities.push(newSpring);
+                    console.log(`♨️ 駐車場 ${parking.name} の最寄り温泉を新規追加: ${newSpring.name}`);
+                  }
+                }
+              } else if (springId) {
+                hotspringIdsToFetch.add(String(springId));
+                console.log(`♨️ 温泉座標なしのためID収集: ${springId}`);
               }
             }
           });
-          
-          // コンビニを表示に追加
-          if (convenienceIds.size > 0) {
-            const relatedStores = validSpots.filter(spot => {
-              if (spot.category !== 'コンビニ') return false;
 
-              // IDを文字列として比較
-              const spotId = String(spot.id);
-
-              // デバッグ用
-              if (validSpots.filter(s => s.category === 'コンビニ').indexOf(spot) < 3) {
-                console.log(`🏪 コンビニマッチング試行: spot.id=${spotId}, 検索対象IDs:`, Array.from(convenienceIds));
-              }
-
-              return convenienceIds.has(spotId);
-            });
-            
-            if (relatedStores.length === 0 && convenienceIds.size > 0) {
-              console.log('⚠️ コンビニIDマッチ失敗。検索対象:', Array.from(convenienceIds));
-              console.log('利用可能なコンビニ:', validSpots.filter(s => s.category === 'コンビニ').slice(0, 5).map(s => ({ id: s.id, idString: (s as any).idString })));
+          // 座標が無い施設はIDでまとめて取得
+          if (convenienceIdsToFetch.size > 0 || hotspringIdsToFetch.size > 0) {
+            try {
+              const fetched = await SupabaseService.fetchFacilitiesByIds(
+                Array.from(convenienceIdsToFetch),
+                Array.from(hotspringIdsToFetch)
+              );
+              [...fetched.conveniences, ...fetched.hotsprings].forEach((f: any) => {
+                const exists = nearbyFacilities.some(x => x.id === f.id) || displaySpots.some(x => x.id === f.id);
+                if (!exists) nearbyFacilities.push(f as Spot);
+              });
+            } catch (e) {
+              console.warn('❗ 施設一括取得エラー:', e);
             }
-            
-            displaySpots.push(...relatedStores);
-            console.log(`🏪 関連コンビニ: ${relatedStores.length}件を表示 (対象ID: ${convenienceIds.size}件)`);
           }
-          
-          // 温泉を表示に追加
-          if (hotspringIds.size > 0) {
-            const relatedSprings = validSpots.filter(spot => {
-              if (spot.category !== '温泉') return false;
 
-              // IDを文字列として比較
-              const spotId = String(spot.id);
-
-              // デバッグ用
-              if (validSpots.filter(s => s.category === '温泉').indexOf(spot) < 3) {
-                console.log(`♨️ 温泉マッチング試行: spot.id=${spotId}, 検索対象IDs:`, Array.from(hotspringIds));
-              }
-
-              return hotspringIds.has(spotId);
-            });
-            
-            if (relatedSprings.length === 0 && hotspringIds.size > 0) {
-              console.log('⚠️ 温泉IDマッチ失敗。検索対象:', Array.from(hotspringIds));
-              console.log('利用可能な温泉:', validSpots.filter(s => s.category === '温泉').slice(0, 5).map(s => ({ id: s.id })));
-            }
-            
-            displaySpots.push(...relatedSprings);
-            console.log(`♨️ 関連温泉: ${relatedSprings.length}件を表示 (対象ID: ${hotspringIds.size}件)`);
+          // 収集した施設を表示に追加
+          if (nearbyFacilities.length > 0) {
+            displaySpots.push(...nearbyFacilities);
+            console.log(`🏪♨️ 関連施設: 合計${nearbyFacilities.length}件を表示（コンビニ: ${nearbyFacilities.filter(f => f.category === 'コンビニ').length}件、温泉: ${nearbyFacilities.filter(f => f.category === '温泉').length}件）`);
           }
         }
       }
