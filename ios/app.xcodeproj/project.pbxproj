@@ -137,7 +137,6 @@
 		EDA4AF48139D4207A71AB2EF /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				/* removed flush_movie.mp4 */
 			);
 			name = Resources;
 			sourceTree = "<group>";
