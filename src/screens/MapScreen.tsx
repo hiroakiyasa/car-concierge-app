@@ -308,7 +308,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       });
       
       // 選択されたカテゴリーを検索
-      const selectedCategories = currentFilter.selectedCategories;
+      let selectedCategories = currentFilter.selectedCategories;
+
+      // 周辺検索が有効な場合、関連施設のカテゴリーも自動的に選択状態にする
+      if (currentFilter.nearbyFilterEnabled) {
+        selectedCategories = new Set(selectedCategories);
+        if ((currentFilter.convenienceStoreRadius || 0) > 0) {
+          selectedCategories.add('コンビニ');
+        }
+        if ((currentFilter.hotSpringRadius || 0) > 0) {
+          selectedCategories.add('温泉');
+        }
+      }
+
       console.log('🔍 選択されたカテゴリー:', Array.from(selectedCategories));
       
       // 標高フィルターが有効な場合はminElevationを渡す
@@ -660,7 +672,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           if (nearbyFacilities.length > 0) {
             displaySpots.push(...nearbyFacilities);
             console.log(`🏪♨️ 関連施設: 合計${nearbyFacilities.length}件を表示（コンビニ: ${nearbyFacilities.filter(f => f.category === 'コンビニ').length}件、温泉: ${nearbyFacilities.filter(f => f.category === '温泉').length}件）`);
+            // 重要: nearbyFacilities ステートを更新して地図上に表示
+            setNearbyFacilities(nearbyFacilities);
           }
+        } else {
+          // 周辺検索が無効の場合、施設をクリア
+          setNearbyFacilities([]);
         }
       }
       
