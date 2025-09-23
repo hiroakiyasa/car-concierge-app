@@ -726,6 +726,22 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       }
 
       setSearchResults(finalResults);
+
+      // デバッグ: カテゴリ別の内訳を確認
+      const categoryCounts = finalResults.reduce((acc, spot) => {
+        acc[spot.category] = (acc[spot.category] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log('📊 searchResultsのカテゴリ別内訳:', categoryCounts);
+
+      // コンビニの詳細を確認
+      const convenienceStores = finalResults.filter(s => s.category === 'コンビニ');
+      if (convenienceStores.length > 0) {
+        console.log(`🏪 searchResultsのコンビニ ${convenienceStores.length}件:`,
+          convenienceStores.map(s => ({ id: s.id, name: s.name, lat: s.lat, lng: s.lng }))
+        );
+      }
+
       setSearchStatus('complete');
       // 3秒後に状態をリセット
       setTimeout(() => setSearchStatus('idle'), 3000);
@@ -973,6 +989,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       categoryOrder.forEach((category) => {
         const spotsInCategory = searchResults.filter(spot => spot.category === category);
+        if (spotsInCategory.length > 0 && category === 'コンビニ') {
+          console.log(`🏪 renderMarkers: ${category} ${spotsInCategory.length}件をレンダリング`);
+        }
         spotsInCategory.forEach((spot) => {
           try {
             // スポットのデータ検証を強化
