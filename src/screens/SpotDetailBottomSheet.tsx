@@ -74,6 +74,12 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   const [photos, setPhotos] = React.useState<any[]>([]);
   const [photosLoading, setPhotosLoading] = React.useState(false);
   const [photoUploadModalVisible, setPhotoUploadModalVisible] = React.useState(false);
+
+  // パネル内で即時に周辺施設を表示するためのローカル状態
+  const [panelNearby, setPanelNearby] = React.useState<{
+    convenience?: { id: string; name: string; distance?: number };
+    hotspring?: { id: string; name: string; distance?: number };
+  }>({});
   
   // スワイプジェスチャーの設定
   const panResponder = React.useRef(
@@ -165,12 +171,68 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     }
   }, [selectedSpot, visible, fetchPhotos]);
 
+  // パネルを開いたら即座に周辺施設を解決して表示
+  React.useEffect(() => {
+    if (!visible || !selectedSpot || selectedSpot.category !== 'コインパーキング') return;
+    const parking = selectedSpot as CoinParking;
+
+    // データベースの周辺施設情報のみを使用（独自の検索はしない）
+    (async () => {
+      try {
+        const updated: any = {};
+
+        // コンビニ: データベースにあるIDと距離情報を使用
+        if (parking.nearestConvenienceStore) {
+          const raw = parking.nearestConvenienceStore as any;
+          const id = String(raw.id || raw.store_id || '');
+          const storedDistance = raw.distance_m || raw.distance || raw.distance_meters;
+
+          if (id) {
+            const store = await SupabaseService.fetchConvenienceStoreById(id);
+            if (store) {
+              // データベースに保存されている距離を優先的に使用
+              updated.convenience = {
+                id: store.id,
+                name: store.name,
+                distance: storedDistance ? Math.round(storedDistance) : undefined
+              };
+            }
+          }
+        }
+
+        // 温泉: データベースにあるIDと距離情報を使用
+        if (parking.nearestHotspring) {
+          const raw = parking.nearestHotspring as any;
+          const id = String(raw.id || raw.spring_id || '');
+          const storedDistance = raw.distance_m || raw.distance || raw.distance_meters;
+
+          if (id) {
+            const spring = await SupabaseService.fetchHotSpringById(id);
+            if (spring) {
+              // データベースに保存されている距離を優先的に使用
+              updated.hotspring = {
+                id: spring.id,
+                name: spring.name,
+                distance: storedDistance ? Math.round(storedDistance) : undefined
+              };
+            }
+          }
+        }
+
+        setPanelNearby(updated);
+      } catch (e) {
+        console.warn('周辺施設ロード失敗:', e);
+      }
+    })();
+  }, [visible, selectedSpot]);
+
   // 駐車場データのログと施設名の取得
   React.useEffect(() => {
     if (!selectedSpot || selectedSpot.category !== 'コインパーキング' || !visible) {
+      setFacilityNames({});
       return;
     }
-    
+
     const parkingSpot = selectedSpot as CoinParking;
     console.log('🚗 SpotDetailBottomSheet - 駐車場データ:', {
       name: parkingSpot.name,
@@ -184,71 +246,98 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       nearestConvenienceStore: parkingSpot.nearestConvenienceStore,
       nearestHotspring: parkingSpot.nearestHotspring,
     });
-    
-    // 施設名を取得（バックエンドのデータ構造に基づいて修正）
+
+    // まず即座に仮の名前を設定
+    const tempNames: { convenience?: string; hotspring?: string } = {};
+    if (parkingSpot.nearestConvenienceStore) {
+      tempNames.convenience = 'コンビニ';
+    }
+    if (parkingSpot.nearestHotspring) {
+      tempNames.hotspring = '温泉';
+    }
+    setFacilityNames(tempNames);
+
+    // 施設名を取得（IDベースで正確な情報を取得）
     const fetchFacilityNames = async () => {
       const names: { convenience?: string; hotspring?: string } = {};
-      
+
       // デバッグ: データ構造を確認
-      console.log('🔍 周辺施設データ構造:', {
+      console.log('🔍 駐車場の周辺施設データ:', {
+        parkingId: parkingSpot.id,
+        parkingName: parkingSpot.name,
         nearestConvenienceStore: parkingSpot.nearestConvenienceStore,
         nearestHotspring: parkingSpot.nearestHotspring,
       });
-      
+
       // コンビニ情報
       if (parkingSpot.nearestConvenienceStore) {
         const convenienceData = parkingSpot.nearestConvenienceStore as any;
-        
-        // IDから施設名を取得
-        if (convenienceData.id) {
-          console.log('🏪 コンビニID:', convenienceData.id);
+        const storeId = convenienceData.id || convenienceData.store_id || convenienceData.facility_id;
+
+        if (storeId) {
+          console.log('🏪 コンビニIDで取得開始:', storeId);
           try {
-            const store = await SupabaseService.fetchConvenienceStoreById(convenienceData.id);
+            const store = await SupabaseService.fetchConvenienceStoreById(String(storeId));
             if (store && store.name) {
               names.convenience = store.name;
-              console.log('🏪 コンビニ名取得成功:', names.convenience);
+              console.log('✅ コンビニ名取得成功:', {
+                id: storeId,
+                name: names.convenience,
+                distance: convenienceData.distance_m || convenienceData.distance
+              });
             } else {
-              // サブタイプがある場合はそれを使用
-              names.convenience = convenienceData.sub_type || 'コンビニ';
-              console.log('🏪 コンビニ名取得失敗、デフォルト使用:', names.convenience);
+              // デフォルト名を使用
+              names.convenience = 'コンビニ';
+              console.log('⚠️ コンビニ情報が見つかりません、デフォルト名使用:', storeId);
             }
           } catch (error) {
-            console.error('🏪 コンビニ情報取得エラー:', error);
+            console.error('❌ コンビニ情報取得エラー:', error);
+            // エラー時もデフォルト名を使用
             names.convenience = 'コンビニ';
           }
         } else {
+          console.log('⚠️ コンビニIDが存在しません');
           names.convenience = 'コンビニ';
         }
       }
-      
+
       // 温泉情報
       if (parkingSpot.nearestHotspring) {
         const hotspringData = parkingSpot.nearestHotspring as any;
-        
-        // IDから施設名を取得
-        if (hotspringData.id) {
-          console.log('♨️ 温泉ID:', hotspringData.id);
+        const springId = hotspringData.id || hotspringData.spring_id || hotspringData.facility_id;
+
+        if (springId) {
+          console.log('♨️ 温泉IDで取得開始:', springId);
           try {
-            const spring = await SupabaseService.fetchHotSpringById(hotspringData.id);
+            const spring = await SupabaseService.fetchHotSpringById(String(springId));
             if (spring && spring.name) {
               names.hotspring = spring.name;
-              console.log('♨️ 温泉名取得成功:', names.hotspring);
+              console.log('✅ 温泉名取得成功:', {
+                id: springId,
+                name: names.hotspring,
+                distance: hotspringData.distance_m || hotspringData.distance
+              });
             } else {
+              // デフォルト名を使用
               names.hotspring = '温泉';
-              console.log('♨️ 温泉名取得失敗、デフォルト使用');
+              console.log('⚠️ 温泉情報が見つかりません、デフォルト名使用:', springId);
             }
           } catch (error) {
-            console.error('♨️ 温泉情報取得エラー:', error);
+            console.error('❌ 温泉情報取得エラー:', error);
+            // エラー時もデフォルト名を使用
             names.hotspring = '温泉';
           }
         } else {
+          console.log('⚠️ 温泉IDが存在しません');
           names.hotspring = '温泉';
         }
       }
-      
+
+      console.log('📊 最終的な施設名:', names);
       setFacilityNames(names);
     };
-    
+
+    // 非同期で施設名を取得
     fetchFacilityNames();
   }, [visible, selectedSpot]);
   
@@ -814,72 +903,46 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               </View>
               
               {/* デバッグ用: データの存在を確認 */}
-              {!parkingSpot.nearestConvenienceStore && !parkingSpot.nearestHotspring && (
+              {!parkingSpot.nearestConvenienceStore && !parkingSpot.nearestHotspring && !panelNearby.convenience && !panelNearby.hotspring && (
                 <Text style={styles.nearbyNameCompact}>
                   データを読み込み中...
                 </Text>
               )}
               
               {/* コンビニ情報 */}
-              {parkingSpot.nearestConvenienceStore && (
+              {(parkingSpot.nearestConvenienceStore || panelNearby.convenience) && (
                 <View style={styles.nearbyItemCompact}>
                   <Text style={styles.nearbyIconCompact}>🏪</Text>
                   <Text style={styles.nearbyNameCompact} numberOfLines={1}>
-                    {(() => {
-                      const convenienceData = parkingSpot.nearestConvenienceStore as any;
-                      console.log('🏪 コンビニデータ:', convenienceData);
-                      // すべての可能なフィールドをチェック
-                      if (convenienceData.name) {
-                        return convenienceData.name;
-                      } else if (convenienceData.store_name) {
-                        return convenienceData.store_name;
-                      } else if (convenienceData.sub_type) {
-                        return convenienceData.sub_type;
-                      } else if (facilityNames.convenience) {
-                        return facilityNames.convenience;
-                      } else {
-                        return 'コンビニ';
-                      }
-                    })()}
+                    {panelNearby.convenience?.name || facilityNames.convenience || 'コンビニ'}
                   </Text>
                   <Text style={styles.nearbyDistanceCompact}>
-                    {(() => {
-                      const data = parkingSpot.nearestConvenienceStore as any;
-                      const distance = data.distance_m || data.distance || data.distance_meters;
-                      return distance ? `${Math.round(distance)}m` : '---';
-                    })()}
+                    {panelNearby.convenience?.distance !== undefined
+                      ? `${panelNearby.convenience.distance}m`
+                      : (() => {
+                          const data = (parkingSpot.nearestConvenienceStore as any) || {};
+                          const distance = data.distance_m || data.distance || data.distance_meters;
+                          return distance !== undefined ? `${Math.round(distance)}m` : '---';
+                        })()}
                   </Text>
                 </View>
               )}
-              
+
               {/* 温泉情報 */}
-              {parkingSpot.nearestHotspring && (
+              {(parkingSpot.nearestHotspring || panelNearby.hotspring) && (
                 <View style={styles.nearbyItemCompact}>
                   <Text style={styles.nearbyIconCompact}>♨️</Text>
                   <Text style={styles.nearbyNameCompact} numberOfLines={1}>
-                    {(() => {
-                      const hotspringData = parkingSpot.nearestHotspring as any;
-                      console.log('♨️ 温泉データ:', hotspringData);
-                      // すべての可能なフィールドをチェック
-                      if (hotspringData.name) {
-                        return hotspringData.name;
-                      } else if (hotspringData.spring_name) {
-                        return hotspringData.spring_name;
-                      } else if (hotspringData.facility_name) {
-                        return hotspringData.facility_name;
-                      } else if (facilityNames.hotspring) {
-                        return facilityNames.hotspring;
-                      } else {
-                        return '温泉';
-                      }
-                    })()}
+                    {panelNearby.hotspring?.name || facilityNames.hotspring || '温泉'}
                   </Text>
                   <Text style={styles.nearbyDistanceCompact}>
-                    {(() => {
-                      const data = parkingSpot.nearestHotspring as any;
-                      const distance = data.distance_m || data.distance || data.distance_meters;
-                      return distance ? `${Math.round(distance)}m` : '---';
-                    })()}
+                    {panelNearby.hotspring?.distance !== undefined
+                      ? `${panelNearby.hotspring.distance}m`
+                      : (() => {
+                          const data = (parkingSpot.nearestHotspring as any) || {};
+                          const distance = data.distance_m || data.distance || data.distance_meters;
+                          return distance !== undefined ? `${Math.round(distance)}m` : '---';
+                        })()}
                   </Text>
                 </View>
               )}

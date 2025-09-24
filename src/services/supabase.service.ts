@@ -607,11 +607,19 @@ export class SupabaseService {
       const hotspringIds = new Set<string>();
 
       results.forEach(spot => {
-        if (spot.nearestConvenienceStore && spot.nearestConvenienceStore.store_id) {
-          convenienceIds.add(String(spot.nearestConvenienceStore.store_id));
+        if (spot.nearestConvenienceStore) {
+          // idフィールドまたはstore_idフィールドを確認
+          const id = spot.nearestConvenienceStore.id || spot.nearestConvenienceStore.store_id;
+          if (id) {
+            convenienceIds.add(String(id));
+          }
         }
-        if (spot.nearestHotspring && spot.nearestHotspring.spring_id) {
-          hotspringIds.add(String(spot.nearestHotspring.spring_id));
+        if (spot.nearestHotspring) {
+          // idフィールドまたはspring_idフィールドを確認
+          const id = spot.nearestHotspring.id || spot.nearestHotspring.spring_id;
+          if (id) {
+            hotspringIds.add(String(id));
+          }
         }
       });
 
@@ -642,38 +650,48 @@ export class SupabaseService {
 
       // nearestConvenienceStoreとnearestHotspringに座標情報を追加
       results.forEach(spot => {
-        if (spot.nearestConvenienceStore && spot.nearestConvenienceStore.store_id) {
-          const store = convenienceStores.find((s: any) => s.id === spot.nearestConvenienceStore.store_id);
-          if (store) {
-            spot.nearestConvenienceStore = {
-              ...spot.nearestConvenienceStore,
-              id: store.id,
-              store_id: store.id,
-              lat: store.lat || store.latitude,
-              lng: store.lng || store.longitude,
-              latitude: store.lat || store.latitude,
-              longitude: store.lng || store.longitude,
-              name: store.name,
-              brand: store.brand,
-              address: store.address
-            };
+        if (spot.nearestConvenienceStore) {
+          // idフィールドまたはstore_idフィールドで検索
+          const targetId = spot.nearestConvenienceStore.id || spot.nearestConvenienceStore.store_id;
+          if (targetId) {
+            const store = convenienceStores.find((s: any) => s.id === targetId);
+            if (store) {
+              // 元のdistance_mを保持しつつ、追加情報を付与
+              spot.nearestConvenienceStore = {
+                ...spot.nearestConvenienceStore,
+                id: store.id,
+                store_id: store.id,
+                lat: store.lat || store.latitude,
+                lng: store.lng || store.longitude,
+                latitude: store.lat || store.latitude,
+                longitude: store.lng || store.longitude,
+                name: store.name,
+                brand: store.brand,
+                address: store.address
+              };
+            }
           }
         }
 
-        if (spot.nearestHotspring && spot.nearestHotspring.spring_id) {
-          const spring = hotSprings.find((s: any) => s.id === spot.nearestHotspring.spring_id);
-          if (spring) {
-            spot.nearestHotspring = {
-              ...spot.nearestHotspring,
-              id: spring.id,
-              spring_id: spring.id,
-              lat: spring.lat || spring.latitude,
-              lng: spring.lng || spring.longitude,
-              latitude: spring.lat || spring.latitude,
-              longitude: spring.lng || spring.longitude,
-              name: spring.name,
-              address: spring.address
-            };
+        if (spot.nearestHotspring) {
+          // idフィールドまたはspring_idフィールドで検索
+          const targetId = spot.nearestHotspring.id || spot.nearestHotspring.spring_id;
+          if (targetId) {
+            const spring = hotSprings.find((s: any) => s.id === targetId);
+            if (spring) {
+              // 元のdistance_mを保持しつつ、追加情報を付与
+              spot.nearestHotspring = {
+                ...spot.nearestHotspring,
+                id: spring.id,
+                spring_id: spring.id,
+                lat: spring.lat || spring.latitude,
+                lng: spring.lng || spring.longitude,
+                latitude: spring.lat || spring.latitude,
+                longitude: spring.lng || spring.longitude,
+                name: spring.name,
+                address: spring.address
+              };
+            }
           }
         }
       });
@@ -841,59 +859,79 @@ export class SupabaseService {
   // Fetch convenience store details by ID
   static async fetchConvenienceStoreById(id: string): Promise<ConvenienceStore | null> {
     if (!id) return null;
-    
     console.log(`🏪 コンビニ詳細取得: ID=${id}`);
-    
-    const { data, error } = await supabase
-      .from('convenience_stores')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (error) {
-      console.error('Error fetching convenience store:', error);
+
+    // いくつかの列名を試して解決（id, idString, code, external_id）
+    const tryFetch = async () => {
+      // 1) id で一致
+      let q = supabase.from('convenience_stores').select('*').eq('id', id).limit(1);
+      let { data, error } = await q;
+      if (!error && data && data[0]) return data[0];
+
+      // 2) or 条件で別名列を試す
+      const { data: alt, error: err2 } = await supabase
+        .from('convenience_stores')
+        .select('*')
+        // idString/code/external_id など存在する場合にヒットさせる
+        .or(`idString.eq.${id},code.eq.${id},external_id.eq.${id}`)
+        .limit(1);
+      if (!err2 && alt && alt[0]) return alt[0];
+      return null;
+    };
+
+    const raw = await tryFetch();
+    if (!raw) {
+      console.warn(`🏪 コンビニID解決失敗: ${id}`);
       return null;
     }
-    
-    if (data) {
-      return {
-        ...data,
-        idString: data.id,
-        category: 'コンビニ',
-        brand: data.brand || data.name,
-        operatingHours: data.Hours || data.operating_hours || data.operatingHours,
-      } as ConvenienceStore;
-    }
-    
-    return null;
+
+    const lat = Number((raw as any).lat ?? (raw as any).latitude);
+    const lng = Number((raw as any).lng ?? (raw as any).longitude);
+
+    return {
+      ...raw,
+      lat,
+      lng,
+      idString: (raw as any).idString || (raw as any).id,
+      category: 'コンビニ',
+      brand: (raw as any).brand || (raw as any).name,
+      operatingHours: (raw as any).Hours || (raw as any).operating_hours || (raw as any).operatingHours,
+    } as ConvenienceStore;
   }
   
   // Fetch hot spring details by ID
   static async fetchHotSpringById(id: string): Promise<HotSpring | null> {
     if (!id) return null;
-    
     console.log(`♨️ 温泉詳細取得: ID=${id}`);
-    
-    const { data, error } = await supabase
-      .from('hot_springs')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (error) {
-      console.error('Error fetching hot spring:', error);
+
+    const tryFetch = async () => {
+      let { data, error } = await supabase.from('hot_springs').select('*').eq('id', id).limit(1);
+      if (!error && data && data[0]) return data[0];
+      const { data: alt, error: err2 } = await supabase
+        .from('hot_springs')
+        .select('*')
+        .or(`idString.eq.${id},code.eq.${id},external_id.eq.${id}`)
+        .limit(1);
+      if (!err2 && alt && alt[0]) return alt[0];
+      return null;
+    };
+
+    const raw = await tryFetch();
+    if (!raw) {
+      console.warn(`♨️ 温泉ID解決失敗: ${id}`);
       return null;
     }
-    
-    if (data) {
-      return {
-        ...data,
-        category: '温泉',
-        operatingHours: data.Hours || data.operating_hours || data.operatingHours,
-      } as HotSpring;
-    }
-    
-    return null;
+
+    const lat = Number((raw as any).lat ?? (raw as any).latitude);
+    const lng = Number((raw as any).lng ?? (raw as any).longitude);
+
+    return {
+      ...raw,
+      lat,
+      lng,
+      category: '温泉',
+      operatingHours: (raw as any).Hours || (raw as any).operating_hours || (raw as any).operatingHours,
+    } as HotSpring;
   }
 
   // Batch fetch facilities by IDs
