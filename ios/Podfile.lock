@@ -255,8 +255,6 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - ExpoVideo (3.0.11):
-    - ExpoModulesCore
   - ExpoWebBrowser (15.0.7):
     - ExpoModulesCore
   - EXUpdatesInterface (2.0.0):
@@ -1672,74 +1670,6 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - react-native-video (6.16.1):
-    - hermes-engine
-    - RCTRequired
-    - RCTTypeSafety
-    - React-Core
-    - React-Core-prebuilt
-    - React-debug
-    - React-Fabric
-    - React-featureflags
-    - React-graphics
-    - React-ImageManager
-    - React-jsi
-    - react-native-video/Video (= 6.16.1)
-    - React-NativeModulesApple
-    - React-RCTFabric
-    - React-renderercss
-    - React-rendererdebug
-    - React-utils
-    - ReactCodegen
-    - ReactCommon/turbomodule/bridging
-    - ReactCommon/turbomodule/core
-    - ReactNativeDependencies
-    - Yoga
-  - react-native-video/Fabric (6.16.1):
-    - hermes-engine
-    - RCTRequired
-    - RCTTypeSafety
-    - React-Core
-    - React-Core-prebuilt
-    - React-debug
-    - React-Fabric
-    - React-featureflags
-    - React-graphics
-    - React-ImageManager
-    - React-jsi
-    - React-NativeModulesApple
-    - React-RCTFabric
-    - React-renderercss
-    - React-rendererdebug
-    - React-utils
-    - ReactCodegen
-    - ReactCommon/turbomodule/bridging
-    - ReactCommon/turbomodule/core
-    - ReactNativeDependencies
-    - Yoga
-  - react-native-video/Video (6.16.1):
-    - hermes-engine
-    - RCTRequired
-    - RCTTypeSafety
-    - React-Core
-    - React-Core-prebuilt
-    - React-debug
-    - React-Fabric
-    - React-featureflags
-    - React-graphics
-    - React-ImageManager
-    - React-jsi
-    - react-native-video/Fabric
-    - React-NativeModulesApple
-    - React-RCTFabric
-    - React-renderercss
-    - React-rendererdebug
-    - React-utils
-    - ReactCodegen
-    - ReactCommon/turbomodule/bridging
-    - ReactCommon/turbomodule/core
-    - ReactNativeDependencies
-    - Yoga
   - React-NativeModulesApple (0.81.4):
     - hermes-engine
     - React-callinvoker
@@ -2423,7 +2353,6 @@ DEPENDENCIES:
   - ExpoLinking (from `../node_modules/expo-linking/ios`)
   - ExpoLocation (from `../node_modules/expo-location/ios`)
   - ExpoModulesCore (from `../node_modules/expo-modules-core`)
-  - ExpoVideo (from `../node_modules/expo-video/ios`)
   - ExpoWebBrowser (from `../node_modules/expo-web-browser/ios`)
   - EXUpdatesInterface (from `../node_modules/expo-updates-interface/ios`)
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
@@ -2465,7 +2394,6 @@ DEPENDENCIES:
   - react-native-maps (from `../node_modules/react-native-maps`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - "react-native-slider (from `../node_modules/@react-native-community/slider`)"
-  - react-native-video (from `../node_modules/react-native-video`)
   - React-NativeModulesApple (from `../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)
   - React-oscompat (from `../node_modules/react-native/ReactCommon/oscompat`)
   - React-perflogger (from `../node_modules/react-native/ReactCommon/reactperflogger`)
@@ -2559,8 +2487,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-location/ios"
   ExpoModulesCore:
     :path: "../node_modules/expo-modules-core"
-  ExpoVideo:
-    :path: "../node_modules/expo-video/ios"
   ExpoWebBrowser:
     :path: "../node_modules/expo-web-browser/ios"
   EXUpdatesInterface:
@@ -2642,8 +2568,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-safe-area-context"
   react-native-slider:
     :path: "../node_modules/@react-native-community/slider"
-  react-native-video:
-    :path: "../node_modules/react-native-video"
   React-NativeModulesApple:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios"
   React-oscompat:
@@ -2747,7 +2671,6 @@ SPEC CHECKSUMS:
   ExpoLinking: f051f28e50ea9269ff539317c166adec81d9342d
   ExpoLocation: 93d7faa0c2adbd5a04686af0c1a61bc6ed3ee2f7
   ExpoModulesCore: 9281d8f1cda9d0c37dbce34c26014212b22eb8c0
-  ExpoVideo: 6ffaf450d18b2ca33bdf92acaea80271b4a06c92
   ExpoWebBrowser: 533bc2a1b188eec1c10e4926decf658f1687b5e5
   EXUpdatesInterface: 5adf50cb41e079c861da6d9b4b954c3db9a50734
   FBLazyVector: 9e0cd874afd81d9a4d36679daca991b58b260d42
@@ -2789,7 +2712,6 @@ SPEC CHECKSUMS:
   react-native-maps: 9febd31278b35cd21e4fad2cf6fa708993be5dab
   react-native-safe-area-context: 42a1b4f8774b577d03b53de7326e3d5757fe9513
   react-native-slider: 8c562583722c396a3682f451f0b6e68e351ec3b9
-  react-native-video: 66ab0bcc5061a4adc304c3cf22164ab3ecb720b9
   React-NativeModulesApple: a9464983ccc0f66f45e93558671f60fc7536e438
   React-oscompat: 73db7dbc80edef36a9d6ed3c6c4e1724ead4236d
   React-perflogger: 123272debf907cc423962adafcf4513320e43757
@@ -2832,6 +2754,6 @@ SPEC CHECKSUMS:
   SDWebImageWebPCoder: e38c0a70396191361d60c092933e22c20d5b1380
   Yoga: 051f086b5ccf465ff2ed38a2cf5a558ae01aaaa1
 
-PODFILE CHECKSUM: 9a296c7e1e28a1f47e4f4ab8b7df233324c742db
+PODFILE CHECKSUM: 140ca6322da1bc3f873eeefbf2efe024c596a94a
 
 COCOAPODS: 1.16.2
