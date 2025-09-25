@@ -275,10 +275,11 @@ export class ParkingFeeCalculator {
     const segmentEnd = accumulatedMinutes + segmentMinutes;
 
     // 適切なprogressive料金を見つける
-    // 累積時間に基づいて適用されるprogressive料金を選択
+    // 重要: progressive料金は、セグメントの一部でもapply_afterを超える場合に返す
+    // ただし、実際の適用は calculateFee メソッドで行う
     for (const rate of sortedProgressiveRates) {
-      // 累積時間がこのprogressive料金の適用開始時間に達している場合
-      if (accumulatedMinutes >= rate.applyAfter!) {
+      // セグメントの終了時点でこのprogressive料金の適用範囲内にある場合
+      if (segmentEnd > rate.applyAfter!) {
         // 次のprogressive料金を確認
         const nextRateIndex = sortedProgressiveRates.indexOf(rate) + 1;
         const nextRate = sortedProgressiveRates[nextRateIndex];
@@ -286,6 +287,7 @@ export class ParkingFeeCalculator {
         // 次の料金帯が存在しない、または累積時間が次の料金帯に達していない場合
         if (!nextRate || accumulatedMinutes < nextRate.applyAfter!) {
           progressiveRate = rate;
+          break;
         }
       }
     }
@@ -618,13 +620,17 @@ export class ParkingFeeCalculator {
               info = `最初の30分無料 / 30分以降 ${firstProgressive.minutes}分毎 ¥${firstProgressive.price}`;
             }
           } else if (firstProgressive.applyAfter === 60) {
-            info = `60分以降 ${firstProgressive.minutes}分毎 ¥${firstProgressive.price}`;
+            // 60分無料の場合の表示を改善
+            info = `最初の60分無料 / 60分以降 ${firstProgressive.minutes}分毎 ¥${firstProgressive.price}`;
           } else {
-            info = `${firstProgressive.applyAfter}分以降 ${firstProgressive.minutes}分毎 ¥${firstProgressive.price}`;
+            info = `最初の${firstProgressive.applyAfter}分無料 / ${firstProgressive.applyAfter}分以降 ${firstProgressive.minutes}分毎 ¥${firstProgressive.price}`;
           }
         } else if (displayBaseRate) {
           // 通常の基本料金
-          if (displayBaseRate.minutes < 60) {
+          if (displayBaseRate.price === 0 && firstProgressive && firstProgressive.applyAfter) {
+            // base料金が0円でprogressive料金がある場合
+            info = `最初の${firstProgressive.applyAfter}分無料 / ${firstProgressive.applyAfter}分以降 ${firstProgressive.minutes}分毎 ¥${firstProgressive.price}`;
+          } else if (displayBaseRate.minutes < 60) {
             info = `${displayBaseRate.minutes}分毎 ¥${displayBaseRate.price}`;
           } else if (displayBaseRate.minutes === 60) {
             info = `1時間 ¥${displayBaseRate.price}`;
@@ -637,8 +643,8 @@ export class ParkingFeeCalculator {
             }
           }
 
-          // progressive料金も追加表示
-          if (firstProgressive) {
+          // progressive料金も追加表示（base料金が0円でない場合のみ）
+          if (firstProgressive && displayBaseRate.price > 0) {
             info += `\n${firstProgressive.applyAfter}分以降: ${firstProgressive.minutes}分毎 ¥${firstProgressive.price}`;
           }
         }
