@@ -1,25 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
-import Constants from 'expo-constants';
-
-// 本番ビルドではprocess.envが使えないので、Constants.expoConfigから取得
-const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+// Expo TestFlight/Store では Constants.expoConfig は利用できないため、process.env を信頼する
+// EAS ビルド時に EXPO_PUBLIC_* が JS に埋め込まれる前提
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Supabase config missing:', {
-    supabaseUrl: !!supabaseUrl,
-    supabaseAnonKey: !!supabaseAnonKey,
-    extra: Constants.expoConfig?.extra
-  });
-  throw new Error(
-    'Missing Supabase config: EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY. ' +
-    'Set them in .env for dev and in EAS build env for production.'
-  );
+  // 本番で throw すると白画面になるため、ログのみに留める
+  console.error('[Supabase] Missing config: set EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY in EAS env');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
   auth: {
     storage: AsyncStorage,
     autoRefreshToken: true,

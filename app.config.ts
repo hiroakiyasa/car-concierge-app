@@ -6,6 +6,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: 'car-concierge-app',
   version: '1.0.0',
   jsEngine: 'hermes',
+  android: {
+    package: 'com.hiroakiyasa.carconciergeapp'
+  },
+  ios: {
+    bundleIdentifier: 'com.carconciege.app'
+  },
   extra: {
     eas: {
       projectId: 'faf23c02-6ed4-4585-bd02-6c6e5130890c'

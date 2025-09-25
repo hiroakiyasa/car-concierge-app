@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.carconciege.app'
+    namespace 'com.hiroakiyasa.carconciergeapp'
     defaultConfig {
-        applicationId 'com.carconciege.app'
+        applicationId 'com.hiroakiyasa.carconciergeapp'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

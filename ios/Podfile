@@ -48,25 +48,5 @@ target 'app' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => podfile_properties['apple.ccacheEnabled'] == 'true',
     )
-
-    # Fix for Folly on React Native 0.81.x
-    installer.pods_project.targets.each do |target|
-      if target.name == 'RCT-Folly'
-        target.build_configurations.each do |config|
-          config.build_settings['HEADER_SEARCH_PATHS'] ||= '$(inherited)'
-          config.build_settings['HEADER_SEARCH_PATHS'] << ' "${PODS_ROOT}/RCT-Folly"'
-          config.build_settings['HEADER_SEARCH_PATHS'] << ' "${PODS_ROOT}/RCT-Folly/folly"'
-          config.build_settings['HEADER_SEARCH_PATHS'] << ' "${PODS_ROOT}/Headers/Public/RCT-Folly"'
-        end
-      end
-    end
-
-    # Fix for missing files
-    installer.pods_project.targets.each do |target|
-      target.build_configurations.each do |config|
-        config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
-        config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'
-      end
-    end
   end
 end

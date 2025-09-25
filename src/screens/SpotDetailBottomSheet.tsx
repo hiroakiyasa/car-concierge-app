@@ -472,19 +472,23 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               const sortedProgs = [...progressiveRates].sort((a: any, b: any) => (
                 (a.apply_after ?? a.applyAfter ?? 0) - (b.apply_after ?? b.applyAfter ?? 0)
               ));
-              const prog = sortedProgs.find((p: any) => (p.apply_after ?? p.applyAfter ?? 0) === firstBase?.minutes) || sortedProgs[0];
-              if (firstBase && prog && firstBase.price === 0 && ((prog as any).apply_after ?? (prog as any).applyAfter) === firstBase.minutes) {
+              const prog = sortedProgs[0];
+
+              // apply_afterがあるprogressive料金の特別処理
+              if (firstBase && prog && firstBase.price === 0 && ((prog as any).apply_after ?? (prog as any).applyAfter) > 0) {
+                const applyAfter = (prog as any).apply_after ?? (prog as any).applyAfter;
                 return (
                   <>
                     <Text style={styles.rateItem}>
                       {formatDayType(firstBase.day_type)}最初{firstBase.minutes}分無料{formatTimeRange(firstBase.time_range)}
                     </Text>
                     <Text style={styles.rateItem}>
-                      {formatDayType(prog.day_type)}以降{prog.minutes}分毎 ¥{prog.price?.toLocaleString()}{formatTimeRange(prog.time_range)}
+                      {formatDayType(prog.day_type)}{applyAfter}分以降 {prog.minutes}分毎 ¥{prog.price?.toLocaleString()}{formatTimeRange(prog.time_range)}
                     </Text>
                   </>
                 );
               }
+
               // それ以外は個別に列挙
               return (
                 <>
@@ -495,13 +499,17 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                         : `${formatDayType(rate.day_type)}${rate.minutes}分毎 ¥${rate.price?.toLocaleString()}${formatTimeRange(rate.time_range)}`}
                     </Text>
                   ))}
-                  {progressiveRates.map((rate, index) => (
-                    <Text key={`prog-${index}`} style={styles.rateItem}>
-                      {formatDayType(rate.day_type)}以降{rate.minutes}分毎 ¥{rate.price?.toLocaleString()}
-                      {(rate as any).apply_after ? `（最初${(rate as any).apply_after}分後から）` : ''}
-                      {formatTimeRange(rate.time_range)}
-                    </Text>
-                  ))}
+                  {progressiveRates.map((rate, index) => {
+                    const applyAfter = (rate as any).apply_after ?? (rate as any).applyAfter;
+                    return (
+                      <Text key={`prog-${index}`} style={styles.rateItem}>
+                        {formatDayType(rate.day_type)}
+                        {applyAfter ? `${applyAfter}分以降 ` : ''}
+                        {rate.minutes}分毎 ¥{rate.price?.toLocaleString()}
+                        {formatTimeRange(rate.time_range)}
+                      </Text>
+                    );
+                  })}
                 </>
               );
             })()}
