@@ -404,7 +404,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   const parkingSpot = selectedSpot as CoinParking;
   const hotSpringSpot = selectedSpot as HotSpring;
   const gasStationSpot = selectedSpot as GasStation;
-  // const convenienceStoreSpot = selectedSpot as ConvenienceStore; // 未使用
+  const convenienceStoreSpot = selectedSpot as ConvenienceStore;
   
   
   const formatPrice = (): string => {
