@@ -424,7 +424,9 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
       description={getMarkerDescription()}
     >
       {renderMarkerContent()}
-      <Callout>
+      <Callout onPress={onPress}
+        tooltip={false}
+      >
         {renderCalloutContent()}
       </Callout>
     </Marker>

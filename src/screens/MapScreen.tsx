@@ -840,8 +840,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     selectSpot(spot);
     setShowDetailSheet(true);
 
-    // 詳細シートが60%を占有 → 残り40%の中央にマーカーを配置
-    if (spot) animateMarkerToTopFractionCenter(spot, 0.4);
+    // 詳細シートが下半分相当を占有する想定 → 上半分(50%)の中央に配置
+    if (spot) animateMarkerToTopFractionCenter(spot, 0.5);
 
     // コインパーキングの場合、最寄りの施設を地図に表示
     if (spot.category === 'コインパーキング') {
@@ -1009,9 +1009,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         let latDelta = Math.max((maxLat - minLat) * 2.5, 0.01);
         let lngDelta = Math.max((maxLng - minLng) * 2.5, 0.01);
         
-        // 可視上部40%の上下中央(=全体の20%位置)にスポットを配置
-        const desired = 0.4 / 2; // 0.2
-        const offsetCenterLat = spot.lat - (0.5 - desired) * latDelta; // = spot.lat - 0.3*latDelta
+        // 可視上部50%の上下中央(=全体の25%位置)にスポットを配置
+        const desired = 0.5 / 2; // 0.25
+        const offsetCenterLat = spot.lat - (0.5 - desired) * latDelta; // = spot.lat - 0.25*latDelta
         
         console.log('🗺️ 地図範囲調整:', {
           施設数: allSpots.length,
@@ -1040,8 +1040,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     // 詳細表示はしない（マーカータップで表示）
     setShowDetailSheet(false);
     
-    // 選択した駐車場を画面上部40%の中央に表示
-    animateMarkerToTopFractionCenter(spot, 0.4);
+    // 選択した駐車場を画面上部50%の中央に表示
+    animateMarkerToTopFractionCenter(spot, 0.5);
   };
   
   const renderMarkers = () => {
