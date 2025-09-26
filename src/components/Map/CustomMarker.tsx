@@ -425,9 +425,11 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
       description={getMarkerDescription()}
     >
       {renderMarkerContent()}
-      <Callout>
-        {renderCalloutContent()}
-      </Callout>
+      {Platform.OS === 'android' ? (
+        <Callout>
+          {renderCalloutContent()}
+        </Callout>
+      ) : null}
     </Marker>
   );
 };
