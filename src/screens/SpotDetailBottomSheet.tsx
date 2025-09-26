@@ -844,6 +844,66 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               showsVerticalScrollIndicator={false}
               bounces={false}
             >
+            {/* Parking Details Information Card */}
+            <View style={styles.parkingDetailsCard}>
+              <View style={styles.parkingDetailsContent}>
+                <View style={styles.parkingDetailsHeader}>
+                  <Ionicons name="information-circle-outline" size={16} color="#666" />
+                  <Text style={styles.parkingDetailsTitle}>駐車場情報</Text>
+                </View>
+
+                {/* 営業時間 */}
+                <View style={styles.parkingDetailRow}>
+                  <View style={styles.parkingDetailLeft}>
+                    <Ionicons name="time-outline" size={14} color="#999" />
+                    <Text style={styles.parkingDetailLabel}>営業時間</Text>
+                  </View>
+                  <Text style={styles.parkingDetailValue}>
+                    {formatOperatingHours()}
+                  </Text>
+                </View>
+
+                {/* 許容台数 */}
+                {parkingSpot.capacity && (
+                  <View style={styles.parkingDetailRow}>
+                    <View style={styles.parkingDetailLeft}>
+                      <Ionicons name="car-outline" size={14} color="#999" />
+                      <Text style={styles.parkingDetailLabel}>許容台数</Text>
+                    </View>
+                    <Text style={styles.parkingDetailValue}>
+                      {parkingSpot.capacity}
+                    </Text>
+                  </View>
+                )}
+
+                {/* 標高 */}
+                {(parkingSpot as any).elevation !== undefined && (parkingSpot as any).elevation !== null && (
+                  <View style={styles.parkingDetailRow}>
+                    <View style={styles.parkingDetailLeft}>
+                      <Ionicons name="trending-up-outline" size={14} color="#999" />
+                      <Text style={styles.parkingDetailLabel}>標高</Text>
+                    </View>
+                    <Text style={styles.parkingDetailValue}>
+                      {(parkingSpot as any).elevation}m
+                    </Text>
+                  </View>
+                )}
+
+                {/* 駐車場タイプ */}
+                {(parkingSpot as any).type && (
+                  <View style={styles.parkingDetailRow}>
+                    <View style={styles.parkingDetailLeft}>
+                      <Ionicons name="flag-outline" size={14} color="#999" />
+                      <Text style={styles.parkingDetailLabel}>タイプ</Text>
+                    </View>
+                    <Text style={styles.parkingDetailValue}>
+                      {(parkingSpot as any).type}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
             {/* Combined Pricing Card - Compact */}
             <View style={styles.pricingCard}>
               <View style={styles.pricingContent}>
@@ -1564,6 +1624,59 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     padding: 8,
     borderRadius: 6,
+  },
+  // Parking Details Styles
+  parkingDetailsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  parkingDetailsContent: {
+    padding: 16,
+  },
+  parkingDetailsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F2F5',
+  },
+  parkingDetailsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginLeft: 6,
+  },
+  parkingDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#F5F7FA',
+  },
+  parkingDetailLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  parkingDetailLabel: {
+    fontSize: 13,
+    color: '#666',
+    marginLeft: 8,
+  },
+  parkingDetailValue: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#333',
+    textAlign: 'right',
+    flex: 1,
   },
   // Compact Hot Spring Styles
   hotSpringCompactCard: {
