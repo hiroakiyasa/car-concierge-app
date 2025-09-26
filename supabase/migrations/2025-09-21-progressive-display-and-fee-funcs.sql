@@ -166,7 +166,9 @@ CREATE OR REPLACE FUNCTION public.get_parking_spots_sorted_by_fee(
     min_lng double precision,
     max_lng double precision,
     duration_minutes integer,
-    parking_start timestamptz DEFAULT now()
+    parking_start timestamptz DEFAULT now(),
+    min_elevation double precision DEFAULT NULL,
+    limit_candidates integer DEFAULT 600
 )
 RETURNS TABLE(
     id bigint,
@@ -196,7 +198,11 @@ BEGIN
             p.capacity::text,
             p.hours
         FROM parking_spots p
-        WHERE p.lat BETWEEN min_lat AND max_lat AND p.lng BETWEEN min_lng AND max_lng
+        WHERE p.lat BETWEEN min_lat AND max_lat
+          AND p.lng BETWEEN min_lng AND max_lng
+          AND (min_elevation IS NULL OR p.elevation >= min_elevation)
+        ORDER BY p.id
+        LIMIT limit_candidates
     ),
     spots_with_fee AS (
         SELECT
@@ -207,10 +213,10 @@ BEGIN
             s.rates,
             s.capacity,
             s.hours,
-            -- Prefer DP calculator; fall back to simple if needed
+            -- Prefer SIMPLE calculator first for performance; DP as fallback
             COALESCE(
-              public.calculate_parking_fee_dp(s.rates, entry_time, exit_time),
-              public.calculate_simple_parking_fee(s.rates, entry_time, duration_minutes)
+              public.calculate_simple_parking_fee(s.rates, entry_time, duration_minutes),
+              public.calculate_parking_fee_dp(s.rates, entry_time, exit_time)
             ) as calculated_fee
         FROM spots_in_region s
     )
@@ -229,4 +235,3 @@ BEGIN
     LIMIT 20;
 END;
 $$;
-
