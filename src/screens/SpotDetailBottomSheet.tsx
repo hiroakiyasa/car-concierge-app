@@ -26,7 +26,7 @@ import { ReviewList } from '@/components/Reviews/ReviewList';
 import { HotSpringReviewModal } from '@/components/Reviews/HotSpringReviewModal';
 import { HotSpringReviewList } from '@/components/Reviews/HotSpringReviewList';
 import { PhotoUploadModal } from '@/components/Photos/PhotoUploadModal';
-import { CoinParking, HotSpring, GasStation } from '@/types';
+import { CoinParking, HotSpring, GasStation, ConvenienceStore } from '@/types';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { SupabaseService } from '@/services/supabase.service';
 import { NATIONAL_AVERAGE_PRICES, formatPriceDifference, getPriceDifferenceColor } from '@/utils/fuelPrices';
@@ -401,11 +401,10 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   const isHotSpring = selectedSpot.category === '温泉';
   const isGasStation = selectedSpot.category === 'ガソリンスタンド';
   const isConvenienceStore = selectedSpot.category === 'コンビニ';
-  const isConvenienceStore = selectedSpot.category === 'コンビニ';
   const parkingSpot = selectedSpot as CoinParking;
   const hotSpringSpot = selectedSpot as HotSpring;
   const gasStationSpot = selectedSpot as GasStation;
-  const convenienceStoreSpot = selectedSpot as ConvenienceStore;
+  // const convenienceStoreSpot = selectedSpot as ConvenienceStore; // 未使用
   
   
   const formatPrice = (): string => {
