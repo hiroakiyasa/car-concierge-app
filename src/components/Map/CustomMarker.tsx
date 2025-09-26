@@ -61,8 +61,14 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
   const getLogoForSpot = () => {
     if (spot.category === 'コンビニ') {
       const store = spot as ConvenienceStore;
-      if (store.brand || store.name) {
-        return getConvenienceStoreLogo(store.brand || store.name);
+      // brand優先 → 失敗時はnameでも判定
+      if (store.brand) {
+        const byBrand = getConvenienceStoreLogo(store.brand);
+        if (byBrand) return byBrand;
+      }
+      if (store.name) {
+        const byName = getConvenienceStoreLogo(store.name);
+        if (byName) return byName;
       }
     } else if (spot.category === 'ガソリンスタンド') {
       const station = spot as GasStation;

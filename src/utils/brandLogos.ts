@@ -27,33 +27,66 @@ export const GAS_STATION_LOGOS: { [key: string]: any } = {
 };
 
 // ブランド名からロゴを取得するヘルパー関数
-export const getConvenienceStoreLogo = (brand: string): any => {
-  // ブランド名の正規化（カタカナ・ひらがな・英数字の統一など）
-  const normalizedBrand = brand
-    .replace(/７/g, 'セブン')
-    .replace(/１１/g, 'イレブン')
-    .replace(/7/g, 'セブン')
-    .replace(/11/g, 'イレブン')
-    .replace(/-/g, '')  // ハイフンを削除（セブン-イレブン → セブンイレブン）
-    .replace(/‐/g, '')  // 全角ハイフンも削除
-    .replace(/－/g, '') // 全角ダッシュも削除
-    .replace(/ー/g, '') // 長音符も削除
-    .replace(/SEVEN/gi, 'セブン')
-    .replace(/ELEVEN/gi, 'イレブン');
+export const getConvenienceStoreLogo = (input: string): any => {
+  if (!input) return null;
+  const brand = String(input).trim();
 
-  // セブンイレブンの特別処理（データベースでは「セブン-イレブン」形式）
-  if (brand.includes('セブン') && brand.includes('イレブン')) {
+  // 大文字小文字を無視するための英字版
+  const lower = brand.toLowerCase();
+  // ハイフン・長音などを取り除いた日本語版
+  const jp = brand
+    .replace(/-/g, '')
+    .replace(/[‐－ー]/g, '')
+    .replace(/７/g, '7')
+    .replace(/１１/g, '11');
+
+  // セブン-イレブン（7-Eleven, SEVEN ELEVEN, セブン‐イレブン など）
+  if (
+    /7\s*-?\s*11/.test(lower) ||
+    (jp.includes('セブン') && jp.includes('イレブン')) ||
+    (lower.includes('seven') && lower.includes('eleven'))
+  ) {
     return CONVENIENCE_STORE_LOGOS['セブンイレブン'];
   }
-  if (brand.includes('7') && (brand.includes('11') || brand.includes('イレブン'))) {
-    return CONVENIENCE_STORE_LOGOS['セブンイレブン'];
+
+  // ファミリーマート（FamilyMart, ﾌｧﾐﾘｰﾏｰﾄ, ファミマ など）
+  if (
+    jp.includes('ファミリ') || jp.includes('ﾌｧﾐﾘ') || jp.includes('ファミマ') ||
+    lower.includes('familymart') || lower.includes('famima') || lower.includes('family mart')
+  ) {
+    return CONVENIENCE_STORE_LOGOS['ファミリーマート'];
   }
 
+  // ローソン（LAWSON）
+  if (jp.includes('ローソン') || lower.includes('lawson')) {
+    return CONVENIENCE_STORE_LOGOS['ローソン'];
+  }
+
+  // ミニストップ（MINISTOP）
+  if (jp.includes('ミニストップ') || lower.includes('ministop')) {
+    return CONVENIENCE_STORE_LOGOS['ミニストップ'];
+  }
+
+  // デイリーヤマザキ（DAILY YAMAZAKI / daily-yamazaki）
+  if (
+    jp.includes('デイリ') || jp.includes('ﾃﾞｲﾘ') ||
+    lower.includes('daily') || lower.includes('yamazaki')
+  ) {
+    return CONVENIENCE_STORE_LOGOS['デイリーヤマザキ'];
+  }
+
+  // セイコーマート（SEICOMART）
+  if (jp.includes('セイコーマート') || lower.includes('seicomart')) {
+    return CONVENIENCE_STORE_LOGOS['セイコーマート'];
+  }
+
+  // 直接一致も一応試す
   for (const key in CONVENIENCE_STORE_LOGOS) {
-    if (normalizedBrand.includes(key) || key.includes(normalizedBrand)) {
+    if (brand.includes(key) || key.includes(brand)) {
       return CONVENIENCE_STORE_LOGOS[key];
     }
   }
+
   return null;
 };
 
