@@ -324,10 +324,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       const validSpots = spots || [];
       
       // 近傍検索（新アルゴリズム）: 周辺検索チェックON時のみ実行
-      const nearbyOn = currentFilter.nearbyFilterEnabled && (((currentFilter.convenienceStoreRadius || 0) > 0 && selectedCategories.has('コンビニ')) || ((currentFilter.hotSpringRadius || 0) > 0 && selectedCategories.has('温泉')));
+      // タブの表示状態やカテゴリ選択とは独立して、チェックボックスの状態（nearbyFilterEnabled）と半径で判定
+      const nearbyOn = currentFilter.nearbyFilterEnabled && (((currentFilter.convenienceStoreRadius || 0) > 0) || ((currentFilter.hotSpringRadius || 0) > 0));
       if (nearbyOn) {
-        const requireConv = selectedCategories.has('コンビニ') && (currentFilter.convenienceStoreRadius || 0) > 0;
-        const requireHot = selectedCategories.has('温泉') && (currentFilter.hotSpringRadius || 0) > 0;
+        const requireConv = (currentFilter.convenienceStoreRadius || 0) > 0;
+        const requireHot = (currentFilter.hotSpringRadius || 0) > 0;
 
         // 1) 駐車場は地図範囲内、施設は範囲+半径分を取得
         const parkings = await SupabaseService.fetchParkingSpots(searchRegion, minElevation);
@@ -723,20 +724,25 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         console.log(`⚠️ エリア内に${totalNonParkingInArea}件の施設があります。各カテゴリー最大100件ずつ表示`);
       }
       
-      // 重複を除去してからセット
-      const uniqueDisplaySpots = Array.from(
+      // 重複を除去
+      let uniqueDisplaySpots = Array.from(
         new Map(displaySpots.map(spot => [spot.id, spot])).values()
       );
       console.log(`🗺️ 合計${uniqueDisplaySpots.length}件を地図に表示（重複除去前: ${displaySpots.length}件）`);
-      // すべての有効結果に対して、パネルで有効なチェック項目を AND で適用
-      // 注意: 周辺検索フィルターは既にバックエンドで適用済みなので、フロントエンドでの再フィルタリングは不要
-      // ただし、他のフィルター（標高など）は適用する必要がある
-      let finalResults = uniqueDisplaySpots;
-
-      // 標高フィルターのみフロントエンドで適用（周辺検索と駐車料金はバックエンドで処理済み）
-      if (currentFilter.elevationFilterEnabled && !currentFilter.nearbyFilterEnabled && !currentFilter.parkingTimeFilterEnabled) {
-        finalResults = SearchService.filterSpots(uniqueDisplaySpots, currentFilter, userLocation);
+      // フィルタの優先順位: 標高 → 周辺検索 → 駐車料金
+      // 1) 標高フィルター（最優先）: 駐車場カテゴリーに対して適用
+      if (currentFilter.elevationFilterEnabled && (currentFilter.minElevation || 0) > 0) {
+        const minElev = currentFilter.minElevation || 0;
+        uniqueDisplaySpots = uniqueDisplaySpots.filter(s =>
+          s.category !== 'コインパーキング' || ( (s as any).elevation == null || (s as any).elevation >= minElev )
+        );
+        console.log(`🏔️ 標高フィルター後: ${uniqueDisplaySpots.length}件 (>= ${minElev}m, 未登録は温存)`);
       }
+
+      // 2) 周辺検索はサービス側ですでに適用済み（fetchParkingSpotsByNearbyFilter）
+      // 3) 駐車料金はサービス側の計算結果を利用（ソート/上位抽出はサービスで実施）
+
+      const finalResults = uniqueDisplaySpots;
 
       setSearchResults(finalResults);
 

@@ -769,8 +769,10 @@ export class SupabaseService {
       duration_minutes: durationMinutes
     };
 
-    // 注意: 現在のRPCシグネチャには min_elevation は存在しないため、
-    // フィルタはクライアント側で適用する（後段でfilter）。
+    // バックエンドが min_elevation を受け付ける場合は渡す（候補を前段で絞る）
+    if (minElevation !== undefined && minElevation > 0) {
+      rpcParams.min_elevation = minElevation;
+    }
 
     // 入庫時間が指定されていればRPCに渡す（DB側にパラメータが定義されている場合のみ有効）
     if (entryAt instanceof Date) {
@@ -878,8 +880,9 @@ export class SupabaseService {
     });
 
     // クライアント側で標高フィルターを適用（RPCがサポートしないため）
+    // 標高フィルター（elevationが未取得のスポットは除外しない＝温存）
     const results = (minElevation !== undefined && minElevation > 0)
-      ? mapped.filter(s => (s.elevation ?? -9999) >= minElevation)
+      ? mapped.filter(s => (s as any).elevation == null || (s as any).elevation >= minElevation)
       : mapped;
 
     return results;
