@@ -41,6 +41,16 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   const [hasInitialized, setHasInitialized] = useState(false);
   const [nearbyFacilities, setNearbyFacilities] = useState<Spot[]>([]);
   
+  // 詳細シート表示中に、パネルのアニメーション完了後もう一度確実に25%位置へ再センタリング
+  useEffect(() => {
+    if (showDetailSheet && selectedSpot) {
+      const t = setTimeout(() => {
+        animateMarkerToTopFractionCenter(selectedSpot, 0.5);
+      }, 350);
+      return () => clearTimeout(t);
+    }
+  }, [showDetailSheet, selectedSpot, mapRegion?.latitudeDelta, mapRegion?.longitudeDelta]);
+  
   const {
     mapRegion,
     setMapRegion,
@@ -90,6 +100,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         if (showDetail) {
           setTimeout(() => {
             setShowDetailSheet(true);
+            // マーカーを画面上から25%の位置に強制移動
+            if (spotFromFavorites) animateMarkerToTopFractionCenter(spotFromFavorites, 0.5);
           }, 1500);
         }
         
@@ -809,7 +821,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     });
   };
 
-  // 指定したスポットを、画面上部の可視地図領域(例:50%)の中央に配置するためのユーティリティ
+  // 指定したスポットを画面上から25%の位置に強制的に配置
   const animateMarkerToTopFractionCenter = (
     spot: Spot,
     visibleTopFraction = 0.5,
@@ -820,11 +832,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     const targetLatDelta = (current.latitudeDelta || 0.01) * (options?.zoomScale ?? 1);
     const targetLngDelta = (current.longitudeDelta || 0.01) * (options?.zoomScale ?? 1);
 
-    // 目標スクリーン位置は「上部領域(visibleTopFraction)の上下中央」= 全体の visibleTopFraction/2
-    // スクリーン位置 p にマーカーを置くには centerLat = markerLat - (p - 0.5) * latDelta
-    // p = visibleTopFraction/2 を代入 → centerLat = markerLat + (0.5 - visibleTopFraction/2) * latDelta
-    const desired = Math.max(0, Math.min(1, visibleTopFraction / 2));
-    const centerLat = spot.lat + (0.5 - desired) * targetLatDelta; // 0.5のときは +0.25 * latDelta → 画面上から25%
+    // マーカーを画面上から25%の位置に強制配置
+    // スクリーン座標0.25の位置にマーカーが来るように計算
+    // centerLat = markerLat - (0.25 - 0.5) * latDelta = markerLat + 0.25 * latDelta
+    const centerLat = spot.lat + 0.25 * targetLatDelta;
 
     mapRef.current.animateToRegion(
       {
@@ -841,7 +852,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     selectSpot(spot);
     setShowDetailSheet(true);
 
-    // 詳細シートが下半分相当を占有する想定 → 上半分(50%)の中央に配置
+    // マーカーを画面上から25%の位置に強制移動
     if (spot) animateMarkerToTopFractionCenter(spot, 0.5);
 
     // コインパーキングの場合、最寄りの施設を地図に表示
@@ -1460,7 +1471,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       <CompactBottomPanel 
         navigation={navigation} 
-        onHeightChange={() => {}}
+        onHeightChange={() => {
+          if (showDetailSheet && selectedSpot) {
+            setTimeout(() => animateMarkerToTopFractionCenter(selectedSpot, 0.5), 50);
+          }
+        }}
         onSearch={(isExpanded: boolean, newFilter?: any) => handleSearch(isExpanded, newFilter)}
       />
       
@@ -1556,6 +1571,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           setShouldReopenRanking(true);
           setTimeout(() => {
             setShowDetailSheet(true);
+            // マーカーを画面上から25%の位置に強制移動
+            if (spot) animateMarkerToTopFractionCenter(spot, 0.5);
           }, 400); // モーダルが閉じるアニメーションを待つ
         }}
       />
