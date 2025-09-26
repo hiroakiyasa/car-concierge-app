@@ -403,6 +403,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
         longitude: spot.lng,
       }}
       onPress={onPress}
+      onCalloutPress={onPress}
       // 初回のみtrue、以降falseにしてスナップショット安定
       tracksViewChanges={Platform.OS === 'android' ? tracks : undefined}
       // 円は中心アンカーでクリッピングを抑制
@@ -424,9 +425,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
       description={getMarkerDescription()}
     >
       {renderMarkerContent()}
-      <Callout onPress={onPress}
-        tooltip={false}
-      >
+      <Callout>
         {renderCalloutContent()}
       </Callout>
     </Marker>
