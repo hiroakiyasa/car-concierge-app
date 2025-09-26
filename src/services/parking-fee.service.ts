@@ -577,18 +577,110 @@ export class ParkingFeeCalculator {
     parking: CoinParking,
     duration: ParkingDuration
   ): boolean {
-    // 24時間営業の場合は常にtrue
-    if (parking.hours?.is_24h || parking.hours?.is24h) {
+    try {
+      const start = duration.startDate;
+      const end = duration.endDate;
+
+      // 無効な期間は通す
+      if (!(start instanceof Date) || !(end instanceof Date) || start >= end) return true;
+
+      const h: any = parking.hours || (parking as any).Hours || null;
+
+      // 24時間営業フラグがあれば通す
+      if (h && (h.is_24h === true || h.is24h === true || h.access_24h === true)) return true;
+
+      // 営業時間の時間帯を抽出（日次の時間帯配列）
+      const ranges = this.parseOpenTimeRanges(h);
+      if (!ranges || ranges.length === 0) {
+        // データがなければ除外しない（不明扱い）
+        return true;
+      }
+
+      // 期間が完全に営業時間内かを確認
+      return this.isIntervalFullyOpen(start, end, ranges);
+    } catch (e) {
+      // 解析に失敗した場合は除外しない（安全側）
       return true;
     }
+  }
 
-    // 営業時間情報がない場合はtrueとする（データ不足の場合は表示）
-    if (!parking.hours?.hours) {
-      return true;
+  // 営業時間の文字列/構造から、1日の開店時間帯(minute-of-day)配列を抽出
+  private static parseOpenTimeRanges(hours: any): Array<{ start: number; end: number }> {
+    const out: Array<{ start: number; end: number }> = [];
+    if (!hours) return out;
+
+    const pushRange = (sMin: number, eMin: number) => {
+      const norm = (n: number) => Math.max(0, Math.min(1440, n));
+      let s = norm(sMin);
+      let e = norm(eMin);
+      if (isNaN(s) || isNaN(e)) return;
+      if (s === e) {
+        // 24h のような場合（同値）→全日扱い
+        out.push({ start: 0, end: 1440 });
+        return;
+      }
+      if (e > s) {
+        out.push({ start: s, end: e });
+      } else {
+        // 日またぎ 22:00～8:00 → [22:00,24:00)、[0:00,8:00)
+        out.push({ start: s, end: 1440 });
+        out.push({ start: 0, end: e });
+      }
+    };
+
+    const parseStr = (str: string) => {
+      if (!str) return;
+      // 複数区切りに対応
+      const parts = String(str).split(/[、,\/\n]|・|＆|＆|\s+/).filter(Boolean);
+      const regex = /(\d{1,2})[:：](\d{2})\s*[～〜\-]\s*(\d{1,2})[:：](\d{2})/;
+      for (const p of parts) {
+        const m = p.match(regex);
+        if (m) {
+          const sh = parseInt(m[1]);
+          const sm = parseInt(m[2]);
+          const eh = parseInt(m[3]);
+          const em = parseInt(m[4]);
+          pushRange(sh * 60 + sm, eh * 60 + em);
+        }
+      }
+    };
+
+    if (typeof hours === 'string') {
+      parseStr(hours);
+      return out;
+    }
+    if (hours?.text) parseStr(hours.text);
+    if (hours?.hours && typeof hours.hours === 'string') parseStr(hours.hours);
+    if (Array.isArray(hours?.schedules)) {
+      for (const sch of hours.schedules) {
+        if (sch && typeof sch.time === 'string') parseStr(sch.time);
+      }
     }
 
-    // TODO: 実際の営業時間チェックロジックを実装
-    // 現在は簡易実装として常にtrueを返す
+    return out;
+  }
+
+  // 指定期間が毎日の営業時間帯に完全に含まれているか
+  private static isIntervalFullyOpen(start: Date, end: Date, ranges: Array<{ start: number; end: number }>): boolean {
+    let cur = new Date(start);
+    while (cur < end) {
+      const dayStart = new Date(cur);
+      dayStart.setHours(0, 0, 0, 0);
+      const nextDay = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      const segEnd = end < nextDay ? end : nextDay;
+
+      const a = (cur.getHours() * 60 + cur.getMinutes());
+      const b = (segEnd.getHours() * 60 + segEnd.getMinutes());
+
+      // 当日内の[a,b]区間が、いずれかの営業時間帯に完全に含まれている必要がある
+      let covered = false;
+      for (const r of ranges) {
+        if (a >= r.start && b <= r.end) { covered = true; break; }
+      }
+      if (!covered) return false;
+
+      cur = segEnd;
+    }
     return true;
   }
 

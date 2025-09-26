@@ -369,6 +369,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         const matched: Match[] = [];
 
         for (const p of parkings) {
+          // 営業時間チェック（指定時間中に1分でも営業時間外なら除外）
+          if (hasParkingTimeFilter) {
+            const open = ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration);
+            if (!open) continue;
+          }
           let conv: Spot | undefined;
           let hot: Spot | undefined;
           const pLat = Number((p as any).lat);
@@ -454,6 +459,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             currentFilter.hotSpringRadius,
             minElevation
           );
+          // 営業時間チェック
+          parkingSpots = parkingSpots.filter(p =>
+            ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
+          );
           console.log(`🅿️ 周辺検索+料金フィルター結果: ${parkingSpots.length}件`);
           displaySpots.push(...parkingSpots);
         }
@@ -467,6 +476,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             currentFilter.hotSpringRadius,
             minElevation
           );
+          parkingSpots = parkingSpots.filter(p =>
+            !hasParkingTimeFilter || ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
+          );
           console.log(`🅿️ 周辺検索結果: ${parkingSpots.length}件`);
           displaySpots.push(...parkingSpots);
         }
@@ -478,6 +490,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             currentFilter.parkingDuration.durationInMinutes,
             minElevation,
             currentFilter.parkingDuration.startDate // 入庫日時を渡す
+          );
+          parkingSpots = parkingSpots.filter(p =>
+            ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
           );
           console.log(`🅿️ 料金フィルター結果: ${parkingSpots.length}件`);
           displaySpots.push(...parkingSpots);
