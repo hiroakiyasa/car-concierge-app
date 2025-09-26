@@ -116,69 +116,46 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   
   const initializeLocation = async () => {
     try {
-      // まず前回保存した地図範囲を取得
-      const savedRegion = await AsyncStorage.getItem('lastMapRegion');
-
-      if (savedRegion) {
-        // 保存された地図範囲がある場合は即座にそれを使用
-        const initialRegion = JSON.parse(savedRegion);
-        console.log('📍 前回の地図範囲を復元:', initialRegion);
-        setMapRegion(initialRegion);
-
-        // バックグラウンドで現在地を取得（地図は動かさない）
-        LocationService.getCurrentLocation().then(location => {
-          if (location) {
-            setUserLocation(location);
-            console.log('📍 現在地を取得（地図は移動しない）:', location);
-          }
-        }).catch(error => {
-          console.log('📍 現在地取得エラー（地図はそのまま）:', error);
-        });
-      } else {
-        // 初回起動時のみ地図範囲を設定
-        console.log('📍 初回起動 - 地図範囲を設定中...');
-
-        // デフォルト位置（東京駅）をまず設定
-        const defaultRegion = {
-          latitude: 35.6812,
-          longitude: 139.7671,
+      // 1) 現在地を最優先で取得し、取得できたら地図を現在地に移動
+      const location = await LocationService.getCurrentLocation();
+      if (location) {
+        setUserLocation(location);
+        const currentRegion = {
+          latitude: location.latitude,
+          longitude: location.longitude,
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         };
-        setMapRegion(defaultRegion);
-
-        // 現在地の取得を試みる（成功したら地図を移動）
-        try {
-          const location = await LocationService.getCurrentLocation();
-          if (location) {
-            setUserLocation(location);
-            // 初回起動時のみ現在地に移動
-            const newRegion = {
-              latitude: location.latitude,
-              longitude: location.longitude,
-              latitudeDelta: 0.02,
-              longitudeDelta: 0.02,
-            };
-            console.log('📍 初回起動 - 現在地を中心に設定:', newRegion);
-            setMapRegion(newRegion);
-            await saveMapRegion(newRegion);
-
-            // 地図のアニメーション
-            if (mapRef.current && isMapReady) {
-              mapRef.current.animateToRegion(newRegion, 1000);
-            }
-          } else {
-            console.log('📍 初回起動 - 現在地取得失敗、デフォルト位置を使用');
-            await saveMapRegion(defaultRegion);
-          }
-        } catch (error) {
-          console.log('📍 初回起動 - 現在地取得エラー、デフォルト位置を使用:', error);
-          await saveMapRegion(defaultRegion);
+        console.log('📍 起動時 - 現在地を中心に設定:', currentRegion);
+        setMapRegion(currentRegion);
+        await saveMapRegion(currentRegion);
+        if (mapRef.current && isMapReady) {
+          mapRef.current.animateToRegion(currentRegion, 1000);
         }
+        return;
       }
+
+      // 2) 現在地が取得できなければ、保存済みの地図範囲を復元
+      const savedRegion = await AsyncStorage.getItem('lastMapRegion');
+      if (savedRegion) {
+        const initialRegion = JSON.parse(savedRegion);
+        console.log('📍 現在地取得不可 - 前回の地図範囲を復元:', initialRegion);
+        setMapRegion(initialRegion);
+        return;
+      }
+
+      // 3) それもなければ、デフォルト位置（東京駅）
+      const defaultRegion = {
+        latitude: 35.6812,
+        longitude: 139.7671,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      };
+      console.log('📍 現在地・保存範囲なし - デフォルト位置を使用');
+      setMapRegion(defaultRegion);
+      await saveMapRegion(defaultRegion);
     } catch (error) {
       console.error('❌ 初期位置の設定エラー:', error);
-      // エラー時はデフォルト位置を設定
       const defaultRegion = {
         latitude: 35.6812,
         longitude: 139.7671,
@@ -310,16 +287,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       // 選択されたカテゴリーを検索
       let selectedCategories = currentFilter.selectedCategories;
 
-      // 周辺検索が有効な場合、関連施設のカテゴリーも自動的に選択状態にする
-      if (currentFilter.nearbyFilterEnabled) {
-        selectedCategories = new Set(selectedCategories);
-        if ((currentFilter.convenienceStoreRadius || 0) > 0) {
-          selectedCategories.add('コンビニ');
-        }
-        if ((currentFilter.hotSpringRadius || 0) > 0) {
-          selectedCategories.add('温泉');
-        }
-      }
+      // 周辺検索が有効でも、自動でカテゴリーを追加しない（チェックされているカテゴリのみ）
+      // 選択状態はCategoryButtonsのチェックに厳密に従う
 
       console.log('🔍 選択されたカテゴリー:', Array.from(selectedCategories));
       
@@ -332,14 +301,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       // 周辺検索が有効な場合は、関連施設も取得するためにカテゴリーを追加
       const categoriesForFetch = new Set<string>(selectedCategories);
-      if (currentFilter.nearbyFilterEnabled && selectedCategories.has('コインパーキング')) {
-        if ((currentFilter.convenienceStoreRadius || 0) > 0) {
-          categoriesForFetch.add('コンビニ');
-        }
-        if ((currentFilter.hotSpringRadius || 0) > 0) {
-          categoriesForFetch.add('温泉');
-        }
-      }
       
       const spots = await SupabaseService.fetchSpotsByCategories(
         searchRegion,
@@ -351,10 +312,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       const validSpots = spots || [];
       
       // 近傍検索（新アルゴリズム）: 周辺検索チェックON時のみ実行
-      const nearbyOn = currentFilter.nearbyFilterEnabled && ((currentFilter.convenienceStoreRadius || 0) > 0 || (currentFilter.hotSpringRadius || 0) > 0);
+      const nearbyOn = currentFilter.nearbyFilterEnabled && (((currentFilter.convenienceStoreRadius || 0) > 0 && selectedCategories.has('コンビニ')) || ((currentFilter.hotSpringRadius || 0) > 0 && selectedCategories.has('温泉')));
       if (nearbyOn) {
-        const requireConv = (currentFilter.convenienceStoreRadius || 0) > 0;
-        const requireHot = (currentFilter.hotSpringRadius || 0) > 0;
+        const requireConv = selectedCategories.has('コンビニ') && (currentFilter.convenienceStoreRadius || 0) > 0;
+        const requireHot = selectedCategories.has('温泉') && (currentFilter.hotSpringRadius || 0) > 0;
 
         // 1) 駐車場は地図範囲内、施設は範囲+半径分を取得
         const parkings = await SupabaseService.fetchParkingSpots(searchRegion, minElevation);

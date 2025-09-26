@@ -409,16 +409,16 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     if (!isParking) return '---';
     
     // 計算済み料金がある場合
-    if (parkingSpot.calculatedFee !== undefined && parkingSpot.calculatedFee !== null && parkingSpot.calculatedFee > 0) {
-      return `¥${parkingSpot.calculatedFee.toLocaleString()}`;
+    if (parkingSpot.calculatedFee !== undefined && parkingSpot.calculatedFee !== null && parkingSpot.calculatedFee >= 0) {
+      return parkingSpot.calculatedFee === 0
+        ? '無料'
+        : `¥${parkingSpot.calculatedFee.toLocaleString()}`;
     }
     
     // 現在の設定で計算
     if (searchFilter.parkingTimeFilterEnabled && parkingSpot.rates && parkingSpot.rates.length > 0) {
       const fee = ParkingFeeCalculator.calculateFee(parkingSpot, searchFilter.parkingDuration);
-      if (fee > 0) {
-        return `¥${fee.toLocaleString()}`;
-      }
+      if (fee >= 0) return fee === 0 ? '無料' : `¥${fee.toLocaleString()}`;
     }
     
     return '---';

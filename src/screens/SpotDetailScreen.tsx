@@ -55,16 +55,14 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
     if (!isParking) return '---';
     
     // calculatedFeeがある場合（ランキングから）
-    if (parkingSpot.calculatedFee !== undefined && parkingSpot.calculatedFee !== null && parkingSpot.calculatedFee > 0) {
-      return `¥${parkingSpot.calculatedFee}`;
+    if (parkingSpot.calculatedFee !== undefined && parkingSpot.calculatedFee !== null && parkingSpot.calculatedFee >= 0) {
+      return parkingSpot.calculatedFee === 0 ? '無料' : `¥${parkingSpot.calculatedFee}`;
     }
     
     // calculatedFeeがない場合、現在の設定で計算
     if (searchFilter.parkingTimeFilterEnabled && parkingSpot.rates && parkingSpot.rates.length > 0) {
       const fee = ParkingFeeCalculator.calculateFee(parkingSpot, searchFilter.parkingDuration);
-      if (fee > 0) {
-        return `¥${fee}`;
-      }
+      if (fee >= 0) return fee === 0 ? '無料' : `¥${fee}`;
     }
     
     return '---';

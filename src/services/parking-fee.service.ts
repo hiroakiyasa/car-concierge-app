@@ -74,6 +74,15 @@ export class ParkingFeeCalculator {
     let accumulatedMinutes = 0;
     let timeRangeFees: Map<string, number> = new Map(); // 時間帯別の累積料金
 
+    // 累積計算のためのロールアップ状態（セグメント跨ぎの丸め重複を防止）
+    let baseAccumMinutes = 0; // applyAfter までの基本料金に属する累積分
+    let baseUnitsCharged = 0;
+    let lastBaseKey: string | null = null;
+
+    let progAccumMinutes = 0; // progressive 適用後の累積分
+    let progUnitsCharged = 0;
+    let lastProgKey: string | null = null;
+
     for (const segment of segments) {
       const segmentMinutes = Math.round(
         (segment.end.getTime() - segment.start.getTime()) / 60000
@@ -90,7 +99,7 @@ export class ParkingFeeCalculator {
       );
 
       const baseRate = applicableRates.baseRate;
-      const progressiveRate = applicableRates.progressiveRate;
+      let progressiveRate = applicableRates.progressiveRate;
       const maxRate = applicableRates.maxRate;
 
       let segmentFee = 0;
@@ -104,65 +113,93 @@ export class ParkingFeeCalculator {
         console.log(`    適用料金: base=${baseRate?.price || 'なし'}円/${baseRate?.minutes || 'なし'}分, progressive=${progressiveRate?.price || 'なし'}円 (after=${progressiveRate?.applyAfter || 'なし'})`);
       }
 
-      // progressive料金の処理（ID 22443のような複数段階料金に対応）
-      if (progressiveRate && progressiveRate.applyAfter !== undefined) {
-        if (accumulatedMinutes >= progressiveRate.applyAfter) {
-          // すでにprogressive料金の範囲内
-          const units = Math.ceil(segmentMinutes / progressiveRate.minutes);
-          segmentFee = units * progressiveRate.price;
+      // progressive料金の処理（セグメント跨ぎの丸め過大請求を防ぐためのロールアップ方式）
+      // 1) このセグメントで参照できるprogressive候補（applyAfter最小）
+      const progressiveCandidates = segment.rates
+        .filter(r => r.type === 'progressive' && r.applyAfter !== undefined)
+        .sort((a, b) => (a.applyAfter! - b.applyAfter!));
+      const progressiveCandidate = progressiveCandidates[0];
+      // progressiveRateが選ばれていないが候補がある場合（閾値未到達セグメントなど）は候補を使う
+      if (!progressiveRate && progressiveCandidate) {
+        progressiveRate = progressiveCandidate;
+      }
 
-          if (parking.id === 22443) {
-            console.log(`    ➡️ Progressive料金適用: ${segmentMinutes}分 ÷ ${progressiveRate.minutes} = ${units}単位 × ${progressiveRate.price}円 = ${segmentFee}円`);
+      // 2) applyAfter閾値を決定
+      const applyAfterThreshold = progressiveRate?.applyAfter;
+
+      // 3) セグメントを base部 と progressive部 に分割して、それぞれロールアップ計算
+      let basePortion = segmentMinutes;
+      let progPortion = 0;
+      if (applyAfterThreshold !== undefined) {
+        // 閾値までの残り分をbaseとして扱い、それ以降をprogressive
+        const remainingUntilProg = Math.max(0, applyAfterThreshold - accumulatedMinutes);
+        basePortion = Math.max(0, Math.min(segmentMinutes, remainingUntilProg));
+        progPortion = Math.max(0, segmentMinutes - basePortion);
+      }
+
+      // 3-a) base部のロールアップ（レートが変わったらリセット）
+      if (basePortion > 0) {
+        if (!baseRate) {
+          console.warn(`⚠️ base料金が見つからないため計算不可`);
+          return -1;
+        }
+        const baseKey = `base:${baseRate.minutes}:${baseRate.price}:${baseRate.dayType || ''}:${baseRate.timeRange || ''}`;
+        if (lastBaseKey !== baseKey) {
+          lastBaseKey = baseKey;
+          baseAccumMinutes = 0;
+          baseUnitsCharged = 0;
+        }
+        baseAccumMinutes += basePortion;
+        const newUnits = Math.ceil(baseAccumMinutes / baseRate.minutes);
+        const addUnits = newUnits - baseUnitsCharged;
+        if (addUnits > 0) {
+          segmentFee += addUnits * baseRate.price;
+          baseUnitsCharged = newUnits;
+        }
+      }
+
+      // 3-b) progressive部のロールアップ（レートが変わったらリセット）
+      if (progPortion > 0) {
+        if (!progressiveRate) {
+          // progressive部だがレートが未定義の場合は安全にbase扱い（想定外データへのフォールバック）
+          if (!baseRate) {
+            console.warn(`⚠️ progressive料金もbase料金も見つからないため計算不可`);
+            return -1;
           }
-        } else if (currentMinutes > progressiveRate.applyAfter) {
-          // このセグメントでprogressive料金に移行
-          const baseMinutes = progressiveRate.applyAfter - accumulatedMinutes;
-          const progressiveMinutes = segmentMinutes - baseMinutes;
-
-          // 初回料金部分
-          if (baseRate) {
-            const baseUnits = Math.ceil(baseMinutes / baseRate.minutes);
-            const baseFee = baseUnits * baseRate.price;
-            segmentFee += baseFee;
-
-            if (parking.id === 22443) {
-              console.log(`    ➡️ Base料金: ${baseMinutes}分 = ${baseFee}円`);
-            }
+          const baseKey = `base:${baseRate.minutes}:${baseRate.price}:${baseRate.dayType || ''}:${baseRate.timeRange || ''}`;
+          if (lastBaseKey !== baseKey) {
+            lastBaseKey = baseKey;
+            baseAccumMinutes = 0;
+            baseUnitsCharged = 0;
           }
-
-          // progressive料金部分
-          const progressiveUnits = Math.ceil(progressiveMinutes / progressiveRate.minutes);
-          const progressiveFee = progressiveUnits * progressiveRate.price;
-          segmentFee += progressiveFee;
-
-          if (parking.id === 22443) {
-            console.log(`    ➡️ Progressive料金: ${progressiveMinutes}分 = ${progressiveFee}円`);
+          baseAccumMinutes += progPortion;
+          const newUnits = Math.ceil(baseAccumMinutes / baseRate.minutes);
+          const addUnits = newUnits - baseUnitsCharged;
+          if (addUnits > 0) {
+            segmentFee += addUnits * baseRate.price;
+            baseUnitsCharged = newUnits;
           }
         } else {
-          // まだprogressive料金に達していない
-          if (baseRate) {
-            const units = Math.ceil(segmentMinutes / baseRate.minutes);
-            segmentFee = units * baseRate.price;
-
-            if (parking.id === 22443) {
-              console.log(`    ➡️ Base料金のみ: ${segmentMinutes}分 = ${segmentFee}円`);
-            }
+          const progKey = `prog:${progressiveRate.minutes}:${progressiveRate.price}:${progressiveRate.dayType || ''}:${progressiveRate.timeRange || ''}`;
+          if (lastProgKey !== progKey) {
+            lastProgKey = progKey;
+            progAccumMinutes = 0;
+            progUnitsCharged = 0;
+          }
+          progAccumMinutes += progPortion;
+          const newUnits = Math.ceil(progAccumMinutes / progressiveRate.minutes);
+          const addUnits = newUnits - progUnitsCharged;
+          if (addUnits > 0) {
+            segmentFee += addUnits * progressiveRate.price;
+            progUnitsCharged = newUnits;
           }
         }
-      } else if (baseRate) {
-        // progressive料金がない場合、通常の基本料金で計算
-        const units = Math.ceil(segmentMinutes / baseRate.minutes);
-        segmentFee = units * baseRate.price;
+      }
 
-        // 分刻み料金のデバッグログ
-        if (baseRate.minutes <= 30) {
-          console.log(`💰 分刻み料金計算: ${segmentMinutes}分 ÷ ${baseRate.minutes}分 = ${units}単位 × ${baseRate.price}円 = ${segmentFee}円`);
-        }
-      } else {
-        // baseRateもprogressiveRateもない場合
-        // 料金計算不可（時間帯外など）
+      // base/progressiveのどちらにも当てはまらず、何も加算されていない場合のフォールバック
+      if (segmentFee === 0 && !baseRate && !progressiveRate) {
         console.warn(`⚠️ セグメントに適用可能な料金がありません`);
-        return -1; // 料金計算不可を全体に伝播
+        return -1;
       }
 
       // 時間帯別最大料金の適用

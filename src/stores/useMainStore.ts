@@ -32,7 +32,8 @@ const createDefaultSearchFilter = (): SearchFilter => ({
   selectedCategories: new Set(['コインパーキング']),
   searchRadius: 500,
   minElevation: 0,
-  parkingTimeFilterEnabled: false,
+  // デフォルトで「駐車料金」チェックをON
+  parkingTimeFilterEnabled: true,
   radiusFilterEnabled: false,
   elevationFilterEnabled: false,
   nearbyCategories: new Set(),
