@@ -904,6 +904,19 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                   {formatOperatingHours()}
                 </Text>
               </View>
+
+              {/* 標高（営業時間の直下） */}
+              {(parkingSpot as any).elevation !== undefined && (parkingSpot as any).elevation !== null && (
+                <View style={styles.parkingDetailRow}>
+                  <View style={styles.parkingDetailLeft}>
+                    <Ionicons name="trending-up-outline" size={14} color="#999" />
+                    <Text style={styles.parkingDetailLabel}>標高</Text>
+                  </View>
+                  <Text style={styles.parkingDetailValue}>
+                    {(parkingSpot as any).elevation}m
+                  </Text>
+                </View>
+              )}
             </View>
             
             {/* Photos Preview in Overview */}
