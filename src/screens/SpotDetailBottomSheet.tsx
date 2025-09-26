@@ -866,19 +866,8 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               </View>
             </View>
 
-            {/* ===== 画面の一番下に 基本情報（営業時間・許容台数・駐車場タイプ）を表示 ===== */}
-            <View style={[styles.parkingDetailsCard, { marginTop: 12, marginBottom: 4 }]}>            
-              {/* 営業時間 */}
-              <View style={styles.parkingDetailRow}>
-                <View style={styles.parkingDetailLeft}>
-                  <Ionicons name="time-outline" size={14} color="#999" />
-                  <Text style={styles.parkingDetailLabel}>営業時間</Text>
-                </View>
-                <Text style={styles.parkingDetailValue}>
-                  {formatOperatingHours()}
-                </Text>
-              </View>
-
+            {/* ===== 画面の一番下に 基本情報（許容台数・駐車場タイプ・営業時間）を表示 ===== */}
+            <View style={styles.bottomInfoContainer}>
               {/* 許容台数 */}
               {parkingSpot.capacity && (
                 <View style={styles.parkingDetailRow}>
@@ -892,7 +881,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 </View>
               )}
 
-              {/* 駐車場タイプ */}
+              {/* 駐車場タイプ（許容台数の直下） */}
               {(parkingSpot as any).type && (
                 <View style={styles.parkingDetailRow}>
                   <View style={styles.parkingDetailLeft}>
@@ -904,6 +893,17 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                   </Text>
                 </View>
               )}
+
+              {/* 営業時間（最下段） */}
+              <View style={styles.parkingDetailRow}>
+                <View style={styles.parkingDetailLeft}>
+                  <Ionicons name="time-outline" size={14} color="#999" />
+                  <Text style={styles.parkingDetailLabel}>営業時間</Text>
+                </View>
+                <Text style={styles.parkingDetailValue}>
+                  {formatOperatingHours()}
+                </Text>
+              </View>
             </View>
             
             {/* Photos Preview in Overview */}
@@ -1618,6 +1618,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 3,
+  },
+  // 下部の基本情報（枠なしのリスト表示）
+  bottomInfoContainer: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
   },
   parkingDetailsContent: {
     padding: 16,
