@@ -400,9 +400,12 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   const isParking = selectedSpot.category === 'コインパーキング';
   const isHotSpring = selectedSpot.category === '温泉';
   const isGasStation = selectedSpot.category === 'ガソリンスタンド';
+  const isConvenienceStore = selectedSpot.category === 'コンビニ';
+  const isConvenienceStore = selectedSpot.category === 'コンビニ';
   const parkingSpot = selectedSpot as CoinParking;
   const hotSpringSpot = selectedSpot as HotSpring;
   const gasStationSpot = selectedSpot as GasStation;
+  const convenienceStoreSpot = selectedSpot as ConvenienceStore;
   
   
   const formatPrice = (): string => {
@@ -762,7 +765,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 </View>
               </View>
               <View style={styles.addressRow}>
-                {selectedSpot.address && !isHotSpring && !isGasStation && (
+                {selectedSpot.address && !isHotSpring && !isGasStation && !isConvenienceStore && (
                   <Text style={styles.address} numberOfLines={1}>
                     {selectedSpot.address}
                   </Text>
@@ -1289,6 +1292,34 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
           </ScrollView>
         )}
         
+        {/* Convenience Store Info - Compact */}
+        {isConvenienceStore && (
+          <ScrollView 
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <View style={[styles.hotSpringCompactCard, { marginTop: 0 }]}> 
+              <View style={styles.compactInfoGrid}>
+                {/* Address */}
+                {selectedSpot.address && (
+                  <View style={styles.compactInfoItem}>
+                    <View style={styles.compactInfoIcon}>
+                      <Ionicons name="location" size={14} color="#666" />
+                    </View>
+                    <View style={styles.compactInfoText}>
+                      <Text style={styles.compactInfoLabel}>住所</Text>
+                      <Text style={styles.compactInfoValue} numberOfLines={2}>
+                        {selectedSpot.address}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </View>
+          </ScrollView>
+        )}
+        
         {/* Gas Station Info - Compact Design */}
         {isGasStation && (
           <ScrollView 
@@ -1383,8 +1414,66 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
             </View>
           </ScrollView>
         )}
+
+        {/* Convenience Store Info */}
+        {isConvenienceStore && (
+          <ScrollView
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <View style={styles.convenienceStoreInfoCard}>
+              {/* Address */}
+              {selectedSpot.address && (
+                <View style={styles.convenienceInfoRow}>
+                  <View style={styles.convenienceInfoIconContainer}>
+                    <Ionicons name="location-outline" size={20} color="#666" />
+                  </View>
+                  <View style={styles.convenienceInfoContent}>
+                    <Text style={styles.convenienceInfoLabel}>住所</Text>
+                    <Text style={styles.convenienceInfoValue} numberOfLines={2}>
+                      {selectedSpot.address}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Phone */}
+              {convenienceStoreSpot.phone && (
+                <View style={styles.convenienceInfoRow}>
+                  <View style={styles.convenienceInfoIconContainer}>
+                    <Ionicons name="call-outline" size={20} color="#666" />
+                  </View>
+                  <View style={styles.convenienceInfoContent}>
+                    <Text style={styles.convenienceInfoLabel}>電話番号</Text>
+                    <Text style={styles.convenienceInfoValue}>
+                      {convenienceStoreSpot.phone}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Operating Hours */}
+              {convenienceStoreSpot.hours && (
+                <View style={styles.convenienceInfoRow}>
+                  <View style={styles.convenienceInfoIconContainer}>
+                    <Ionicons name="time-outline" size={20} color="#666" />
+                  </View>
+                  <View style={styles.convenienceInfoContent}>
+                    <Text style={styles.convenienceInfoLabel}>営業時間</Text>
+                    <Text style={styles.convenienceInfoValue}>
+                      {typeof convenienceStoreSpot.hours === 'string'
+                        ? convenienceStoreSpot.hours
+                        : convenienceStoreSpot.hours.text || convenienceStoreSpot.hours.hours || '24時間営業'}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </ScrollView>
+        )}
       </View>
-      
+
       {/* Review Modal */}
       {isParking && (
         <ReviewModal
@@ -1443,8 +1532,8 @@ const styles = StyleSheet.create({
   },
   handleContainer: {
     alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 6,
+    paddingTop: 6,
+    paddingBottom: 4,
   },
   handle: {
     width: 36,
@@ -1457,7 +1546,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingBottom: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
@@ -1684,6 +1773,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     marginHorizontal: 16,
+    marginTop: 0,
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -1910,6 +2000,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     marginHorizontal: 16,
+    marginTop: 0,
     marginBottom: 12,
     padding: 16,
     shadowColor: '#000',
@@ -1965,6 +2056,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     marginHorizontal: 16,
+    marginTop: 0,
     marginBottom: 16,
     padding: 16,
     shadowColor: '#000',
@@ -1996,6 +2088,51 @@ const styles = StyleSheet.create({
     color: '#333',
     lineHeight: 18,
   },
+
+  // Convenience Store styles
+  convenienceStoreInfoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  convenienceInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  convenienceInfoIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  convenienceInfoContent: {
+    flex: 1,
+  },
+  convenienceInfoLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  convenienceInfoValue: {
+    fontSize: 15,
+    color: '#333',
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+
   // Tab Bar Styles
   tabBar: {
     flexDirection: 'row',

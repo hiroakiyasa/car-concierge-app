@@ -199,7 +199,9 @@ export class SupabaseService {
       idString: store.id,
       category: 'コンビニ',
       brand: store.brand || store.name,
-      operatingHours: store.Hours || store.operating_hours || store.operatingHours,
+      phone: store.phone_number || store.phone,
+      hours: store.operating_hours || store.hours,
+      operatingHours: store.operating_hours || store.Hours || store.operatingHours,
     })) as ConvenienceStore[];
   }
   
@@ -927,7 +929,9 @@ export class SupabaseService {
       idString: (raw as any).idString || (raw as any).id,
       category: 'コンビニ',
       brand: (raw as any).brand || (raw as any).name,
-      operatingHours: (raw as any).Hours || (raw as any).operating_hours || (raw as any).operatingHours,
+      phone: (raw as any).phone_number || (raw as any).phone,
+      hours: (raw as any).operating_hours || (raw as any).hours,
+      operatingHours: (raw as any).operating_hours || (raw as any).Hours || (raw as any).operatingHours,
     } as ConvenienceStore;
   }
   
