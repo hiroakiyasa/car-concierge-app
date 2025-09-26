@@ -809,10 +809,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     });
   };
 
-  // 指定したスポットを、画面上部の可視地図領域(例:40%)の中央に配置するためのユーティリティ
+  // 指定したスポットを、画面上部の可視地図領域(例:50%)の中央に配置するためのユーティリティ
   const animateMarkerToTopFractionCenter = (
     spot: Spot,
-    visibleTopFraction = 0.4,
+    visibleTopFraction = 0.5,
     options?: { zoomScale?: number }
   ) => {
     if (!mapRef.current || !mapRegion) return;
@@ -821,9 +821,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     const targetLngDelta = (current.longitudeDelta || 0.01) * (options?.zoomScale ?? 1);
 
     // 目標スクリーン位置は「上部領域(visibleTopFraction)の上下中央」= 全体の visibleTopFraction/2
-    // 一般式: centerLat = markerLat - (0.5 - visibleTopFraction/2) * latDelta
+    // スクリーン位置 p にマーカーを置くには centerLat = markerLat - (p - 0.5) * latDelta
+    // p = visibleTopFraction/2 を代入 → centerLat = markerLat + (0.5 - visibleTopFraction/2) * latDelta
     const desired = Math.max(0, Math.min(1, visibleTopFraction / 2));
-    const centerLat = spot.lat - (0.5 - desired) * targetLatDelta; // 0.4のときは -0.3 * latDelta
+    const centerLat = spot.lat + (0.5 - desired) * targetLatDelta; // 0.5のときは +0.25 * latDelta → 画面上から25%
 
     mapRef.current.animateToRegion(
       {
@@ -1011,7 +1012,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         
         // 可視上部50%の上下中央(=全体の25%位置)にスポットを配置
         const desired = 0.5 / 2; // 0.25
-        const offsetCenterLat = spot.lat - (0.5 - desired) * latDelta; // = spot.lat - 0.25*latDelta
+        const offsetCenterLat = spot.lat + (0.5 - desired) * latDelta; // = spot.lat + 0.25*latDelta
         
         console.log('🗺️ 地図範囲調整:', {
           施設数: allSpots.length,
@@ -1527,8 +1528,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             let latDelta = Math.max((maxLat - minLat) * 2.5, 0.01);
             let lngDelta = Math.max((maxLng - minLng) * 2.5, 0.01);
 
-            // 駐車場を画面上部40%の中央に配置するための計算
-            const offsetCenterLat = spot.lat - (0.5 - 0.4/2) * latDelta; // = spot.lat - 0.3 * latDelta
+            // 駐車場を画面上部50%の中央(=全体の25%)に配置するための計算
+            const offsetCenterLat = spot.lat + (0.5 - 0.5/2) * latDelta; // = spot.lat + 0.25 * latDelta
 
             mapRef.current.animateToRegion({
               latitude: offsetCenterLat,
@@ -1537,11 +1538,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
               longitudeDelta: lngDelta,
             }, 300);
           } else if (mapRef.current) {
-            // 施設がない場合は駐車場のみを表示（上部40%の中央に）
+            // 施設がない場合は駐車場のみを表示（上部50%の中央に）
             const current = mapRegion;
             const latDelta = (current?.latitudeDelta || 0.01);
             const lngDelta = (current?.longitudeDelta || 0.01);
-            const centerLat = spot.lat - (0.5 - 0.4/2) * latDelta; // = spot.lat - 0.3 * latDelta
+            const centerLat = spot.lat + (0.5 - 0.5/2) * latDelta; // = spot.lat + 0.25 * latDelta
             mapRef.current.animateToRegion({
               latitude: centerLat,
               longitude: spot.lng,
