@@ -834,8 +834,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
 
     // マーカーを画面上から25%の位置に強制配置
     // スクリーン座標0.25の位置にマーカーが来るように計算
-    // centerLat = markerLat - (0.25 - 0.5) * latDelta = markerLat + 0.25 * latDelta
-    const centerLat = spot.lat + 0.25 * targetLatDelta;
+    // centerLat = markerLat + (0.25 - 0.5) * latDelta = markerLat - 0.25 * latDelta
+    const centerLat = spot.lat - 0.25 * targetLatDelta;
 
     mapRef.current.animateToRegion(
       {
@@ -1023,7 +1023,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         
         // 可視上部50%の上下中央(=全体の25%位置)にスポットを配置
         const desired = 0.5 / 2; // 0.25
-        const offsetCenterLat = spot.lat + (0.5 - desired) * latDelta; // = spot.lat + 0.25*latDelta
+        const offsetCenterLat = spot.lat - (0.5 - desired) * latDelta; // = spot.lat - 0.25*latDelta
         
         console.log('🗺️ 地図範囲調整:', {
           施設数: allSpots.length,
@@ -1544,7 +1544,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             let lngDelta = Math.max((maxLng - minLng) * 2.5, 0.01);
 
             // 駐車場を画面上部50%の中央(=全体の25%)に配置するための計算
-            const offsetCenterLat = spot.lat + (0.5 - 0.5/2) * latDelta; // = spot.lat + 0.25 * latDelta
+            const offsetCenterLat = spot.lat - (0.5 - 0.5/2) * latDelta; // = spot.lat - 0.25 * latDelta
 
             mapRef.current.animateToRegion({
               latitude: offsetCenterLat,
@@ -1557,7 +1557,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             const current = mapRegion;
             const latDelta = (current?.latitudeDelta || 0.01);
             const lngDelta = (current?.longitudeDelta || 0.01);
-            const centerLat = spot.lat + (0.5 - 0.5/2) * latDelta; // = spot.lat + 0.25 * latDelta
+            const centerLat = spot.lat - (0.5 - 0.5/2) * latDelta; // = spot.lat - 0.25 * latDelta
             mapRef.current.animateToRegion({
               latitude: centerLat,
               longitude: spot.lng,
