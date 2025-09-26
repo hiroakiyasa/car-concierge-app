@@ -44,7 +44,14 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const [hotspringSelected, setHotspringSelected] = useState(false); // 温泉選択状態
   
   // チェックボックス状態（各タブの有効/無効） - フィルター適用を制御
-  const [parkingEnabled, setParkingEnabled] = useState(false);
+  // 初期値はストアのデフォルト（初期起動時は料金計算ON）
+  const { 
+    searchFilter,
+    setSearchFilter
+  } = useMainStore();
+  const [parkingEnabled, setParkingEnabled] = useState<boolean>(
+    !!searchFilter?.parkingTimeFilterEnabled
+  );
   const [nearbyEnabled, setNearbyEnabled] = useState(false);
   const [elevationEnabled, setElevationEnabled] = useState(false);
   
@@ -52,10 +59,12 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const translateX = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef<ScrollView>(null);
   
-  const { 
-    searchFilter,
-    setSearchFilter
-  } = useMainStore();
+  // ストア側の変更に追随（将来他画面から変更された場合など）
+  useEffect(() => {
+    if (typeof searchFilter?.parkingTimeFilterEnabled === 'boolean') {
+      setParkingEnabled(searchFilter.parkingTimeFilterEnabled);
+    }
+  }, [searchFilter?.parkingTimeFilterEnabled]);
   
   // タブインデックスを取得
   const getTabIndex = () => {
