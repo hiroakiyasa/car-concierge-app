@@ -416,7 +416,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         // 重複排除
         const unique = Array.from(new Map(resultSpots.map(s => [s.id, s])).values());
         console.log(`✅ 新アルゴ: 駐車場${top.length}件 + 施設${unique.length - top.length}件`);
-        setSearchResults(unique);
+        // 右上のカテゴリーで駐車場が未選択の場合は、駐車場を除外して施設のみ表示
+        const output = selectedCategories.has('コインパーキング')
+          ? unique
+          : unique.filter(s => s.category !== 'コインパーキング');
+        setSearchResults(output);
         setSearchStatus('complete');
         setTimeout(() => setSearchStatus('idle'), 3000);
         return;
