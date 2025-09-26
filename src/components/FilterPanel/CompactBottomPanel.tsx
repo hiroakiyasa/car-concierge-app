@@ -346,7 +346,17 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
             style={styles.checkbox}
             onPress={(e) => {
               e.stopPropagation();
-              setNearbyEnabled(!nearbyEnabled);
+              const next = !nearbyEnabled;
+              setNearbyEnabled(next);
+              // タブが非表示でも、チェックON時はデフォルトでコンビニ半径を設定して有効化
+              if (next) {
+                if (!convenienceSelected && !hotspringSelected) {
+                  const defaultR = 100;
+                  setConvenienceSelected(true);
+                  setConvenienceRadius(defaultR);
+                  setConvenienceSlider(radiusToSlider(defaultR));
+                }
+              }
             }}
           >
             <Ionicons

@@ -34,9 +34,21 @@ export const getConvenienceStoreLogo = (brand: string): any => {
     .replace(/１１/g, 'イレブン')
     .replace(/7/g, 'セブン')
     .replace(/11/g, 'イレブン')
+    .replace(/-/g, '')  // ハイフンを削除（セブン-イレブン → セブンイレブン）
+    .replace(/‐/g, '')  // 全角ハイフンも削除
+    .replace(/－/g, '') // 全角ダッシュも削除
+    .replace(/ー/g, '') // 長音符も削除
     .replace(/SEVEN/gi, 'セブン')
     .replace(/ELEVEN/gi, 'イレブン');
-  
+
+  // セブンイレブンの特別処理（データベースでは「セブン-イレブン」形式）
+  if (brand.includes('セブン') && brand.includes('イレブン')) {
+    return CONVENIENCE_STORE_LOGOS['セブンイレブン'];
+  }
+  if (brand.includes('7') && (brand.includes('11') || brand.includes('イレブン'))) {
+    return CONVENIENCE_STORE_LOGOS['セブンイレブン'];
+  }
+
   for (const key in CONVENIENCE_STORE_LOGOS) {
     if (normalizedBrand.includes(key) || key.includes(normalizedBrand)) {
       return CONVENIENCE_STORE_LOGOS[key];
