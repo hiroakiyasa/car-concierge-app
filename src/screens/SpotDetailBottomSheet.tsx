@@ -844,65 +844,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               showsVerticalScrollIndicator={false}
               bounces={false}
             >
-            {/* Parking Details Information Card */}
-            <View style={styles.parkingDetailsCard}>
-              <View style={styles.parkingDetailsContent}>
-                <View style={styles.parkingDetailsHeader}>
-                  <Ionicons name="information-circle-outline" size={16} color="#666" />
-                  <Text style={styles.parkingDetailsTitle}>駐車場情報</Text>
-                </View>
-
-                {/* 営業時間 */}
-                <View style={styles.parkingDetailRow}>
-                  <View style={styles.parkingDetailLeft}>
-                    <Ionicons name="time-outline" size={14} color="#999" />
-                    <Text style={styles.parkingDetailLabel}>営業時間</Text>
-                  </View>
-                  <Text style={styles.parkingDetailValue}>
-                    {formatOperatingHours()}
-                  </Text>
-                </View>
-
-                {/* 許容台数 */}
-                {parkingSpot.capacity && (
-                  <View style={styles.parkingDetailRow}>
-                    <View style={styles.parkingDetailLeft}>
-                      <Ionicons name="car-outline" size={14} color="#999" />
-                      <Text style={styles.parkingDetailLabel}>許容台数</Text>
-                    </View>
-                    <Text style={styles.parkingDetailValue}>
-                      {parkingSpot.capacity}
-                    </Text>
-                  </View>
-                )}
-
-                {/* 標高 */}
-                {(parkingSpot as any).elevation !== undefined && (parkingSpot as any).elevation !== null && (
-                  <View style={styles.parkingDetailRow}>
-                    <View style={styles.parkingDetailLeft}>
-                      <Ionicons name="trending-up-outline" size={14} color="#999" />
-                      <Text style={styles.parkingDetailLabel}>標高</Text>
-                    </View>
-                    <Text style={styles.parkingDetailValue}>
-                      {(parkingSpot as any).elevation}m
-                    </Text>
-                  </View>
-                )}
-
-                {/* 駐車場タイプ */}
-                {(parkingSpot as any).type && (
-                  <View style={styles.parkingDetailRow}>
-                    <View style={styles.parkingDetailLeft}>
-                      <Ionicons name="flag-outline" size={14} color="#999" />
-                      <Text style={styles.parkingDetailLabel}>タイプ</Text>
-                    </View>
-                    <Text style={styles.parkingDetailValue}>
-                      {(parkingSpot as any).type}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
+            {/* 駐車場情報カードは削除（要望により下部へ移動） */}
 
             {/* Combined Pricing Card - Compact */}
             <View style={styles.pricingCard}>
@@ -922,6 +864,46 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                   </View>
                 </View>
               </View>
+            </View>
+
+            {/* ===== 画面の一番下に 基本情報（営業時間・許容台数・駐車場タイプ）を表示 ===== */}
+            <View style={[styles.parkingDetailsCard, { marginTop: 12, marginBottom: 4 }]}>            
+              {/* 営業時間 */}
+              <View style={styles.parkingDetailRow}>
+                <View style={styles.parkingDetailLeft}>
+                  <Ionicons name="time-outline" size={14} color="#999" />
+                  <Text style={styles.parkingDetailLabel}>営業時間</Text>
+                </View>
+                <Text style={styles.parkingDetailValue}>
+                  {formatOperatingHours()}
+                </Text>
+              </View>
+
+              {/* 許容台数 */}
+              {parkingSpot.capacity && (
+                <View style={styles.parkingDetailRow}>
+                  <View style={styles.parkingDetailLeft}>
+                    <Ionicons name="car-outline" size={14} color="#999" />
+                    <Text style={styles.parkingDetailLabel}>許容台数</Text>
+                  </View>
+                  <Text style={styles.parkingDetailValue}>
+                    {parkingSpot.capacity}
+                  </Text>
+                </View>
+              )}
+
+              {/* 駐車場タイプ */}
+              {(parkingSpot as any).type && (
+                <View style={styles.parkingDetailRow}>
+                  <View style={styles.parkingDetailLeft}>
+                    <Ionicons name="flag-outline" size={14} color="#999" />
+                    <Text style={styles.parkingDetailLabel}>駐車場タイプ</Text>
+                  </View>
+                  <Text style={styles.parkingDetailValue}>
+                    {(parkingSpot as any).type}
+                  </Text>
+                </View>
+              )}
             </View>
             
             {/* Photos Preview in Overview */}
