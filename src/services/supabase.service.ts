@@ -769,9 +769,8 @@ export class SupabaseService {
       duration_minutes: durationMinutes
     };
 
-    if (minElevation !== undefined && minElevation > 0) {
-      rpcParams.min_elevation = minElevation;
-    }
+    // 注意: 現在のRPCシグネチャには min_elevation は存在しないため、
+    // フィルタはクライアント側で適用する（後段でfilter）。
 
     // 入庫時間が指定されていればRPCに渡す（DB側にパラメータが定義されている場合のみ有効）
     if (entryAt instanceof Date) {
@@ -797,7 +796,7 @@ export class SupabaseService {
 
     console.log(`💰 料金ソート済み駐車場を${data?.length || 0}件取得`);
 
-    return (data || []).map((spot, index) => {
+    const mapped = (data || []).map((spot, index) => {
       // デバッグ用に最初の3件のデータ構造をログ出力
       if (index < 3) {
         console.log(`🔍 スポット[${index}] データ詳細:`, {
@@ -877,6 +876,13 @@ export class SupabaseService {
 
       return result;
     });
+
+    // クライアント側で標高フィルターを適用（RPCがサポートしないため）
+    const results = (minElevation !== undefined && minElevation > 0)
+      ? mapped.filter(s => (s.elevation ?? -9999) >= minElevation)
+      : mapped;
+
+    return results;
   }
   
   // Fetch convenience store details by ID
