@@ -18,6 +18,7 @@ interface PremiumMapControlsProps {
   onRankingPress: () => void;
   searchStatus?: 'idle' | 'searching' | 'complete';
   resultCount?: number;
+  showMenuButton?: boolean;
 }
 
 export const PremiumMapControls: React.FC<PremiumMapControlsProps> = ({
@@ -26,6 +27,7 @@ export const PremiumMapControls: React.FC<PremiumMapControlsProps> = ({
   onRankingPress,
   searchStatus = 'idle',
   resultCount = 0,
+  showMenuButton = true,
 }) => {
   // Animations
   const buttonSlideAnimation = useRef(new Animated.Value(0)).current;
@@ -193,39 +195,41 @@ export const PremiumMapControls: React.FC<PremiumMapControlsProps> = ({
         </Animated.View>
       )}
 
-      {/* Menu Button - Top Right */}
-      <Animated.View
-        style={[
-          styles.menuButtonContainer,
-          {
-            opacity: buttonSlideAnimation,
-            transform: [
-              {
-                translateX: buttonSlideAnimation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [60, 0],
-                }),
-              },
-              { scale: buttonScaleAnimation },
-            ],
-          },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.premiumButton}
-          onPress={onMenuPress}
-          activeOpacity={0.7}
+      {/* Menu Button - Top Right (optional) */}
+      {showMenuButton && (
+        <Animated.View
+          style={[
+            styles.menuButtonContainer,
+            {
+              opacity: buttonSlideAnimation,
+              transform: [
+                {
+                  translateX: buttonSlideAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [60, 0],
+                  }),
+                },
+                { scale: buttonScaleAnimation },
+              ],
+            },
+          ]}
         >
-          <LinearGradient
-            colors={['#4B5563', '#374151']}
-            style={styles.buttonGradient}
+          <TouchableOpacity
+            style={styles.premiumButton}
+            onPress={onMenuPress}
+            activeOpacity={0.7}
           >
-            <View style={styles.buttonInner}>
-              <Ionicons name="menu" size={20} color={Colors.white} />
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
+            <LinearGradient
+              colors={['#4B5563', '#374151']}
+              style={styles.buttonGradient}
+            >
+              <View style={styles.buttonInner}>
+                <Ionicons name="menu" size={20} color={Colors.white} />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
       {/* Location and Ranking Buttons Stack */}
       <Animated.View

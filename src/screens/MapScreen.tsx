@@ -15,7 +15,8 @@ import { SupabaseService } from '@/services/supabase.service';
 import { SearchService } from '@/services/search.service';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { CustomMarker } from '@/components/Map/CustomMarker';
-import { CategoryButtons } from '@/components/Map/CategoryButtons';
+// Right-side category buttons are replaced by top chips
+// import { CategoryButtons } from '@/components/Map/CategoryButtons';
 import { MapScale } from '@/components/Map/MapScale';
 import { PremiumMapControls } from '@/components/Map/PremiumMapControls';
 import { MenuModal } from '@/components/MenuModal';
@@ -24,6 +25,8 @@ import { SpotDetailBottomSheet } from '@/screens/SpotDetailBottomSheet';
 import { RankingListModal } from '@/screens/RankingListModal';
 import { Colors } from '@/utils/constants';
 import { Region, Spot, CoinParking } from '@/types';
+import { TopSearchBar } from '@/components/Map/TopSearchBar';
+import { TopCategoryTabs } from '@/components/Map/TopCategoryTabs';
 
 interface MapScreenProps {
   navigation: any;
@@ -1024,6 +1027,38 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     );
   };
   
+  // テキスト検索機能
+  const handleTextSearch = async (_query: string) => {
+    // 現在の範囲・カテゴリで検索を実行
+    await handleSearch(false);
+  };
+
+  // カテゴリートグル機能
+  const handleCategoryToggle = (category: string) => {
+    const newCategories = new Set(searchFilter.selectedCategories);
+    if (newCategories.has(category)) {
+      newCategories.delete(category);
+    } else {
+      newCategories.add(category);
+    }
+
+    // ストアを更新
+    useMainStore.setState(state => ({
+      searchFilter: {
+        ...state.searchFilter,
+        selectedCategories: newCategories
+      }
+    }));
+
+    console.log('📝 カテゴリー選択更新:', Array.from(newCategories));
+
+    // 自動的に再検索
+    handleSearch(false, {
+      ...searchFilter,
+      selectedCategories: newCategories
+    });
+  };
+
   const handleMarkerPress = async (spot: Spot) => {
     selectSpot(spot);
     setShowDetailSheet(true);
@@ -1618,7 +1653,17 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           })()}
         </CrossPlatformMap>
         
-        <CategoryButtons />
+        {/* Top search bar with right-side menu */}
+        <TopSearchBar
+          onMenuPress={() => setShowMenuModal(true)}
+          onSearch={handleTextSearch}
+        />
+
+        {/* Category tabs under search bar */}
+        <TopCategoryTabs
+          selectedCategories={searchFilter.selectedCategories}
+          onCategoryToggle={handleCategoryToggle}
+        />
         
         {/* プレミアムマップコントロール */}
         <PremiumMapControls
@@ -1627,6 +1672,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           onRankingPress={() => setShowRankingModal(true)}
           searchStatus={searchStatus}
           resultCount={searchResults.filter(s => s.category === 'コインパーキング').length}
+          showMenuButton={false}
         />
         
         {/* 縮尺バー - パネルの少し上に配置 */}
