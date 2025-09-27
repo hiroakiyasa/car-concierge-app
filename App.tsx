@@ -30,6 +30,7 @@ import { PremiumScreen } from '@/screens/PremiumScreen';
 import { TermsScreen } from '@/screens/TermsScreen';
 import { PrivacyScreen } from '@/screens/PrivacyScreen';
 import { GuideScreen } from '@/screens/GuideScreen';
+import { TestParkingType } from '@/screens/TestParkingType';
 
 const Stack = createStackNavigator();
 const queryClient = new QueryClient({
@@ -96,6 +97,7 @@ export default function App() {
             <Stack.Screen name="TestHours" component={TestOperatingHours} />
             <Stack.Screen name="TestNearby" component={TestNearbyData} />
             <Stack.Screen name="TestParkingFee" component={TestParkingFeeAdvanced} />
+            <Stack.Screen name="TestParkingType" component={TestParkingType} />
             
             <Stack.Screen 
               name="SpotDetail" 

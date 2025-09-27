@@ -292,6 +292,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       capacity: parkingSpot.capacity,
       nearestConvenienceStore: parkingSpot.nearestConvenienceStore,
       nearestHotspring: parkingSpot.nearestHotspring,
+      全オブジェクト: parkingSpot,
     });
 
     // まず即座に仮の名前を設定
@@ -774,33 +775,58 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
 
   // 駐車場タイプ（英語/コード値）を日本語に整形
   const formatParkingType = (): string => {
-    if (!isParking) return '---';
+    if (!isParking) {
+      console.log('🅿️ formatParkingType: 駐車場ではない');
+      return '---';
+    }
+
     // parkingType (SupabaseServiceでマッピング), type, parking_type の順で確認
     const raw = parkingSpot.parkingType || (parkingSpot as any).type || (parkingSpot as any).parking_type;
 
-    console.log('🅿️ 駐車場タイプデバッグ:', {
+    console.log('🅿️ 駐車場タイプデバッグ詳細:', {
+      駐車場名: parkingSpot.name,
       parkingType: parkingSpot.parkingType,
       type: (parkingSpot as any).type,
       parking_type: (parkingSpot as any).parking_type,
-      raw: raw
+      raw: raw,
+      全フィールド: Object.keys(parkingSpot).filter(key => key.includes('type') || key.includes('Type'))
     });
 
-    if (!raw) return '---';
+    if (!raw) {
+      console.log('🅿️ タイプフィールドが見つからない');
+      return '---';
+    }
+
     const rawStr = String(raw);
     const t = rawStr.toLowerCase();
+    console.log('🅿️ 処理中のタイプ文字列:', rawStr);
 
     // 既に日本語の場合はそのまま返す
     if (rawStr.includes('平面駐車場') || rawStr.includes('立体駐車場') ||
         rawStr.includes('機械式') || rawStr.includes('車中泊')) {
+      console.log('🅿️ 日本語タイプをそのまま返す:', rawStr);
       return rawStr;
     }
 
     // 英語の場合は変換
-    if (t.includes('multi') || t.includes('立体') || t.includes('building')) return '立体駐車場';
-    if (t.includes('flat') || t.includes('平面') || t.includes('outdoor')) return '平面駐車場';
-    if (t.includes('mechan') || t.includes('機械')) return '機械式';
-    if (t.includes('camp') || t.includes('車中泊')) return '車中泊・キャンプ場';
+    if (t.includes('multi') || t.includes('立体') || t.includes('building')) {
+      console.log('🅿️ 立体駐車場として認識');
+      return '立体駐車場';
+    }
+    if (t.includes('flat') || t.includes('平面') || t.includes('outdoor')) {
+      console.log('🅿️ 平面駐車場として認識');
+      return '平面駐車場';
+    }
+    if (t.includes('mechan') || t.includes('機械')) {
+      console.log('🅿️ 機械式として認識');
+      return '機械式';
+    }
+    if (t.includes('camp') || t.includes('車中泊')) {
+      console.log('🅿️ 車中泊・キャンプ場として認識');
+      return '車中泊・キャンプ場';
+    }
 
+    console.log('🅿️ デフォルトとして返す:', rawStr);
     return rawStr;
   };
   
@@ -1060,11 +1086,10 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 )}
                 {(() => {
                   const typeText = formatParkingType();
-                  if (typeText === '---') return null;
                   return (
                     <View style={styles.statChip}>
                       <Ionicons name="car-sport-outline" size={14} color="#374151" />
-                      <Text style={styles.statText}>{typeText}</Text>
+                      <Text style={styles.statText}>{typeText === '---' ? '—' : typeText}</Text>
                     </View>
                   );
                 })()}
