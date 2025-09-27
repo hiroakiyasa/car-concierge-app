@@ -620,6 +620,7 @@ export class SupabaseService {
           operatingHours: spot.operating_hours || spot.operatingHours || spot.hours,
           operating_hours: spot.operating_hours,
           is_24h: spot.is_24h,
+          parkingType: spot.type, // 駐車場タイプを追加
           nearestConvenienceStore,
           nearestHotspring,
           calculatedFee: spot.calculatedFee,
@@ -787,11 +788,21 @@ export class SupabaseService {
     
     const { data, error } = await supabase.rpc('get_parking_spots_sorted_by_fee', rpcParams);
 
-    console.log('📡 RPC呼び出し結果:', { 
-      dataCount: data?.length || 0, 
+    console.log('📡 RPC呼び出し結果:', {
+      dataCount: data?.length || 0,
       hasError: !!error,
-      errorDetails: error ? { message: error.message, details: error.details, hint: error.hint } : null 
+      errorDetails: error ? { message: error.message, details: error.details, hint: error.hint } : null
     });
+
+    // 最初のデータのtypeフィールドを確認
+    if (data && data.length > 0) {
+      console.log('🔍 RPC結果の最初のデータ（typeフィールド確認）:', {
+        name: data[0].name,
+        type: data[0].type,
+        has_type: 'type' in data[0],
+        全フィールド: Object.keys(data[0])
+      });
+    }
 
     if (error) {
       console.error('❌ Error fetching sorted parking spots:', error);
@@ -898,7 +909,10 @@ export class SupabaseService {
           calculatedFee: result.calculatedFee,
           rank: result.rank,
           isOpenDuringParking: result.isOpenDuringParking,
-          operatingStatus: result.operatingStatus
+          operatingStatus: result.operatingStatus,
+          parkingType: result.parkingType,
+          type: spot.type,
+          元データtype: spot.type
         });
       }
 

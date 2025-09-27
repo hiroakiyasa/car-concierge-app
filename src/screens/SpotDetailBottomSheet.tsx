@@ -781,7 +781,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     }
 
     // parkingType (SupabaseServiceでマッピング), type, parking_type の順で確認
-    const raw = parkingSpot.parkingType || (parkingSpot as any).type || (parkingSpot as any).parking_type;
+    const raw = parkingSpot.parkingType || (parkingSpot as any).type || (parkingSpot as any).parking_type || (parkingSpot as any).parkingTypeDisplay || (parkingSpot as any).parking;
 
     console.log('🅿️ 駐車場タイプデバッグ詳細:', {
       駐車場名: parkingSpot.name,
@@ -801,23 +801,21 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     const t = rawStr.toLowerCase();
     console.log('🅿️ 処理中のタイプ文字列:', rawStr);
 
-    // 既に日本語の場合はそのまま返す
-    if (rawStr.includes('平面駐車場') || rawStr.includes('立体駐車場') ||
-        rawStr.includes('機械式') || rawStr.includes('車中泊')) {
-      console.log('🅿️ 日本語タイプをそのまま返す:', rawStr);
-      return rawStr;
-    }
+    // 既に日本語の場合は短縮表記にして返す
+    if (rawStr.includes('平面')) return '平面';
+    if (rawStr.includes('立体')) return '立体';
+    if (rawStr.includes('機械')) return '機械式';
 
     // 英語の場合は変換
-    if (t.includes('multi') || t.includes('立体') || t.includes('building')) {
+    if (t.includes('multi') || t.includes('building') || t.includes('structure') || t.includes('multistory') || t.includes('multi-story') || t.includes('multi level') || t.includes('multilevel')) {
       console.log('🅿️ 立体駐車場として認識');
-      return '立体駐車場';
+      return '立体';
     }
-    if (t.includes('flat') || t.includes('平面') || t.includes('outdoor')) {
+    if (t.includes('flat') || t.includes('surface') || t.includes('ground') || t.includes('open') || t.includes('outdoor') || t.includes('grade')) {
       console.log('🅿️ 平面駐車場として認識');
-      return '平面駐車場';
+      return '平面';
     }
-    if (t.includes('mechan') || t.includes('機械')) {
+    if (t.includes('mechan') || t.includes('tower') || t.includes('auto') || t.includes('elevator')) {
       console.log('🅿️ 機械式として認識');
       return '機械式';
     }
@@ -825,6 +823,13 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       console.log('🅿️ 車中泊・キャンプ場として認識');
       return '車中泊・キャンプ場';
     }
+
+    // 駐車場名/説明から推定（キーワード）
+    const name = (parkingSpot.name || '').toLowerCase();
+    const desc = ((parkingSpot as any).description || '').toLowerCase();
+    if (name.includes('立体') || desc.includes('立体') || name.includes('タワー') || desc.includes('タワー') || name.includes('ビル') || desc.includes('ビル')) return '立体';
+    if (name.includes('平面') || desc.includes('平面') || name.includes('屋外') || desc.includes('屋外')) return '平面';
+    if (name.includes('機械') || desc.includes('機械')) return '機械式';
 
     console.log('🅿️ デフォルトとして返す:', rawStr);
     return rawStr;
