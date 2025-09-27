@@ -496,14 +496,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           if (result.totalCount > 2000) {
             console.log(`⚠️ 駐車場が${result.totalCount}件あります。2000件以下になるまで自動でズームインします`);
 
-            // アラートを表示
-            Alert.alert(
-              '検索範囲が広すぎます',
-              `${result.totalCount}件の駐車場が見つかりました。自動で地図を拡大します。`,
-              [{ text: 'OK', style: 'default' }]
-            );
-
-            // 2000件以下になるまで段階的にズームイン
+            // 2000件以下になるまで段階的にズームイン（アラートなしでシームレスに実行）
             let zoomRegion = { ...searchRegion };
             let zoomFactor = 0.5; // 初回は50%ズーム
             let maxZoomAttempts = 5; // 最大5回まで試行
@@ -554,8 +547,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
               }
             };
 
-            // 初回のズーム実行
-            setTimeout(() => performAutoZoom(), 600);
+            // 初回のズーム実行（即座にシームレスに実行）
+            performAutoZoom();
 
             return; // 早期リターン
           }
