@@ -806,10 +806,8 @@ export class SupabaseService {
 
     if (error) {
       console.error('❌ Error fetching sorted parking spots:', error);
-      console.error('🔄 フォールバックとして通常の検索を実行');
-      // フォールバックとして通常の検索を実行
-      const fallbackSpots = await this.fetchParkingSpots(region, minElevation);
-      return { spots: fallbackSpots, totalCount: fallbackSpots.length };
+      // フォールバックせず、呼び出し側でズーム制御を行うため合図を返す
+      return { spots: [], totalCount: -1, error: error.message } as any;
     }
 
     console.log(`💰 料金ソート済み駐車場を${data?.length || 0}件取得`);

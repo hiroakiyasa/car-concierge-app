@@ -271,14 +271,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         console.log('📦 パネル展開時: 下側=パネル境界、上側=画面上端から1ラベル分内側（' + (bottomExclusionRatio * 100).toFixed(0) + '%除外）');
       } else {
         // パネル最小時でも約100pxは隠れている
-        const bottomPanelRatio = 0.15; // 最小パネルが占める割合
+        const bottomPanelRatio = 0.17; // 最小パネルが占める割合
         const bottomExclusionRatio = bottomPanelRatio + bottomLabelMargin; // パネル境界まで
         // 左右マージン（上で定義済み）
         
         // 境界を計算
         // 上側：画面上端から1ラベル分内側（画面内に制限）
         // 下側：パネル境界まで（変更なし）
-        const visibleTopRatio = 1 - topInset; // 上側は検索バー+カテゴリの直下まで
+        const visibleTopRatio = 0.97 - topInset; // 上側は検索バー+カテゴリの直下まで
         const visibleBottomRatio = 1 - bottomExclusionRatio; // 下側はパネル境界まで
         
         // 緯度の調整（上下）
@@ -338,9 +338,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       // spotsがnullまたはundefinedの場合は空配列として処理
       const validSpots = spots || [];
       
+      // 周辺検索・料金フィルターのフラグを先に計算（以降の処理で参照）
+      const hasNearbyFilter = currentFilter.nearbyFilterEnabled &&
+        (((currentFilter.convenienceStoreRadius || 0) > 0) || ((currentFilter.hotSpringRadius || 0) > 0));
+      const hasParkingTimeFilter = currentFilter.parkingTimeFilterEnabled;
+
       // 近傍検索（新アルゴリズム）: 周辺検索チェックON時のみ実行
       // タブの表示状態やカテゴリ選択とは独立して、チェックボックスの状態（nearbyFilterEnabled）と半径で判定
-      const nearbyOn = currentFilter.nearbyFilterEnabled && (((currentFilter.convenienceStoreRadius || 0) > 0) || ((currentFilter.hotSpringRadius || 0) > 0));
+      const nearbyOn = hasNearbyFilter;
       if (nearbyOn) {
         const requireConv = (currentFilter.convenienceStoreRadius || 0) > 0;
         const requireHot = (currentFilter.hotSpringRadius || 0) > 0;
@@ -453,9 +458,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         let parkingSpots: CoinParking[] = [];
         
         // フィルターの組み合わせを判定
-        const hasNearbyFilter = currentFilter.nearbyFilterEnabled && 
-            ((currentFilter.convenienceStoreRadius || 0) > 0 || (currentFilter.hotSpringRadius || 0) > 0);
-        const hasParkingTimeFilter = currentFilter.parkingTimeFilterEnabled;
+        // 先に算出済みのフラグを使用
         
         console.log('🔍 フィルター状態:', {
           周辺検索: hasNearbyFilter,
@@ -500,12 +503,46 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         // 料金時間フィルターのみ有効な場合
         else if (hasParkingTimeFilter) {
           console.log('💰 料金時間フィルターのみ有効 - バックエンドで料金計算・ソート実行');
-          const result = await SupabaseService.fetchParkingSpotsSortedByFee(
+          let result = await SupabaseService.fetchParkingSpotsSortedByFee(
             searchRegion,
             currentFilter.parkingDuration.durationInMinutes,
             minElevation,
             currentFilter.parkingDuration.startDate // 入庫日時を渡す
           );
+
+          // タイムアウトなどで結果が返らない場合、自動的にズームインして再試行
+          if ((result as any).error || result.totalCount === -1) {
+            console.log('⏳ RPCがタイムアウト/失敗。自動で範囲を縮小して再実行');
+            let zoomRegion = { ...searchRegion };
+            let zoomFactor = 0.6;
+            let attempts = 0;
+            const maxAttempts = 5;
+            while (attempts < maxAttempts) {
+              attempts++;
+              zoomRegion = {
+                ...zoomRegion,
+                latitudeDelta: zoomRegion.latitudeDelta * zoomFactor,
+                longitudeDelta: zoomRegion.longitudeDelta * zoomFactor,
+              };
+              if (mapRef.current) mapRef.current.animateToRegion(zoomRegion, 400);
+              result = await SupabaseService.fetchParkingSpotsSortedByFee(
+                zoomRegion,
+                currentFilter.parkingDuration.durationInMinutes,
+                minElevation,
+                currentFilter.parkingDuration.startDate
+              );
+              if (!(result as any).error && result.totalCount !== -1) {
+                console.log(`✅ RPC成功（試行${attempts}回目）: ${result.totalCount}件`);
+                searchRegion = zoomRegion;
+                break;
+              }
+            }
+            if ((result as any).error || result.totalCount === -1) {
+              console.error('❌ RPC再試行に失敗。ユーザーに地図拡大を促します');
+              Alert.alert('検索範囲を拡大', '検索範囲が広すぎます。地図を拡大してから再度検索してください。');
+              return;
+            }
+          }
 
           // 2000件を超えた場合、自動でズームイン（2000件以下になるまで段階的にズーム）
           if (result.totalCount > 2000) {
@@ -996,6 +1033,54 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   };
   
   const handleRegionChangeComplete = (region: Region) => {
+    // 日本国外に出ないようにクランプ
+    const JAPAN_BOUNDS = {
+      minLat: 20.0,
+      maxLat: 46.5,
+      minLng: 122.0,
+      maxLng: 154.0,
+    };
+
+    const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+    const halfLat = region.latitudeDelta / 2;
+    const halfLng = region.longitudeDelta / 2;
+
+    // ズームアウトし過ぎを制御（日本全域に収まる程度）
+    const maxLatDelta = (JAPAN_BOUNDS.maxLat - JAPAN_BOUNDS.minLat) * 0.98;
+    const maxLngDelta = (JAPAN_BOUNDS.maxLng - JAPAN_BOUNDS.minLng) * 0.98;
+    const latitudeDelta = Math.min(region.latitudeDelta, maxLatDelta);
+    const longitudeDelta = Math.min(region.longitudeDelta, maxLngDelta);
+
+    const halfLatNew = latitudeDelta / 2;
+    const halfLngNew = longitudeDelta / 2;
+
+    const minCenterLat = JAPAN_BOUNDS.minLat + halfLatNew;
+    const maxCenterLat = JAPAN_BOUNDS.maxLat - halfLatNew;
+    const minCenterLng = JAPAN_BOUNDS.minLng + halfLngNew;
+    const maxCenterLng = JAPAN_BOUNDS.maxLng - halfLngNew;
+
+    const clamped: Region = {
+      latitude: clamp(region.latitude, minCenterLat, maxCenterLat),
+      longitude: clamp(region.longitude, minCenterLng, maxCenterLng),
+      latitudeDelta,
+      longitudeDelta,
+    };
+
+    // 地図の移動が完了したら最新のregionを保存（必要ならアニメート）
+    const epsilon = 1e-6;
+    const changed =
+      Math.abs(clamped.latitude - region.latitude) > epsilon ||
+      Math.abs(clamped.longitude - region.longitude) > epsilon ||
+      Math.abs(clamped.latitudeDelta - region.latitudeDelta) > epsilon ||
+      Math.abs(clamped.longitudeDelta - region.longitudeDelta) > epsilon;
+
+    if (changed && mapRef.current) {
+      mapRef.current.animateToRegion(clamped, 180);
+      setMapRegion(clamped);
+      saveMapRegion(clamped);
+      return;
+    }
+
     // 地図の移動が完了したら最新のregionを保存
     setMapRegion(region);
 

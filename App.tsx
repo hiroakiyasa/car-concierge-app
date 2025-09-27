@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { NavigationContainer } from '@react-navigation/native';
@@ -31,6 +31,7 @@ import { TermsScreen } from '@/screens/TermsScreen';
 import { PrivacyScreen } from '@/screens/PrivacyScreen';
 import { GuideScreen } from '@/screens/GuideScreen';
 import { TestParkingType } from '@/screens/TestParkingType';
+import { SplashOverlay } from '@/components/SplashOverlay';
 
 const Stack = createStackNavigator();
 const queryClient = new QueryClient({
@@ -44,6 +45,7 @@ const queryClient = new QueryClient({
 
 export default function App() {
   const initializeAuth = useAuthStore(state => state.initializeAuth);
+  const [appReady, setAppReady] = useState(false);
 
   useEffect(() => {
     // 認証状態の監視を開始（非同期処理）
@@ -51,9 +53,13 @@ export default function App() {
       console.log('🚀 App: 認証初期化開始');
       try {
         await initializeAuth();
+        // 体感を整えるため僅かな待機
+        await new Promise(r => setTimeout(r, 250));
+        setAppReady(true);
         console.log('🚀 App: 認証初期化完了');
       } catch (error) {
         console.error('🚀 App: 認証初期化エラー:', error);
+        setAppReady(true);
       }
     };
 
@@ -109,6 +115,7 @@ export default function App() {
           </Stack.Navigator>
           <StatusBar style="auto" />
         </NavigationContainer>
+        {!appReady && <SplashOverlay />}
       </QueryClientProvider>
     </GestureHandlerRootView>
   );

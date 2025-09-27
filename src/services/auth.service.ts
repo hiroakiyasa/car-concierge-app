@@ -1,6 +1,7 @@
 import { supabase } from '@/config/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AuthSession from 'expo-auth-session';
+import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 
 export interface User {
@@ -464,12 +465,12 @@ export class AuthService {
       // WebBrowserセッションをリセット
       WebBrowser.maybeCompleteAuthSession();
 
-      // Expo環境に応じたリダイレクトURIを生成
+      // Expo Go では proxy を使い、Dev Client/本番は独自スキームで戻す
+      const isExpoGo = Constants.appOwnership === 'expo';
       const redirectTo = AuthSession.makeRedirectUri({
-        scheme: 'car-concierge-app',
+        useProxy: isExpoGo,
+        scheme: isExpoGo ? undefined : 'car-concierge-app',
         path: 'auth/callback',
-        preferLocalhost: false,
-        isTripleSlashed: true,
       });
 
       console.log('🔐 生成されたリダイレクトURI:', redirectTo);
