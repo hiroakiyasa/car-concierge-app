@@ -5,6 +5,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   name: '車旅コンシェルジュ',
   slug: 'car-concierge-app',
   version: '1.0.0',
+  scheme: 'car-concierge-app',
   jsEngine: 'hermes',
   android: {
     package: 'com.hiroakiyasa.carconciergeapp'

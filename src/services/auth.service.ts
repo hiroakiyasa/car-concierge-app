@@ -459,24 +459,29 @@ export class AuthService {
   // Google Sign-In
   static async signInWithGoogle(): Promise<{ user: User | null, error: string | null }> {
     try {
+      console.log('🔐 Google認証開始');
+
+      // WebBrowserセッションをリセット
       WebBrowser.maybeCompleteAuthSession();
-      
-      // モバイルアプリ用の固定リダイレクトURIを使用
-      const redirectTo = `car-concierge-app://auth/callback`;
-      
-      console.log('🔐 Google認証 - Redirect URI:', redirectTo);
-      
-      // 開発環境の場合の追加情報
-      const expoRedirectUri = AuthSession.makeRedirectUri({
+
+      // Expo環境に応じたリダイレクトURIを生成
+      const redirectTo = AuthSession.makeRedirectUri({
         scheme: 'car-concierge-app',
         path: 'auth/callback',
+        preferLocalhost: false,
+        isTripleSlashed: true,
       });
-      console.log('🔐 Expo Generated URI:', expoRedirectUri);
-      
+
+      console.log('🔐 生成されたリダイレクトURI:', redirectTo);
+
+      // Supabaseに設定されているURLを確認
+      const supabaseRedirectUrl = `${redirectTo}`;
+      console.log('🔐 Supabaseに渡すリダイレクトURL:', supabaseRedirectUrl);
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo,
+          redirectTo: supabaseRedirectUrl,
           skipBrowserRedirect: true,
           queryParams: {
             access_type: 'offline',
@@ -491,24 +496,24 @@ export class AuthService {
       }
 
       if (data?.url) {
-        console.log('🔐 認証URL取得成功:', data.url);
-        
+        console.log('🔐 認証URL取得成功');
+        console.log('🔐 OAuth URL:', data.url.substring(0, 100) + '...');
+
+        // WebBrowserでOAuth認証を開く
         const result = await WebBrowser.openAuthSessionAsync(
           data.url,
           redirectTo,
           {
             showInRecents: true,
             preferEphemeralSession: false, // セッション情報を保持
+            createTask: false, // Android用の設定
           }
         );
-        
-        console.log('🔐 WebBrowser結果詳細:', {
-          type: result.type,
-          url: result.url ? result.url.substring(0, 100) + '...' : null,
-          // URLの最初の100文字のみ表示（セキュリティのため）
-        });
 
-        console.log('🔐 認証結果:', result);
+        console.log('🔐 WebBrowser結果:', {
+          type: result.type,
+          hasUrl: !!result.url,
+        });
 
         if (result.type === 'success' && result.url) {
           console.log('🔐 成功時のURL:', result.url);
@@ -631,8 +636,27 @@ export class AuthService {
 
       return { user: null, error: 'Google認証に失敗しました' };
     } catch (error) {
-      console.error('Google sign in error:', error);
-      return { user: null, error: 'Google認証中にエラーが発生しました' };
+      console.error('🔐 Google認証エラー詳細:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : '不明なエラー',
+        errorStack: error instanceof Error ? error.stack : undefined,
+      });
+
+      // より詳細なエラーメッセージ
+      let errorMessage = 'Google認証中にエラーが発生しました';
+      if (error instanceof Error) {
+        if (error.message.includes('network')) {
+          errorMessage = 'ネットワーク接続を確認してください';
+        } else if (error.message.includes('cancelled')) {
+          errorMessage = 'Google認証がキャンセルされました';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Google認証がタイムアウトしました';
+        } else {
+          errorMessage = `Google認証エラー: ${error.message}`;
+        }
+      }
+
+      return { user: null, error: errorMessage };
     }
   }
 
