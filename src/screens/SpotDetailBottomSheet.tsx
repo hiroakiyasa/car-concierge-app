@@ -759,6 +759,18 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     return 'データ未登録';
   };
 
+  // よりコンパクトに表示するための営業時間（短縮版）
+  const formatOperatingHoursShort = (): string => {
+    const full = formatOperatingHours();
+    if (!full || full === '---') return '—';
+    if (full.includes('24時間')) return '24時間';
+    return full
+      .replace('営業時間', '')
+      .replace(/\s+/g, '')
+      .replace('営業', '')
+      .trim();
+  };
+
   // 駐車場タイプ（英語/コード値）を日本語に整形
   const formatParkingType = (): string => {
     if (!isParking) return '---';
@@ -1005,63 +1017,34 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               </View>
             </View>
 
-            {/* ===== 基本情報（許容台数・営業時間・標高・駐車場タイプ）を大きな枠で囲んで表示 ===== */}
-            <View style={styles.bottomInfoContainer}>
-              <View style={styles.bottomInfoSection}>
-              {/* 許容台数 */}
+            {/* ===== コンパクト統合情報（チップ表示） ===== */}
+            <View style={styles.compactStatsContainer}>
               {parkingSpot.capacity && (
-                <View style={styles.parkingDetailRow}>
-                  <View style={styles.parkingDetailLeft}>
-                    <Ionicons name="car-outline" size={14} color="#999" />
-                    <Text style={styles.parkingDetailLabel}>許容台数</Text>
-                  </View>
-                  <Text style={styles.parkingDetailValue}>
-                    {parkingSpot.capacity}
-                  </Text>
+                <View style={styles.statChip}>
+                  <Ionicons name="car-outline" size={14} color="#374151" />
+                  <Text style={styles.statText}>{parkingSpot.capacity}台</Text>
                 </View>
               )}
-
-              {/* 営業時間（最下段） */}
-              <View style={styles.parkingDetailRow}>
-                <View style={styles.parkingDetailLeft}>
-                  <Ionicons name="time-outline" size={14} color="#999" />
-                  <Text style={styles.parkingDetailLabel}>営業時間</Text>
-                </View>
-                <Text style={styles.parkingDetailValue}>
-                  {formatOperatingHours()}
-                </Text>
+              <View style={styles.statChip}>
+                <Ionicons name="time-outline" size={14} color="#374151" />
+                <Text style={styles.statText}>{formatOperatingHoursShort()}</Text>
               </View>
-
-              {/* 標高（営業時間の直下） */}
               {(parkingSpot as any).elevation !== undefined && (parkingSpot as any).elevation !== null && (
-                <View style={styles.parkingDetailRow}>
-                  <View style={styles.parkingDetailLeft}>
-                    <Ionicons name="trending-up-outline" size={14} color="#999" />
-                    <Text style={styles.parkingDetailLabel}>標高</Text>
-                  </View>
-                  <Text style={styles.parkingDetailValue}>
-                    {(parkingSpot as any).elevation}m
-                  </Text>
+                <View style={styles.statChip}>
+                  <Ionicons name="trending-up-outline" size={14} color="#374151" />
+                  <Text style={styles.statText}>{(parkingSpot as any).elevation}m</Text>
                 </View>
               )}
-
-              {/* 駐車場タイプ（標高の直下） */}
               {(() => {
                 const typeText = formatParkingType();
                 if (typeText === '---') return null;
                 return (
-                  <View style={styles.parkingDetailRow}>
-                    <View style={styles.parkingDetailLeft}>
-                      <Ionicons name="car-outline" size={14} color="#999" />
-                      <Text style={styles.parkingDetailLabel}>駐車場タイプ</Text>
-                    </View>
-                    <Text style={styles.parkingDetailValue}>
-                      {typeText}
-                    </Text>
+                  <View style={styles.statChip}>
+                    <Ionicons name="albums-outline" size={14} color="#374151" />
+                    <Text style={styles.statText}>{typeText}</Text>
                   </View>
                 );
               })()}
-              </View>
             </View>
             
             {/* Photos Preview in Overview */}
@@ -1948,6 +1931,28 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F2F5',
+  },
+  // Compact stats chips
+  compactStatsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  statChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  statText: {
+    fontSize: 13,
+    color: '#111827',
+    fontWeight: '600',
   },
   parkingDetailsTitle: {
     fontSize: 14,
