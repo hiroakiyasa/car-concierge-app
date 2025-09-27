@@ -1028,9 +1028,52 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   };
   
   // テキスト検索機能
-  const handleTextSearch = async (_query: string) => {
-    // 現在の範囲・カテゴリで検索を実行
-    await handleSearch(false);
+  const handleTextSearch = async (query: string) => {
+    const q = (query || '').trim();
+    if (!q) return;
+
+    // 1) 既存の検索結果から名前一致のスポットを探す
+    const lower = q.toLowerCase();
+    const matched = searchResults.find(s => (s.name || '').toLowerCase().includes(lower));
+
+    if (matched) {
+      // スポットが見つかった場合はその場所へ移動
+      const newRegion = {
+        latitude: matched.lat,
+        longitude: matched.lng,
+        latitudeDelta: mapRegion?.latitudeDelta || 0.01,
+        longitudeDelta: mapRegion?.longitudeDelta || 0.01,
+      };
+      setMapRegion(newRegion);
+
+      // 駐車場の場合は詳細を開き、マーカーを上側に
+      selectSpot(matched);
+      if (matched.category === 'コインパーキング') {
+        setShowDetailSheet(true);
+      }
+      animateMarkerToTopFractionCenter(matched, 0.5);
+      return;
+    }
+
+    // 2) 地名としてジオコーディングし、地図中心を移動
+    const geocoded = await LocationService.geocode(q);
+    if (geocoded) {
+      const newRegion = {
+        latitude: geocoded.latitude,
+        longitude: geocoded.longitude,
+        latitudeDelta: mapRegion?.latitudeDelta || 0.02,
+        longitudeDelta: mapRegion?.longitudeDelta || 0.02,
+      };
+      setMapRegion(newRegion);
+      if (mapRef.current) {
+        mapRef.current.animateToRegion(newRegion, 800);
+      }
+      // 新しい中心で検索を実行
+      await handleSearch(false);
+      return;
+    }
+
+    Alert.alert('検索', '該当する場所やスポットが見つかりませんでした。');
   };
 
   // カテゴリートグル機能

@@ -15,6 +15,20 @@ export class LocationService {
         return 'restricted';
     }
   }
+
+  static async geocode(query: string): Promise<{ latitude: number; longitude: number } | null> {
+    try {
+      const results = await Location.geocodeAsync(query);
+      const first = results && results.length > 0 ? results[0] : null;
+      if (first && typeof first.latitude === 'number' && typeof first.longitude === 'number') {
+        return { latitude: first.latitude, longitude: first.longitude };
+      }
+      return null;
+    } catch (e) {
+      console.log('Geocoding error:', e);
+      return null;
+    }
+  }
   
   static async getCurrentLocation(): Promise<LocationType | null> {
     try {
