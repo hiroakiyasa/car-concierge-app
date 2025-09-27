@@ -176,44 +176,68 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     if (!visible || !selectedSpot || selectedSpot.category !== 'コインパーキング') return;
     const parking = selectedSpot as CoinParking;
 
-    // データベースの周辺施設情報のみを使用（独自の検索はしない）
+    // まず、既存のデータから即座に表示可能な情報を設定
+    const initialNearby: any = {};
+
+    // コンビニの即座表示
+    if (parking.nearestConvenienceStore) {
+      const raw = parking.nearestConvenienceStore as any;
+      const storedDistance = raw.distance_m || raw.distance || raw.distance_meters;
+      initialNearby.convenience = {
+        id: raw.id || raw.store_id,
+        name: raw.name || 'コンビニ',
+        distance: storedDistance ? Math.round(storedDistance) : undefined
+      };
+    }
+
+    // 温泉の即座表示
+    if (parking.nearestHotspring) {
+      const raw = parking.nearestHotspring as any;
+      const storedDistance = raw.distance_m || raw.distance || raw.distance_meters;
+      initialNearby.hotspring = {
+        id: raw.id || raw.spring_id,
+        name: raw.name || '温泉',
+        distance: storedDistance ? Math.round(storedDistance) : undefined
+      };
+    }
+
+    // 即座に初期データを表示
+    setPanelNearby(initialNearby);
+
+    // その後、詳細情報を取得して更新
     (async () => {
       try {
-        const updated: any = {};
+        const updated: any = { ...initialNearby };
 
-        // コンビニ: データベースにあるIDと距離情報を使用
-        if (parking.nearestConvenienceStore) {
+        // コンビニ: 詳細情報を取得
+        if (parking.nearestConvenienceStore && !updated.convenience?.name.includes('コンビニ')) {
           const raw = parking.nearestConvenienceStore as any;
           const id = String(raw.id || raw.store_id || '');
-          const storedDistance = raw.distance_m || raw.distance || raw.distance_meters;
 
-          if (id) {
+          if (id && !raw.name) {  // nameが既にある場合はスキップ
             const store = await SupabaseService.fetchConvenienceStoreById(id);
             if (store) {
-              // データベースに保存されている距離を優先的に使用
               updated.convenience = {
+                ...updated.convenience,
                 id: store.id,
-                name: store.name,
-                distance: storedDistance ? Math.round(storedDistance) : undefined
+                name: store.name
               };
             }
           }
         }
 
-        // 温泉: データベースにあるIDと距離情報を使用
-        if (parking.nearestHotspring) {
+        // 温泉: 詳細情報を取得
+        if (parking.nearestHotspring && !updated.hotspring?.name.includes('温泉')) {
           const raw = parking.nearestHotspring as any;
           const id = String(raw.id || raw.spring_id || '');
-          const storedDistance = raw.distance_m || raw.distance || raw.distance_meters;
 
-          if (id) {
+          if (id && !raw.name) {  // nameが既にある場合はスキップ
             const spring = await SupabaseService.fetchHotSpringById(id);
             if (spring) {
-              // データベースに保存されている距離を優先的に使用
               updated.hotspring = {
+                ...updated.hotspring,
                 id: spring.id,
-                name: spring.name,
-                distance: storedDistance ? Math.round(storedDistance) : undefined
+                name: spring.name
               };
             }
           }
@@ -221,7 +245,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
 
         setPanelNearby(updated);
       } catch (e) {
-        console.warn('周辺施設ロード失敗:', e);
+        console.warn('周辺施設詳細ロード失敗:', e);
       }
     })();
   }, [visible, selectedSpot]);

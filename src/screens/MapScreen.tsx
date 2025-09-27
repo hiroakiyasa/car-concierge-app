@@ -553,6 +553,95 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             return; // 早期リターン
           }
 
+          // 10件未満の場合、10件以上見つかるまで自動でズームアウト
+          if (result.totalCount < 10) {
+            console.log(`⚠️ 駐車場が${result.totalCount}件しかありません。10件以上見つかるまで自動でズームアウトします`);
+
+            let zoomOutRegion = { ...searchRegion };
+            let zoomOutFactor = 1.5; // 初回は150%ズームアウト
+            let maxZoomOutAttempts = 5; // 最大5回まで試行
+            let currentZoomOutAttempt = 0;
+
+            const performAutoZoomOut = async () => {
+              currentZoomOutAttempt++;
+
+              // 地図をズームアウト
+              zoomOutRegion = {
+                ...zoomOutRegion,
+                latitudeDelta: zoomOutRegion.latitudeDelta * zoomOutFactor,
+                longitudeDelta: zoomOutRegion.longitudeDelta * zoomOutFactor,
+              };
+
+              // mapRefが存在する場合はアニメーション付きでズーム
+              if (mapRef.current) {
+                mapRef.current.animateToRegion(zoomOutRegion, 500);
+              }
+
+              // ズームアウト後の範囲で再検索
+              const retryResult = await SupabaseService.fetchParkingSpotsSortedByFee(
+                zoomOutRegion,
+                currentFilter.parkingDuration.durationInMinutes,
+                minElevation,
+                currentFilter.parkingDuration.startDate
+              );
+
+              console.log(`🔍 ズームアウト試行${currentZoomOutAttempt}: 駐車場${retryResult.totalCount}件`);
+
+              // 10件以上見つかった、または最大試行回数に達した場合は結果を表示
+              // ただし2000件を超えない範囲で
+              if ((retryResult.totalCount >= 10 && retryResult.totalCount <= 2000) || currentZoomOutAttempt >= maxZoomOutAttempts) {
+                parkingSpots = retryResult.spots.filter(p =>
+                  ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
+                );
+                console.log(`🅿️ 最終料金フィルター結果: ${parkingSpots.length}件 (総数: ${retryResult.totalCount}件)`);
+                displaySpots.push(...parkingSpots);
+
+                // 結果を更新
+                setSearchResults(displaySpots);
+                setSearchStatus('complete');
+                setTimeout(() => setSearchStatus('idle'), 3000);
+              } else if (retryResult.totalCount > 2000) {
+                // 2000件を超えてしまった場合は少し縮小
+                zoomOutRegion = {
+                  ...zoomOutRegion,
+                  latitudeDelta: zoomOutRegion.latitudeDelta * 0.8,
+                  longitudeDelta: zoomOutRegion.longitudeDelta * 0.8,
+                };
+                if (mapRef.current) {
+                  mapRef.current.animateToRegion(zoomOutRegion, 500);
+                }
+
+                // 再度検索して結果を表示
+                const finalResult = await SupabaseService.fetchParkingSpotsSortedByFee(
+                  zoomOutRegion,
+                  currentFilter.parkingDuration.durationInMinutes,
+                  minElevation,
+                  currentFilter.parkingDuration.startDate
+                );
+
+                parkingSpots = finalResult.spots.filter(p =>
+                  ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
+                );
+                console.log(`🅿️ 最終料金フィルター結果: ${parkingSpots.length}件 (総数: ${finalResult.totalCount}件)`);
+                displaySpots.push(...parkingSpots);
+
+                setSearchResults(displaySpots);
+                setSearchStatus('complete');
+                setTimeout(() => setSearchStatus('idle'), 3000);
+              } else {
+                // まだ10件未満の場合は、さらにズームアウト
+                // 次回は40%ズームアウト（徐々に細かく調整）
+                zoomOutFactor = 1.4;
+                setTimeout(() => performAutoZoomOut(), 600);
+              }
+            };
+
+            // 初回のズームアウト実行（即座にシームレスに実行）
+            performAutoZoomOut();
+
+            return; // 早期リターン
+          }
+
           parkingSpots = result.spots.filter(p =>
             ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
           );
