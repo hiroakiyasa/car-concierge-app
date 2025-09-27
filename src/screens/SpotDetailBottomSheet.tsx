@@ -546,15 +546,65 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         {maxRates.length > 0 && (
           <View style={styles.rateSection}>
             <Text style={styles.rateSectionTitle}>🔝 最大料金</Text>
-            {maxRates.map((rate, index) => (
-              <Text key={index} style={styles.rateItem}>
-                {formatDayType(rate.day_type)}最大¥{rate.price?.toLocaleString()}
-                {rate.minutes && rate.minutes < 1440 && ` (${Math.floor(rate.minutes/60)}時間)`}
-                {formatTimeRange(rate.time_range)}
-              </Text>
-            ))}
+            {maxRates.map((rate, index) => {
+              const rangeRaw = (rate as any).time_range || (rate as any).timeRange || '';
+              const minutes = (rate as any).minutes;
+              let rangeDisplay = '';
+              if (rangeRaw && rangeRaw !== 'not_specified') {
+                rangeDisplay = String(rangeRaw);
+              } else if (minutes && minutes > 0 && minutes < 1440) {
+                const h = Math.floor(minutes / 60);
+                rangeDisplay = h > 0 ? `最大${h}時間まで` : `最大${minutes}分まで`;
+              } else {
+                rangeDisplay = '終日';
+              }
+
+              return (
+                <View key={index} style={styles.maxRateBlock}>
+                  <Text style={styles.rateItemPrimary}>
+                    {formatDayType((rate as any).day_type || (rate as any).dayType)}最大¥{rate.price?.toLocaleString()}
+                  </Text>
+                  <Text style={styles.rateItemSub}>適用時間: {rangeDisplay}</Text>
+                </View>
+              );
+            })}
           </View>
         )}
+      </View>
+    );
+  };
+
+  // 最大料金の要約（時間帯も一緒に見やすく表示）
+  const renderMaxRateSummary = (): React.ReactNode | null => {
+    if (!isParking || !parkingSpot.rates || parkingSpot.rates.length === 0) return null;
+    const maxRates = parkingSpot.rates.filter(r => r.type === 'max');
+    if (maxRates.length === 0) return null;
+
+    const formatRange = (r: any) => {
+      const range = r.time_range || r.timeRange || '';
+      if (range && range !== 'not_specified') return String(range);
+      if (r.minutes && r.minutes > 0 && r.minutes < 1440) {
+        const h = Math.floor(r.minutes / 60);
+        return `${h > 0 ? `${h}時間` : `${r.minutes}分`}まで`;
+      }
+      return '終日';
+    };
+
+    return (
+      <View style={styles.maxRateContainer}>
+        <View style={styles.maxRateLabelRow}>
+          <Ionicons name="cash-outline" size={16} color={Colors.textSecondary} />
+          <Text style={styles.maxRateLabel}>最大料金</Text>
+        </View>
+        <View style={styles.maxRateChipsWrap}>
+          {maxRates.map((r, idx) => (
+            <View key={idx} style={styles.maxRateChip}>
+              <Text style={styles.maxRateChipText}>
+                ¥{(r.price || 0).toLocaleString()} ・ {formatRange(r)}
+              </Text>
+            </View>
+          ))}
+        </View>
       </View>
     );
   };
@@ -1733,6 +1783,39 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#333',
   },
+  // Max rate summary styles
+  maxRateContainer: {
+    marginTop: 6,
+  },
+  maxRateLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  maxRateLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  maxRateChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  maxRateChip: {
+    backgroundColor: '#FFF3E0',
+    borderColor: '#FBC02D',
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  maxRateChipText: {
+    color: '#8D6E63',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   detailedRateRow: {
     flexDirection: 'column',
     gap: 8,
@@ -1762,6 +1845,20 @@ const styles = StyleSheet.create({
     color: '#555',
     lineHeight: 18,
     paddingLeft: 8,
+  },
+  maxRateBlock: {
+    paddingLeft: 8,
+    marginBottom: 4,
+  },
+  rateItemPrimary: {
+    fontSize: 13,
+    color: '#333',
+    fontWeight: '600',
+  },
+  rateItemSub: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginTop: 2,
   },
   originalFeesText: {
     fontSize: 11,
