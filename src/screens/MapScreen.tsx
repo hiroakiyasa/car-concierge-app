@@ -5,6 +5,8 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Dimensions,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CrossPlatformMap } from '@/components/Map/CrossPlatformMap';
@@ -219,25 +221,34 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       // UI要素を考慮した検索範囲を計算
       let searchRegion = { ...fullScreenRegion };
       
-      // ラベルサイズを考慮したマージン設定
-      const labelWidthRatio = 0.06; // ラベル1個分の幅（画面の6%）
-      const labelHeightRatio = 0.05; // ラベル1個分の高さ（画面の5%）
+      // 画面オーバーレイ(UI)を考慮したマージン設定（実測pxを画面比に変換）
+      const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+      // 検索バー + カテゴリーチップの合計高さ（余白含む）
+      const SEARCH_BAR_HEIGHT = 52;
+      const SEARCH_BAR_TOP = Platform.OS === 'ios' ? 6 : 4;
+      const CHIPS_HEIGHT = 48;
+      const CHIPS_GAP = 6; // 少しの余白
+      const topOverlayPx = SEARCH_BAR_TOP + SEARCH_BAR_HEIGHT + CHIPS_GAP + CHIPS_HEIGHT;
+      const topInset = Math.min(0.35, topOverlayPx / Math.max(1, SCREEN_HEIGHT));
+
+      // 右側はマーカー1つ分だけ内側へ
+      const MARKER_SIZE = 40; // 近似
+      const RIGHT_PADDING = 8;
+      const rightMargin = Math.min(0.25, (MARKER_SIZE + RIGHT_PADDING) / Math.max(1, SCREEN_WIDTH));
+      const leftMargin = 0; // 左は変更なし
       const bottomLabelMargin = 0; // 下側はパネル境界まで（変更なし）
-      const topInset = labelHeightRatio; // 上側は画面上端から1ラベル分内側に制限
-      const upwardOffset = labelHeightRatio * 2; // 全体を2ラベル分上にオフセット
       
       // パネルが展開されている場合
       if (isExpanded) {
         // 画面の1/3がパネルで隠れている
         const bottomPanelRatio = 0.33; // パネルが占める割合
         const bottomExclusionRatio = bottomPanelRatio + bottomLabelMargin; // パネル境界まで
-        const leftMargin = labelWidthRatio; // 左側はラベル1個分内側（範囲を1ラベル分拡張）
-        const rightMargin = labelWidthRatio * 2 + 0.05; // 右側はラベル2個分内側に調整
+        // 左右マージン（上で定義済み）
         
         // 境界を計算
         // 上側：画面上端から1ラベル分内側（画面内に制限）
         // 下側：パネル境界まで（変更なし）
-        const visibleTopRatio = 1 - topInset; // 上側は画面から1ラベル分内側まで（画面外には出ない）
+        const visibleTopRatio = 1 - topInset; // 上側は検索バー+カテゴリの直下まで
         const visibleBottomRatio = 1 - bottomExclusionRatio; // 下側はパネル境界まで
         
         // 緯度の調整（上下）
@@ -247,11 +258,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         const adjustedLongitudeDelta = fullScreenRegion.longitudeDelta * (1 - leftMargin - rightMargin);
         
         // 検索範囲の中心を計算（上にシフト + 境界調整）
-        const centerLatitudeShift = fullScreenRegion.latitudeDelta * ((upwardOffset + bottomExclusionRatio - topInset) / 2);
+        const centerLatitudeShift = fullScreenRegion.latitudeDelta * ((bottomExclusionRatio - topInset) / 2);
         
         searchRegion = {
           latitude: fullScreenRegion.latitude + centerLatitudeShift,
-          longitude: fullScreenRegion.longitude - (fullScreenRegion.longitudeDelta * rightMargin * 0.3),
+          // 右側に余白を設けたぶん中央を左に補正
+          longitude: fullScreenRegion.longitude - (fullScreenRegion.longitudeDelta * (rightMargin - leftMargin) / 2),
           latitudeDelta: adjustedLatitudeDelta,
           longitudeDelta: adjustedLongitudeDelta,
         };
@@ -261,13 +273,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         // パネル最小時でも約100pxは隠れている
         const bottomPanelRatio = 0.15; // 最小パネルが占める割合
         const bottomExclusionRatio = bottomPanelRatio + bottomLabelMargin; // パネル境界まで
-        const leftMargin = labelWidthRatio; // 左側はラベル1個分内側（範囲を1ラベル分拡張）
-        const rightMargin = labelWidthRatio * 2 + 0.05; // 右側はラベル2個分内側に調整
+        // 左右マージン（上で定義済み）
         
         // 境界を計算
         // 上側：画面上端から1ラベル分内側（画面内に制限）
         // 下側：パネル境界まで（変更なし）
-        const visibleTopRatio = 1 - topInset; // 上側は画面から1ラベル分内側まで（画面外には出ない）
+        const visibleTopRatio = 1 - topInset; // 上側は検索バー+カテゴリの直下まで
         const visibleBottomRatio = 1 - bottomExclusionRatio; // 下側はパネル境界まで
         
         // 緯度の調整（上下）
@@ -277,11 +288,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         const adjustedLongitudeDelta = fullScreenRegion.longitudeDelta * (1 - leftMargin - rightMargin);
         
         // 検索範囲の中心を計算（上にシフト + 境界調整）
-        const centerLatitudeShift = fullScreenRegion.latitudeDelta * ((upwardOffset + bottomExclusionRatio - topInset) / 2);
+        const centerLatitudeShift = fullScreenRegion.latitudeDelta * ((bottomExclusionRatio - topInset) / 2);
         
         searchRegion = {
           latitude: fullScreenRegion.latitude + centerLatitudeShift,
-          longitude: fullScreenRegion.longitude - (fullScreenRegion.longitudeDelta * rightMargin * 0.3),
+          longitude: fullScreenRegion.longitude - (fullScreenRegion.longitudeDelta * (rightMargin - leftMargin) / 2),
           latitudeDelta: adjustedLatitudeDelta,
           longitudeDelta: adjustedLongitudeDelta,
         };
