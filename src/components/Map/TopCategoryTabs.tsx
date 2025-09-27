@@ -22,7 +22,8 @@ export const TopCategoryTabs: React.FC<TopCategoryTabsProps> = ({
 }) => {
   const renderIcon = (category: any) => {
     const size = 16;
-    const color = selectedCategories.has(category.id) ? Colors.primary : '#5F6368';
+    const isActive = selectedCategories.has(category.id);
+    const color = isActive ? Colors.white : '#5F6368';
 
     if (category.iconFamily === 'MaterialIcons') {
       return <MaterialIcons name={category.icon as any} size={size} color={color} />;
@@ -45,7 +46,8 @@ export const TopCategoryTabs: React.FC<TopCategoryTabsProps> = ({
             key={category.id}
             style={[
               styles.categoryButton,
-              selectedCategories.has(category.id) && styles.categoryButtonActive
+              selectedCategories.has(category.id) && styles.categoryButtonActive,
+              selectedCategories.has(category.id) && styles.categoryButtonActiveShadow,
             ]}
             onPress={() => onCategoryToggle(category.id)}
             activeOpacity={0.7}
@@ -80,25 +82,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.white,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 18,
     gap: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
   },
   categoryButtonActive: {
-    backgroundColor: '#E8F0FE',
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  categoryButtonActiveShadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 6,
   },
   categoryLabel: {
     fontSize: 12,
-    color: '#5F6368',
-    fontWeight: '500',
+    color: '#374151',
+    fontWeight: '600',
   },
   categoryLabelActive: {
-    color: Colors.primary,
+    color: Colors.white,
   },
 });
