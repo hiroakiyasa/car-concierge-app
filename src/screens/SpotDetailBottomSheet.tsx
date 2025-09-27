@@ -1005,8 +1005,9 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               </View>
             </View>
 
-            {/* ===== 画面の一番下に 基本情報（許容台数・駐車場タイプ・営業時間）を表示 ===== */}
+            {/* ===== 基本情報（許容台数・営業時間・標高・駐車場タイプ）を大きな枠で囲んで表示 ===== */}
             <View style={styles.bottomInfoContainer}>
+              <View style={styles.bottomInfoSection}>
               {/* 許容台数 */}
               {parkingSpot.capacity && (
                 <View style={styles.parkingDetailRow}>
@@ -1060,6 +1061,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                   </View>
                 );
               })()}
+              </View>
             </View>
             
             {/* Photos Preview in Overview */}
@@ -1927,6 +1929,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 12,
     marginBottom: 4,
+  },
+  // 大枠（周辺施設と同等のカード枠）
+  bottomInfoSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   parkingDetailsContent: {
     padding: 16,
