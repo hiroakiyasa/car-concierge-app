@@ -25,6 +25,15 @@ export class ParkingFeeCalculator {
       timeRange: rate.timeRange ?? (rate as any).time_range ?? rate.timeRange,
     }));
 
+    // データ検証: base料金にapply_afterがある場合は無効
+    const invalidBaseRates = normalizedRates.filter(r =>
+      r.type === 'base' && r.applyAfter !== undefined && r.applyAfter !== null
+    );
+    if (invalidBaseRates.length > 0) {
+      console.error(`❌ 無効な料金データ: base料金にapply_afterが含まれています - ${parking.name}`, invalidBaseRates);
+      return -1; // 無効なデータなので計算不可
+    }
+
     // 料金データのバリデーション
     const baseRates = normalizedRates.filter(r => r.type === 'base');
     const progressiveRates = normalizedRates.filter(r => r.type === 'progressive');
@@ -286,7 +295,12 @@ export class ParkingFeeCalculator {
     };
 
     // base料金の選択（曜日を考慮）
-    const baseRates = rates.filter(r => r.type === 'base' && filterByDayType(r));
+    // 重要: base料金にapply_afterがある場合は無効なデータとして除外
+    const baseRates = rates.filter(r =>
+      r.type === 'base' &&
+      filterByDayType(r) &&
+      !r.applyAfter // base料金にapply_afterがあるのは無効
+    );
     if (baseRates.length > 0) {
       // より具体的な条件を持つ料金を優先
       baseRate = baseRates.sort((a, b) => {

@@ -793,11 +793,13 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               size={20}
               style={styles.favoriteButton}
             />
-            <TouchableOpacity onPress={openGoogleSearch} style={styles.actionButton}>
-              <Ionicons name="search" size={18} color="#666" />
+            {/* Google検索をカラフルに（Googleカラーの青） */}
+            <TouchableOpacity onPress={openGoogleSearch} style={[styles.actionButton, styles.searchActionButton]}>
+              <Ionicons name="logo-google" size={18} color="#FFFFFF" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={openGoogleMaps} style={styles.actionButton}>
-              <Ionicons name="map" size={18} color="#666" />
+            {/* マップは見分けやすい緑 */}
+            <TouchableOpacity onPress={openGoogleMaps} style={[styles.actionButton, styles.mapActionButton]}>
+              <Ionicons name="map" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
@@ -1605,12 +1607,23 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   actionButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#F5F5F5',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  searchActionButton: {
+    backgroundColor: '#4285F4', // Google Blue
+  },
+  mapActionButton: {
+    backgroundColor: '#34A853', // Google Green
   },
   content: {
     flex: 1,
