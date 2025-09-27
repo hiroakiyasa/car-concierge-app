@@ -21,6 +21,7 @@ interface CrossPlatformMapProps {
   mapRef?: React.RefObject<any>;
   onMapReady?: () => void;
   onMarkerPress?: (event: any) => void;
+  onPress?: (event: any) => void;
   showsCompass?: boolean;
   showsScale?: boolean;
   rotateEnabled?: boolean;
@@ -37,6 +38,7 @@ export const CrossPlatformMap: React.FC<CrossPlatformMapProps> = ({
   mapRef,
   onMapReady,
   onMarkerPress,
+  onPress,
   showsCompass = true,
   showsScale = true,
   rotateEnabled = true,
@@ -55,6 +57,7 @@ export const CrossPlatformMap: React.FC<CrossPlatformMapProps> = ({
       onRegionChangeComplete={onRegionChangeComplete}
       onMapReady={onMapReady}
       onMarkerPress={onMarkerPress}
+      onPress={onPress}
       provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
       showsUserLocation={showsUserLocation}
       followsUserLocation={followsUserLocation}

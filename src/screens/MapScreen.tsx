@@ -35,6 +35,7 @@ interface MapScreenProps {
 
 export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   const mapRef = useRef<any>(null);
+  const [dismissSearchUI, setDismissSearchUI] = useState(0);
   const [showDetailSheet, setShowDetailSheet] = useState(false);
   const [showRankingModal, setShowRankingModal] = useState(false);
   const [showMenuModal, setShowMenuModal] = useState(false);
@@ -1623,6 +1624,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           style={styles.map}
           region={mapRegion}
           onRegionChangeComplete={handleRegionChangeComplete}
+          onPress={() => setDismissSearchUI(prev => prev + 1)}
           onMapReady={() => setIsMapReady(true)}
           showsUserLocation={true}
           showsMyLocationButton={false}
@@ -1700,6 +1702,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         <TopSearchBar
           onMenuPress={() => setShowMenuModal(true)}
           onSearch={handleTextSearch}
+          dismissSignal={dismissSearchUI}
         />
 
         {/* Category tabs under search bar */}
@@ -1742,6 +1745,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           }
         }}
         onSearch={(isExpanded: boolean, newFilter?: any) => handleSearch(isExpanded, newFilter)}
+        onAnyTap={() => setDismissSearchUI(prev => prev + 1)}
       />
       
       <RankingListModal

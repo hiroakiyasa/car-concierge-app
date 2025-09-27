@@ -24,12 +24,14 @@ interface CompactBottomPanelProps {
   navigation?: any;
   onHeightChange?: (height: number, isExpanded: boolean) => void;
   onSearch?: (isExpanded: boolean, newFilter?: any) => void;
+  onAnyTap?: () => void;
 }
 
 export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({ 
   navigation, 
   onHeightChange, 
-  onSearch 
+  onSearch,
+  onAnyTap,
 }) => {
   const [showTimeSelector, setShowTimeSelector] = useState(false);
   const [timeSelectorMode, setTimeSelectorMode] = useState<'entry' | 'duration' | 'exit'>('entry');
@@ -290,7 +292,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   };
   
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onTouchStart={onAnyTap}>
       
       {/* フィルタータブ */}
       <View style={styles.filterTabs}>

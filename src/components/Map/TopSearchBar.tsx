@@ -10,6 +10,7 @@ interface TopSearchBarProps {
   onSearchPress?: () => void;
   onSearch?: (query: string) => void;
   placeholder?: string;
+  dismissSignal?: number;
 }
 
 export const TopSearchBar: React.FC<TopSearchBarProps> = ({
@@ -17,6 +18,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   onSearchPress,
   onSearch,
   placeholder = 'ここで検索',
+  dismissSignal,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -34,6 +36,13 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
       setIsSearching(false);
     }
   };
+
+  // 外部からの非表示要求
+  React.useEffect(() => {
+    if (dismissSignal !== undefined) {
+      setIsSearching(false);
+    }
+  }, [dismissSignal]);
 
   const loadHistory = async () => {
     try {
