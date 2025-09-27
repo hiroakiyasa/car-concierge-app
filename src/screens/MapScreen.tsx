@@ -492,8 +492,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             currentFilter.parkingDuration.startDate // 入庫日時を渡す
           );
 
-          // 500件を超えた場合、自動でズームイン
-          if (result.totalCount > 500) {
+          // 2000件を超えた場合、自動でズームイン
+          if (result.totalCount > 2000) {
             console.log(`⚠️ 駐車場が${result.totalCount}件あります。自動で地図をズームインします`);
 
             // アラートを表示
