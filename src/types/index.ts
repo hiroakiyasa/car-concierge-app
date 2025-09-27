@@ -70,6 +70,7 @@ export interface CoinParking extends Spot {
   nearestHotspring?: NearbyFacility;
   isOpenDuringParking?: boolean; // 指定された駐車時間が営業時間内か
   operatingStatus?: string; // 営業状態の文字列（例：「営業中 (8:00～22:00)」「営業時間外」「24時間営業」）
+  parkingType?: string; // 駐車場タイプ（平面駐車場、立体駐車場、機械式、車中泊・キャンプ場）
 }
 
 // Other spot types

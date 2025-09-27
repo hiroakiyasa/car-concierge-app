@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   categoryLabel: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#374151',
     fontWeight: '600',
   },

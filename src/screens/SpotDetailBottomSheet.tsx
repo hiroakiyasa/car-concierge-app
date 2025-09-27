@@ -1033,14 +1033,14 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               )}
 
               {/* 駐車場タイプ（標高の直下） */}
-              {((parkingSpot as any).type || (parkingSpot as any).parking_type) && (
+              {parkingSpot.parkingType && (
                 <View style={styles.parkingDetailRow}>
                   <View style={styles.parkingDetailLeft}>
-                    <Ionicons name="flag-outline" size={14} color="#999" />
+                    <Ionicons name="car-outline" size={14} color="#999" />
                     <Text style={styles.parkingDetailLabel}>駐車場タイプ</Text>
                   </View>
                   <Text style={styles.parkingDetailValue}>
-                    {(parkingSpot as any).type || (parkingSpot as any).parking_type}
+                    {parkingSpot.parkingType}
                   </Text>
                 </View>
               )}
@@ -1752,10 +1752,17 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   pricingCard: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     marginBottom: 12,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   pricingContent: {
     padding: 12,
@@ -1777,11 +1784,11 @@ const styles = StyleSheet.create({
   },
   pricingMainLabel: {
     fontSize: 15,
-    color: '#666',
-    fontWeight: '500',
+    color: '#6B7280',
+    fontWeight: '600',
   },
   pricingMainValue: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.primary,
   },
@@ -1852,9 +1859,9 @@ const styles = StyleSheet.create({
   },
   rateSectionTitle: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#4CAF50',
-    marginBottom: 4,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 6,
   },
   rateItem: {
     fontSize: 14,
@@ -2033,10 +2040,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   nearbySection: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     padding: 10,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   nearbyHeader: {
     flexDirection: 'row',

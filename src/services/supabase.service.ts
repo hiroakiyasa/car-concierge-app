@@ -108,6 +108,7 @@ export class SupabaseService {
         operatingHours: spot.operating_hours || spot.operatingHours || spot.hours,
         operating_hours: spot.operating_hours, // 元のフィールドも保持
         is_24h: spot.is_24h, // is_24hフィールドも保持
+        parkingType: spot.type, // 駐車場タイプ（平面駐車場、立体駐車場、機械式など）
         nearestConvenienceStore,
         nearestHotspring,
       };
@@ -877,6 +878,7 @@ export class SupabaseService {
         rates: ratesData,
         hours: hoursData,
         elevation: spot.elevation,
+        parkingType: spot.type, // 駐車場タイプ
         nearestConvenienceStore: nearestConvenienceStore,
         nearestHotspring: nearestHotspring,
         calculatedFee: spot.calculated_fee, // バックエンドで計算された料金
