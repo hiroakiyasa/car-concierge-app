@@ -38,12 +38,12 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const [activeTab, setActiveTab] = useState<'parking' | 'nearby' | 'elevation'>('parking');
   const [minElevation, setMinElevation] = useState(0);
   const [sliderValue, setSliderValue] = useState(0); // 0-100のスライダー値
-  const [convenienceRadius, setConvenienceRadius] = useState(0); // コンビニ検索半径
-  const [hotspringRadius, setHotspringRadius] = useState(0); // 温泉検索半径
-  const [convenienceSlider, setConvenienceSlider] = useState(0); // コンビニスライダー値 0-100
-  const [hotspringSlider, setHotspringSlider] = useState(0); // 温泉スライダー値 0-100
-  const [convenienceSelected, setConvenienceSelected] = useState(false); // コンビニ選択状態
-  const [hotspringSelected, setHotspringSelected] = useState(false); // 温泉選択状態
+  const [convenienceRadius, setConvenienceRadius] = useState(30); // コンビニ検索半径（デフォルトON: 30m）
+  const [hotspringRadius, setHotspringRadius] = useState(0); // 温泉検索半径（デフォルトOFF）
+  const [convenienceSlider, setConvenienceSlider] = useState(16); // 約30m相当（radiusToSlider(30) ≈ 16）
+  const [hotspringSlider, setHotspringSlider] = useState(0); // 温泉スライダー初期値 0
+  const [convenienceSelected, setConvenienceSelected] = useState(true); // コンビニをデフォルトON
+  const [hotspringSelected, setHotspringSelected] = useState(false); // 温泉はデフォルトOFF
   
   // チェックボックス状態（各タブの有効/無効） - フィルター適用を制御
   // 初期値はストアのデフォルト（初期起動時は料金計算ON）
@@ -327,16 +327,14 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
           style={[styles.filterTab, activeTab === 'nearby' && styles.activeTab]}
           onPress={() => {
             setActiveTab('nearby');
-            // タブ選択時は表示を切り替えるだけで、フィルターは有効化しない
+            // 初回選択時: コンビニのみON、温泉はOFF
             if (!convenienceSelected && !hotspringSelected) {
-              // 初回選択時はデフォルトでコンビニ30mを準備（表示のみ）
               setConvenienceSelected(true);
-              setConvenienceSlider(radiusToSlider(30));
               setConvenienceRadius(30);
-              // 温泉もデフォルト表示だけ準備（100m）
-              setHotspringSelected(true);
-              setHotspringSlider(radiusToSlider(100));
-              setHotspringRadius(100);
+              setConvenienceSlider(radiusToSlider(30));
+              setHotspringSelected(false);
+              setHotspringRadius(0);
+              setHotspringSlider(0);
             }
           }}
         >
@@ -354,18 +352,16 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
               e.stopPropagation();
               const next = !nearbyEnabled;
               setNearbyEnabled(next);
-              // タブが非表示でも、チェックON時はデフォルトで半径を設定して有効化
+              // ON時は「コンビニのみON、温泉OFF」で初期化
               if (next) {
-                if (!convenienceSelected) {
-                  setConvenienceSelected(true);
+                setConvenienceSelected(true);
+                if (convenienceRadius <= 0) {
                   setConvenienceRadius(30);
                   setConvenienceSlider(radiusToSlider(30));
                 }
-                if (!hotspringSelected) {
-                  setHotspringSelected(true);
-                  setHotspringRadius(100);
-                  setHotspringSlider(radiusToSlider(100));
-                }
+                setHotspringSelected(false);
+                setHotspringRadius(0);
+                setHotspringSlider(0);
               }
             }}
           >
@@ -477,8 +473,8 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                     setConvenienceSelected(newSelected);
                     // 選択時にデフォルト100mを設定
                     if (newSelected && convenienceRadius < 10) {
-                      setConvenienceRadius(100);
-                      setConvenienceSlider(radiusToSlider(100));
+                      setConvenienceRadius(30);
+                      setConvenienceSlider(radiusToSlider(30));
                     }
                   }}
                 >
