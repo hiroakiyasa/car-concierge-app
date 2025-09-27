@@ -132,11 +132,6 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
 
         {/* Action icons */}
         <View style={styles.actionsRow}>
-          {/* Microphone icon */}
-          <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
-            <Ionicons name="mic" size={20} color="#5F6368" />
-          </TouchableOpacity>
-
           {/* Menu button (replaces profile initial) */}
           <TouchableOpacity
             style={styles.menuButton}
