@@ -80,6 +80,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     convenience?: { id: string; name: string; distance?: number };
     hotspring?: { id: string; name: string; distance?: number };
   }>({});
+  const [nearbyLoading, setNearbyLoading] = React.useState(false);
   
   // スワイプジェスチャーの設定
   const panResponder = React.useRef(
@@ -204,8 +205,9 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     // 即座に初期データを表示
     setPanelNearby(initialNearby);
 
-    // その後、詳細情報を取得して更新
+    // その後、詳細情報を取得して更新（無い場合は近傍探索で補完）
     (async () => {
+      setNearbyLoading(true);
       try {
         const updated: any = { ...initialNearby };
 
@@ -243,9 +245,29 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
           }
         }
 
+        // 近傍データが無い場合は周辺探索で補完
+        if (!updated.convenience) {
+          try {
+            const stores = await SupabaseService.fetchNearbyConvenienceStoresAround(parking.lat, parking.lng, 500, 1);
+            if (stores && stores.length > 0) {
+              updated.convenience = { id: stores[0].id, name: stores[0].name || 'コンビニ', distance: Math.round((stores as any)[0]._dist || 0) };
+            }
+          } catch {}
+        }
+        if (!updated.hotspring) {
+          try {
+            const springs = await SupabaseService.fetchNearbyHotSpringsAround(parking.lat, parking.lng, 2000, 1);
+            if (springs && springs.length > 0) {
+              updated.hotspring = { id: springs[0].id, name: springs[0].name || '温泉', distance: Math.round((springs as any)[0]._dist || 0) };
+            }
+          } catch {}
+        }
+
         setPanelNearby(updated);
       } catch (e) {
         console.warn('周辺施設詳細ロード失敗:', e);
+      } finally {
+        setNearbyLoading(false);
       }
     })();
   }, [visible, selectedSpot]);
@@ -562,9 +584,8 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               return (
                 <View key={index} style={styles.maxRateBlock}>
                   <Text style={styles.rateItemPrimary}>
-                    {formatDayType((rate as any).day_type || (rate as any).dayType)}最大¥{rate.price?.toLocaleString()}
+                    {formatDayType((rate as any).day_type || (rate as any).dayType)}最大¥{rate.price?.toLocaleString()} <Text style={styles.rateItemInlineRange}>({rangeDisplay})</Text>
                   </Text>
-                  <Text style={styles.rateItemSub}>適用時間: {rangeDisplay}</Text>
                 </View>
               );
             })}
@@ -987,19 +1008,6 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 </View>
               )}
 
-              {/* 駐車場タイプ（許容台数の直下） */}
-              {(parkingSpot as any).type && (
-                <View style={styles.parkingDetailRow}>
-                  <View style={styles.parkingDetailLeft}>
-                    <Ionicons name="flag-outline" size={14} color="#999" />
-                    <Text style={styles.parkingDetailLabel}>駐車場タイプ</Text>
-                  </View>
-                  <Text style={styles.parkingDetailValue}>
-                    {(parkingSpot as any).type}
-                  </Text>
-                </View>
-              )}
-
               {/* 営業時間（最下段） */}
               <View style={styles.parkingDetailRow}>
                 <View style={styles.parkingDetailLeft}>
@@ -1020,6 +1028,19 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                   </View>
                   <Text style={styles.parkingDetailValue}>
                     {(parkingSpot as any).elevation}m
+                  </Text>
+                </View>
+              )}
+
+              {/* 駐車場タイプ（標高の直下） */}
+              {((parkingSpot as any).type || (parkingSpot as any).parking_type) && (
+                <View style={styles.parkingDetailRow}>
+                  <View style={styles.parkingDetailLeft}>
+                    <Ionicons name="flag-outline" size={14} color="#999" />
+                    <Text style={styles.parkingDetailLabel}>駐車場タイプ</Text>
+                  </View>
+                  <Text style={styles.parkingDetailValue}>
+                    {(parkingSpot as any).type || (parkingSpot as any).parking_type}
                   </Text>
                 </View>
               )}
@@ -1071,12 +1092,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 <Text style={styles.nearbyTitle}>周辺施設</Text>
               </View>
               
-              {/* デバッグ用: データの存在を確認 */}
-              {!parkingSpot.nearestConvenienceStore && !parkingSpot.nearestHotspring && !panelNearby.convenience && !panelNearby.hotspring && (
-                <Text style={styles.nearbyNameCompact}>
-                  データを読み込み中...
-                </Text>
-              )}
+              {/* 可能な限り即時に表示（ローディング文言は出さない） */}
               
               {/* コンビニ情報 */}
               {(parkingSpot.nearestConvenienceStore || panelNearby.convenience) && (
@@ -1841,24 +1857,25 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   rateItem: {
-    fontSize: 12,
-    color: '#555',
-    lineHeight: 18,
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
     paddingLeft: 8,
+    fontWeight: '600',
   },
   maxRateBlock: {
     paddingLeft: 8,
     marginBottom: 4,
   },
   rateItemPrimary: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#333',
     fontWeight: '600',
   },
-  rateItemSub: {
-    fontSize: 11,
-    color: '#6B7280',
-    marginTop: 2,
+  rateItemInlineRange: {
+    fontSize: 14, // 料金と同サイズ
+    color: '#555',
+    fontWeight: '600',
   },
   originalFeesText: {
     fontSize: 11,
