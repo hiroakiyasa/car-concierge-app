@@ -798,8 +798,13 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               <Ionicons name="logo-google" size={18} color="#FFFFFF" />
             </TouchableOpacity>
             {/* マップは見分けやすい緑 */}
-            <TouchableOpacity onPress={openGoogleMaps} style={[styles.actionButton, styles.mapActionButton]}>
-              <Ionicons name="map" size={18} color="#FFFFFF" />
+            <TouchableOpacity
+              onPress={openGoogleMaps}
+              style={[styles.actionButton, styles.mapActionButton]}
+              accessibilityLabel="Googleマップで開く"
+              accessible
+            >
+              <Ionicons name="location-sharp" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </View>
@@ -1623,7 +1628,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#4285F4', // Google Blue
   },
   mapActionButton: {
-    backgroundColor: '#34A853', // Google Green
+    backgroundColor: '#DB4437', // Google Red (ピン連想)
   },
   content: {
     flex: 1,
