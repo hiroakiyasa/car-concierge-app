@@ -288,6 +288,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       operatingHours: parkingSpot.operatingHours,
       rates: parkingSpot.rates,
       type: parkingSpot.type,
+      parkingType: parkingSpot.parkingType,
       capacity: parkingSpot.capacity,
       nearestConvenienceStore: parkingSpot.nearestConvenienceStore,
       nearestHotspring: parkingSpot.nearestHotspring,
@@ -774,13 +775,33 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   // 駐車場タイプ（英語/コード値）を日本語に整形
   const formatParkingType = (): string => {
     if (!isParking) return '---';
-    const raw = (parkingSpot as any).parking_type || (parkingSpot as any).type;
+    // parkingType (SupabaseServiceでマッピング), type, parking_type の順で確認
+    const raw = parkingSpot.parkingType || (parkingSpot as any).type || (parkingSpot as any).parking_type;
+
+    console.log('🅿️ 駐車場タイプデバッグ:', {
+      parkingType: parkingSpot.parkingType,
+      type: (parkingSpot as any).type,
+      parking_type: (parkingSpot as any).parking_type,
+      raw: raw
+    });
+
     if (!raw) return '---';
-    const t = String(raw).toLowerCase();
+    const rawStr = String(raw);
+    const t = rawStr.toLowerCase();
+
+    // 既に日本語の場合はそのまま返す
+    if (rawStr.includes('平面駐車場') || rawStr.includes('立体駐車場') ||
+        rawStr.includes('機械式') || rawStr.includes('車中泊')) {
+      return rawStr;
+    }
+
+    // 英語の場合は変換
     if (t.includes('multi') || t.includes('立体') || t.includes('building')) return '立体駐車場';
     if (t.includes('flat') || t.includes('平面') || t.includes('outdoor')) return '平面駐車場';
-    if (t.includes('mechan') || t.includes('機械')) return '機械式駐車場';
-    return String(raw);
+    if (t.includes('mechan') || t.includes('機械')) return '機械式';
+    if (t.includes('camp') || t.includes('車中泊')) return '車中泊・キャンプ場';
+
+    return rawStr;
   };
   
   const openGoogleSearch = () => {
@@ -1029,22 +1050,25 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 <Ionicons name="time-outline" size={14} color="#374151" />
                 <Text style={styles.statText}>{formatOperatingHoursShort()}</Text>
               </View>
-              {(parkingSpot as any).elevation !== undefined && (parkingSpot as any).elevation !== null && (
-                <View style={styles.statChip}>
-                  <Ionicons name="trending-up-outline" size={14} color="#374151" />
-                  <Text style={styles.statText}>{(parkingSpot as any).elevation}m</Text>
-                </View>
-              )}
-              {(() => {
-                const typeText = formatParkingType();
-                if (typeText === '---') return null;
-                return (
+              {/* 標高と駐車場タイプ */}
+              <View style={styles.statsPair}>
+                {(parkingSpot as any).elevation !== undefined && (parkingSpot as any).elevation !== null && (
                   <View style={styles.statChip}>
-                    <Ionicons name="albums-outline" size={14} color="#374151" />
-                    <Text style={styles.statText}>{typeText}</Text>
+                    <Ionicons name="trending-up-outline" size={14} color="#374151" />
+                    <Text style={styles.statText}>標高 {(parkingSpot as any).elevation}m</Text>
                   </View>
-                );
-              })()}
+                )}
+                {(() => {
+                  const typeText = formatParkingType();
+                  if (typeText === '---') return null;
+                  return (
+                    <View style={styles.statChip}>
+                      <Ionicons name="car-sport-outline" size={14} color="#374151" />
+                      <Text style={styles.statText}>{typeText}</Text>
+                    </View>
+                  );
+                })()}
+              </View>
             </View>
             
             {/* Photos Preview in Overview */}
@@ -1948,6 +1972,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 6,
+  },
+  statsPair: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   statText: {
     fontSize: 13,
