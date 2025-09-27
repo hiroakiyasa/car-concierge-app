@@ -758,6 +758,18 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     // 7. データがない場合のより具体的なメッセージ
     return 'データ未登録';
   };
+
+  // 駐車場タイプ（英語/コード値）を日本語に整形
+  const formatParkingType = (): string => {
+    if (!isParking) return '---';
+    const raw = (parkingSpot as any).parking_type || (parkingSpot as any).type;
+    if (!raw) return '---';
+    const t = String(raw).toLowerCase();
+    if (t.includes('multi') || t.includes('立体') || t.includes('building')) return '立体駐車場';
+    if (t.includes('flat') || t.includes('平面') || t.includes('outdoor')) return '平面駐車場';
+    if (t.includes('mechan') || t.includes('機械')) return '機械式駐車場';
+    return String(raw);
+  };
   
   const openGoogleSearch = () => {
     const searchQuery = encodeURIComponent(selectedSpot.name);
@@ -1033,17 +1045,21 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               )}
 
               {/* 駐車場タイプ（標高の直下） */}
-              {parkingSpot.parkingType && (
-                <View style={styles.parkingDetailRow}>
-                  <View style={styles.parkingDetailLeft}>
-                    <Ionicons name="car-outline" size={14} color="#999" />
-                    <Text style={styles.parkingDetailLabel}>駐車場タイプ</Text>
+              {(() => {
+                const typeText = formatParkingType();
+                if (typeText === '---') return null;
+                return (
+                  <View style={styles.parkingDetailRow}>
+                    <View style={styles.parkingDetailLeft}>
+                      <Ionicons name="car-outline" size={14} color="#999" />
+                      <Text style={styles.parkingDetailLabel}>駐車場タイプ</Text>
+                    </View>
+                    <Text style={styles.parkingDetailValue}>
+                      {typeText}
+                    </Text>
                   </View>
-                  <Text style={styles.parkingDetailValue}>
-                    {parkingSpot.parkingType}
-                  </Text>
-                </View>
-              )}
+                );
+              })()}
             </View>
             
             {/* Photos Preview in Overview */}
@@ -1932,9 +1948,13 @@ const styles = StyleSheet.create({
   parkingDetailRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#F5F7FA',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    marginBottom: 8,
   },
   parkingDetailLeft: {
     flexDirection: 'row',
@@ -1942,14 +1962,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   parkingDetailLabel: {
-    fontSize: 13,
-    color: '#666',
+    fontSize: 14,
+    color: '#6B7280',
     marginLeft: 8,
+    fontWeight: '600',
   },
   parkingDetailValue: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#333',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
     textAlign: 'right',
     flex: 1,
   },
