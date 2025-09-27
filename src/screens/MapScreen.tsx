@@ -492,49 +492,70 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             currentFilter.parkingDuration.startDate // 入庫日時を渡す
           );
 
-          // 2000件を超えた場合、自動でズームイン
+          // 2000件を超えた場合、自動でズームイン（2000件以下になるまで段階的にズーム）
           if (result.totalCount > 2000) {
-            console.log(`⚠️ 駐車場が${result.totalCount}件あります。自動で地図をズームインします`);
+            console.log(`⚠️ 駐車場が${result.totalCount}件あります。2000件以下になるまで自動でズームインします`);
 
             // アラートを表示
             Alert.alert(
               '検索範囲が広すぎます',
-              `${result.totalCount}件の駐車場が見つかりました。地図を拡大してください。`,
+              `${result.totalCount}件の駐車場が見つかりました。自動で地図を拡大します。`,
               [{ text: 'OK', style: 'default' }]
             );
 
-            // 地図をズームイン（約50%ズーム）
-            const newRegion = {
-              ...searchRegion,
-              latitudeDelta: searchRegion.latitudeDelta * 0.5,
-              longitudeDelta: searchRegion.longitudeDelta * 0.5,
-            };
+            // 2000件以下になるまで段階的にズームイン
+            let zoomRegion = { ...searchRegion };
+            let zoomFactor = 0.5; // 初回は50%ズーム
+            let maxZoomAttempts = 5; // 最大5回まで試行
+            let currentAttempt = 0;
 
-            // mapRefが存在する場合はアニメーション付きでズーム
-            if (mapRef.current) {
-              mapRef.current.animateToRegion(newRegion, 500);
-            }
+            const performAutoZoom = async () => {
+              currentAttempt++;
 
-            // ズーム後の範囲で再検索
-            setTimeout(async () => {
+              // 地図をズームイン
+              zoomRegion = {
+                ...zoomRegion,
+                latitudeDelta: zoomRegion.latitudeDelta * zoomFactor,
+                longitudeDelta: zoomRegion.longitudeDelta * zoomFactor,
+              };
+
+              // mapRefが存在する場合はアニメーション付きでズーム
+              if (mapRef.current) {
+                mapRef.current.animateToRegion(zoomRegion, 500);
+              }
+
+              // ズーム後の範囲で再検索
               const retryResult = await SupabaseService.fetchParkingSpotsSortedByFee(
-                newRegion,
+                zoomRegion,
                 currentFilter.parkingDuration.durationInMinutes,
                 minElevation,
                 currentFilter.parkingDuration.startDate
               );
 
-              parkingSpots = retryResult.spots.filter(p =>
-                ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
-              );
-              console.log(`🅿️ ズーム後の料金フィルター結果: ${parkingSpots.length}件 (総数: ${retryResult.totalCount}件)`);
-              displaySpots.push(...parkingSpots);
+              console.log(`🔍 ズーム試行${currentAttempt}: 駐車場${retryResult.totalCount}件`);
 
-              // 結果を更新
-              setSearchResults(displaySpots);
-              setSearchStatus('complete');
-              setTimeout(() => setSearchStatus('idle'), 3000);
-            }, 600);
+              // 2000件以下になった、または最大試行回数に達した場合は結果を表示
+              if (retryResult.totalCount <= 2000 || currentAttempt >= maxZoomAttempts) {
+                parkingSpots = retryResult.spots.filter(p =>
+                  ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
+                );
+                console.log(`🅿️ 最終料金フィルター結果: ${parkingSpots.length}件 (総数: ${retryResult.totalCount}件)`);
+                displaySpots.push(...parkingSpots);
+
+                // 結果を更新
+                setSearchResults(displaySpots);
+                setSearchStatus('complete');
+                setTimeout(() => setSearchStatus('idle'), 3000);
+              } else {
+                // まだ2000件を超えている場合は、さらにズームイン
+                // 次回は60%ズーム（徐々に細かくズーム）
+                zoomFactor = 0.6;
+                setTimeout(() => performAutoZoom(), 600);
+              }
+            };
+
+            // 初回のズーム実行
+            setTimeout(() => performAutoZoom(), 600);
 
             return; // 早期リターン
           }
