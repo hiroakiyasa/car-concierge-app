@@ -1,5 +1,6 @@
 import { supabase } from '@/config/supabase';
 import { Spot, CoinParking, HotSpring, ConvenienceStore, GasStation, Festival, Region } from '@/types';
+import { ParkingHoursService } from './parking-hours.service';
 
 export class SupabaseService {
   // Fetch parking spots within a region
@@ -857,6 +858,14 @@ export class SupabaseService {
         }
       }
 
+      // 営業時間チェック
+      const parkingStartTime = entryAt || new Date();
+      const isOpenDuringParking = ParkingHoursService.isOpenDuringParkingTime(
+        hoursData,
+        parkingStartTime,
+        durationMinutes
+      );
+
       const result = {
         id: spot.id,
         name: spot.name,
@@ -871,7 +880,13 @@ export class SupabaseService {
         nearestConvenienceStore: nearestConvenienceStore,
         nearestHotspring: nearestHotspring,
         calculatedFee: spot.calculated_fee, // バックエンドで計算された料金
-        rank: spot.rank // バックエンドで付与されたランキング
+        rank: spot.rank, // バックエンドで付与されたランキング
+        isOpenDuringParking, // 営業時間内かのフラグ
+        operatingStatus: ParkingHoursService.getOperatingStatus(
+          hoursData,
+          parkingStartTime,
+          durationMinutes
+        ) // 営業状態の文字列
       } as CoinParking;
 
       // デバッグ用に最初の3件の結果をログ出力
@@ -879,18 +894,34 @@ export class SupabaseService {
         console.log(`✅ 変換後スポット[${index}]:`, {
           name: result.name,
           calculatedFee: result.calculatedFee,
-          rank: result.rank
+          rank: result.rank,
+          isOpenDuringParking: result.isOpenDuringParking,
+          operatingStatus: result.operatingStatus
         });
       }
 
       return result;
     });
 
-    // クライアント側で標高フィルターを適用（RPCがサポートしないため）
+    // クライアント側でフィルターを適用
+    let results = mapped;
+
     // 標高フィルター（elevationが未取得のスポットは除外しない＝温存）
-    const results = (minElevation !== undefined && minElevation > 0)
-      ? mapped.filter(s => (s as any).elevation == null || (s as any).elevation >= minElevation)
-      : mapped;
+    if (minElevation !== undefined && minElevation > 0) {
+      results = results.filter(s => (s as any).elevation == null || (s as any).elevation >= minElevation);
+    }
+
+    // 営業時間外の駐車場を除外
+    const openSpots = results.filter(spot => spot.isOpenDuringParking);
+    const closedSpots = results.filter(spot => !spot.isOpenDuringParking);
+
+    if (closedSpots.length > 0) {
+      console.log(`⏰ 営業時間外の駐車場を${closedSpots.length}件除外しました:`,
+        closedSpots.slice(0, 3).map(s => `${s.name} (${s.operatingStatus})`));
+    }
+
+    // 営業時間内の駐車場のみを返す
+    results = openSpots;
 
     return { spots: results, totalCount };
   }

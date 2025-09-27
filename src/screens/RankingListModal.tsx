@@ -144,11 +144,20 @@ export const RankingListModal: React.FC<RankingListModalProps> = ({
         
         <View style={styles.spotInfo}>
           <Text style={styles.spotName} numberOfLines={1}>{item.name}</Text>
+          {/* 営業時間表示 */}
+          {item.operatingStatus && (
+            <Text style={[
+              styles.operatingStatus,
+              !item.isOpenDuringParking && styles.operatingStatusClosed
+            ]} numberOfLines={1}>
+              {item.operatingStatus}
+            </Text>
+          )}
           {selectedSpot?.id === item.id && lastSelectedId === item.id && (
             <Text style={styles.tapForDetailText}>タップで詳細</Text>
           )}
         </View>
-        
+
         <Text style={styles.priceText}>{formatPrice(item)}</Text>
       </TouchableOpacity>
     );
@@ -316,6 +325,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: Colors.primary,
     marginTop: 2,
+  },
+  operatingStatus: {
+    fontSize: 10,
+    color: Colors.success,
+    marginTop: 2,
+  },
+  operatingStatusClosed: {
+    color: Colors.textSecondary,
   },
   priceText: {
     fontSize: 14,

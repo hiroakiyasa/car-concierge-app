@@ -23,6 +23,9 @@ export const MenuModal: React.FC<MenuModalProps> = ({
   navigation,
 }) => {
   const { user, isAuthenticated } = useAuthStore();
+  const openURL = (url: string) => {
+    try { require('react-native').Linking.openURL(url); } catch {}
+  };
 
   const handleNavigate = (screen: string) => {
     onClose();
@@ -135,6 +138,31 @@ export const MenuModal: React.FC<MenuModalProps> = ({
               >
                 <Ionicons name="information-circle-outline" size={20} color="#333" />
                 <Text style={styles.menuText}>このアプリについて</Text>
+              </TouchableOpacity>
+
+              {/* 公式リンク群（Aboutにもあるものをメニューにも表示） */}
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => openURL('https://trailfusionai.com/')}
+              >
+                <Ionicons name="globe-outline" size={20} color={Colors.primary} />
+                <Text style={[styles.menuText, { color: Colors.primary }]}>公式ウェブサイト</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => handleNavigate('Terms')}
+              >
+                <Ionicons name="document-text-outline" size={20} color="#333" />
+                <Text style={styles.menuText}>利用規約</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => handleNavigate('Privacy')}
+              >
+                <Ionicons name="shield-checkmark-outline" size={20} color="#333" />
+                <Text style={styles.menuText}>プライバシーポリシー</Text>
               </TouchableOpacity>
             </View>
           </TouchableWithoutFeedback>

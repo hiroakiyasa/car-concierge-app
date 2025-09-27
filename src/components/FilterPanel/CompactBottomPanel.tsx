@@ -331,6 +331,10 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
               setConvenienceSelected(true);
               setConvenienceSlider(radiusToSlider(30));
               setConvenienceRadius(30);
+              // 温泉もデフォルト表示だけ準備（100m）
+              setHotspringSelected(true);
+              setHotspringSlider(radiusToSlider(100));
+              setHotspringRadius(100);
             }
           }}
         >
@@ -348,13 +352,17 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
               e.stopPropagation();
               const next = !nearbyEnabled;
               setNearbyEnabled(next);
-              // タブが非表示でも、チェックON時はデフォルトでコンビニ半径を設定して有効化
+              // タブが非表示でも、チェックON時はデフォルトで半径を設定して有効化
               if (next) {
-                if (!convenienceSelected && !hotspringSelected) {
-                  const defaultR = 100;
+                if (!convenienceSelected) {
                   setConvenienceSelected(true);
-                  setConvenienceRadius(defaultR);
-                  setConvenienceSlider(radiusToSlider(defaultR));
+                  setConvenienceRadius(30);
+                  setConvenienceSlider(radiusToSlider(30));
+                }
+                if (!hotspringSelected) {
+                  setHotspringSelected(true);
+                  setHotspringRadius(100);
+                  setHotspringSlider(radiusToSlider(100));
                 }
               }
             }}
@@ -511,10 +519,10 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                   onPress={() => {
                     const newSelected = !hotspringSelected;
                     setHotspringSelected(newSelected);
-                    // 選択時にデフォルト500mを設定
+                    // 選択時にデフォルト100mを設定
                     if (newSelected && hotspringRadius < 10) {
-                      setHotspringRadius(500);
-                      setHotspringSlider(radiusToSlider(500));
+                      setHotspringRadius(100);
+                      setHotspringSlider(radiusToSlider(100));
                     }
                   }}
                 >
