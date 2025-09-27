@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   // Search Status Styles
   searchStatusContainer: {
     position: 'absolute',
-    top: 60,
+    bottom: 180, // 下側のパネル(160)より少し上
     alignSelf: 'center',
     zIndex: 1000,
   },
