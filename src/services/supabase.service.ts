@@ -748,7 +748,7 @@ export class SupabaseService {
     durationMinutes: number,
     minElevation?: number,
     entryAt?: Date // 追加: 入庫日時（ユーザー指定）
-  ): Promise<CoinParking[]> {
+  ): Promise<{ spots: CoinParking[], totalCount: number }> {
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
     
     const minLat = latitude - (latitudeDelta / 2);
@@ -795,10 +795,15 @@ export class SupabaseService {
       console.error('❌ Error fetching sorted parking spots:', error);
       console.error('🔄 フォールバックとして通常の検索を実行');
       // フォールバックとして通常の検索を実行
-      return this.fetchParkingSpots(region, minElevation);
+      const fallbackSpots = await this.fetchParkingSpots(region, minElevation);
+      return { spots: fallbackSpots, totalCount: fallbackSpots.length };
     }
 
     console.log(`💰 料金ソート済み駐車場を${data?.length || 0}件取得`);
+
+    // Extract total count from the first item (all items have the same total count)
+    const totalCount = data && data.length > 0 && data[0].total_spots_in_region ? data[0].total_spots_in_region : data?.length || 0;
+    console.log(`📊 地域内の駐車場総数: ${totalCount}件`);
 
     const mapped = (data || []).map((spot, index) => {
       // デバッグ用に最初の3件のデータ構造をログ出力
@@ -887,7 +892,7 @@ export class SupabaseService {
       ? mapped.filter(s => (s as any).elevation == null || (s as any).elevation >= minElevation)
       : mapped;
 
-    return results;
+    return { spots: results, totalCount };
   }
   
   // Fetch convenience store details by ID

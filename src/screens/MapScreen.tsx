@@ -485,16 +485,64 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         // 料金時間フィルターのみ有効な場合
         else if (hasParkingTimeFilter) {
           console.log('💰 料金時間フィルターのみ有効 - バックエンドで料金計算・ソート実行');
-          parkingSpots = await SupabaseService.fetchParkingSpotsSortedByFee(
+          const result = await SupabaseService.fetchParkingSpotsSortedByFee(
             searchRegion,
             currentFilter.parkingDuration.durationInMinutes,
             minElevation,
             currentFilter.parkingDuration.startDate // 入庫日時を渡す
           );
-          parkingSpots = parkingSpots.filter(p =>
+
+          // 500件を超えた場合、自動でズームイン
+          if (result.totalCount > 500) {
+            console.log(`⚠️ 駐車場が${result.totalCount}件あります。自動で地図をズームインします`);
+
+            // アラートを表示
+            Alert.alert(
+              '検索範囲が広すぎます',
+              `${result.totalCount}件の駐車場が見つかりました。地図を拡大してください。`,
+              [{ text: 'OK', style: 'default' }]
+            );
+
+            // 地図をズームイン（約50%ズーム）
+            const newRegion = {
+              ...searchRegion,
+              latitudeDelta: searchRegion.latitudeDelta * 0.5,
+              longitudeDelta: searchRegion.longitudeDelta * 0.5,
+            };
+
+            // mapRefが存在する場合はアニメーション付きでズーム
+            if (mapRef.current) {
+              mapRef.current.animateToRegion(newRegion, 500);
+            }
+
+            // ズーム後の範囲で再検索
+            setTimeout(async () => {
+              const retryResult = await SupabaseService.fetchParkingSpotsSortedByFee(
+                newRegion,
+                currentFilter.parkingDuration.durationInMinutes,
+                minElevation,
+                currentFilter.parkingDuration.startDate
+              );
+
+              parkingSpots = retryResult.spots.filter(p =>
+                ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
+              );
+              console.log(`🅿️ ズーム後の料金フィルター結果: ${parkingSpots.length}件 (総数: ${retryResult.totalCount}件)`);
+              displaySpots.push(...parkingSpots);
+
+              // 結果を更新
+              setSearchResults(displaySpots);
+              setSearchStatus('complete');
+              setTimeout(() => setSearchStatus('idle'), 3000);
+            }, 600);
+
+            return; // 早期リターン
+          }
+
+          parkingSpots = result.spots.filter(p =>
             ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
           );
-          console.log(`🅿️ 料金フィルター結果: ${parkingSpots.length}件`);
+          console.log(`🅿️ 料金フィルター結果: ${parkingSpots.length}件 (総数: ${result.totalCount}件)`);
           displaySpots.push(...parkingSpots);
         } 
         // どちらのフィルターも無効な場合
