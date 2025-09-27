@@ -1466,33 +1466,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
           </ScrollView>
         )}
         
-        {/* Convenience Store Info - Compact */}
-        {isConvenienceStore && (
-          <ScrollView 
-            style={styles.content}
-            showsVerticalScrollIndicator={false}
-            bounces={false}
-          >
-            <View style={[styles.hotSpringCompactCard, { marginTop: 0 }]}> 
-              <View style={styles.compactInfoGrid}>
-                {/* Address */}
-                {selectedSpot.address && (
-                  <View style={styles.compactInfoItem}>
-                    <View style={styles.compactInfoIcon}>
-                      <Ionicons name="location" size={14} color="#666" />
-                    </View>
-                    <View style={styles.compactInfoText}>
-                      <Text style={styles.compactInfoLabel}>住所</Text>
-                      <Text style={styles.compactInfoValue} numberOfLines={2}>
-                        {selectedSpot.address}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              </View>
-            </View>
-          </ScrollView>
-        )}
+        {/* Convenience Store Info - removed duplicate compact block (address shows below) */}
         
         {/* Gas Station Info - Compact Design */}
         {isGasStation && (
@@ -2372,9 +2346,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 16,
-    padding: 20,
+    marginTop: 6,
+    marginBottom: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -2384,7 +2360,7 @@ const styles = StyleSheet.create({
   convenienceInfoRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 12,
   },
   convenienceInfoIconContainer: {
     width: 36,
