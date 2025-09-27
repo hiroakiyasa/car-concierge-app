@@ -7,11 +7,26 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   version: '1.0.0',
   scheme: 'car-concierge-app',
   jsEngine: 'hermes',
+  splash: {
+    image: './assets/splash-icon.png',
+    resizeMode: 'contain',
+    backgroundColor: '#0B1220',
+  },
   android: {
-    package: 'com.hiroakiyasa.carconciergeapp'
+    package: 'com.hiroakiyasa.carconciergeapp',
+    splash: {
+      image: './assets/splash-icon.png',
+      resizeMode: 'contain',
+      backgroundColor: '#0B1220',
+    },
   },
   ios: {
-    bundleIdentifier: 'com.carconciege.app'
+    bundleIdentifier: 'com.carconciege.app',
+    splash: {
+      image: './assets/splash-icon.png',
+      resizeMode: 'contain',
+      backgroundColor: '#0B1220',
+    },
   },
   extra: {
     eas: {
