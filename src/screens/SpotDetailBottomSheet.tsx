@@ -670,24 +670,45 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     Linking.openURL(url);
   };
   
-  const openGoogleMaps = () => {
+  const openGoogleMaps = async () => {
     const { lat, lng } = selectedSpot;
     const label = encodeURIComponent(selectedSpot.name);
-    
-    const scheme = Platform.select({
-      ios: 'maps:0,0?q=',
-      android: 'geo:0,0?q='
-    });
     const latLng = `${lat},${lng}`;
-    const url = Platform.select({
-      ios: `${scheme}${label}@${latLng}`,
-      android: `${scheme}${latLng}(${label})`
-    });
-    
-    Linking.openURL(url as string).catch(() => {
+
+    try {
+      // 1) Google Maps アプリ優先（両OSで comgooglemaps スキームを試す）
+      const googleMapsAppURL = Platform.select({
+        ios: `comgooglemaps://?q=${label}&center=${latLng}&zoom=16`,
+        android: `comgooglemaps://?q=${latLng}(${label})`
+      }) as string;
+
+      if (await Linking.canOpenURL(googleMapsAppURL)) {
+        await Linking.openURL(googleMapsAppURL);
+        return;
+      }
+
+      // 2) OSデフォルトの地図アプリ
+      if (Platform.OS === 'ios') {
+        const appleMapsURL = `http://maps.apple.com/?q=${label}&ll=${latLng}`;
+        await Linking.openURL(appleMapsURL);
+        return;
+      } else {
+        // geo: はデフォルト地図（Google/その他）に委ねる
+        const geoURL = `geo:${latLng}?q=${latLng}(${label})`;
+        if (await Linking.canOpenURL(geoURL)) {
+          await Linking.openURL(geoURL);
+          return;
+        }
+      }
+
+      // 3) 最後のフォールバック: ブラウザでGoogle Maps
+      const browserUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      await Linking.openURL(browserUrl);
+    } catch (e) {
+      // 念のためブラウザにフォールバック
       const browserUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
       Linking.openURL(browserUrl);
-    });
+    }
   };
 
   const handleReviewSubmitted = () => {
