@@ -755,9 +755,11 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         {/* Title Section */}
         <View style={styles.titleSection}>
           <View style={styles.titleLeft}>
-            <Text style={styles.categoryIcon}>
-              {isParking ? '🅿️' : isHotSpring ? '♨️' : isGasStation ? '⛽' : '📍'}
-            </Text>
+            {!isParking && (
+              <Text style={styles.categoryIcon}>
+                {isHotSpring ? '♨️' : isGasStation ? '⛽' : isConvenienceStore ? '🏪' : '📍'}
+              </Text>
+            )}
             <View style={styles.titleInfo}>
               <View style={styles.nameRow}>
                 <View 
