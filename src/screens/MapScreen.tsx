@@ -11,6 +11,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CrossPlatformMap } from '@/components/Map/CrossPlatformMap';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useMainStore } from '@/stores/useMainStore';
 import { LocationService } from '@/services/location.service';
 import { SupabaseService } from '@/services/supabase.service';
@@ -129,6 +130,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       setHasInitialized(true);
       console.log('📍 地図の準備完了 - 現在の位置:', mapRegion);
       // 自動検索は行わない
+    }
+    if (isMapReady && mapRegion.latitude && mapRegion.longitude && !hasInitialized) {
+      // Appブート完了としてスプラッシュを閉じる合図
+      try { useMainStore.getState().setAppBootReady(true); } catch {}
     }
   }, [isMapReady, mapRegion.latitude, mapRegion.longitude, hasInitialized]);
   
@@ -340,7 +345,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       // 周辺検索・料金フィルターのフラグを先に計算（以降の処理で参照）
       const hasNearbyFilter = currentFilter.nearbyFilterEnabled &&
-        (((currentFilter.convenienceStoreRadius || 0) > 0) || ((currentFilter.hotSpringRadius || 0) > 0));
+        (((currentFilter.convenienceStoreRadius || 0) > 0) || ((currentFilter.toiletRadius || 0) > 0));
       const hasParkingTimeFilter = currentFilter.parkingTimeFilterEnabled;
 
       // 近傍検索（新アルゴリズム）: 周辺検索チェックON時のみ実行
@@ -348,13 +353,13 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       const nearbyOn = hasNearbyFilter;
       if (nearbyOn) {
         const requireConv = (currentFilter.convenienceStoreRadius || 0) > 0;
-        const requireHot = (currentFilter.hotSpringRadius || 0) > 0;
+        const requireToilet = (currentFilter.toiletRadius || 0) > 0;
 
         // 1) 駐車場は地図範囲内、施設は範囲+半径分を取得
         const parkings = await SupabaseService.fetchParkingSpots(searchRegion, minElevation);
         const metersToLat = (m: number) => m / 111000;
         const metersToLng = (m: number, lat: number) => m / (111000 * Math.cos((lat * Math.PI)/180));
-        const maxR = Math.max(currentFilter.convenienceStoreRadius || 0, currentFilter.hotSpringRadius || 0);
+        const maxR = Math.max(currentFilter.convenienceStoreRadius || 0, currentFilter.toiletRadius || 0);
         const expanded: Region = {
           latitude: searchRegion.latitude,
           longitude: searchRegion.longitude,
@@ -363,13 +368,13 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         };
         // 取得した施設の座標は数値化して扱う
         const conveniencesRaw = requireConv ? await SupabaseService.fetchConvenienceStores(expanded) : [];
-        const hotspringsRaw = requireHot ? await SupabaseService.fetchHotSprings(expanded) : [];
+        const toiletsRaw = requireToilet ? await SupabaseService.fetchToilets(expanded) : [];
         const conveniences = conveniencesRaw.map(s => ({
           ...s,
           lat: Number((s as any).lat),
           lng: Number((s as any).lng),
         }));
-        const hotsprings = hotspringsRaw.map(s => ({
+        const toilets = toiletsRaw.map(s => ({
           ...s,
           lat: Number((s as any).lat),
           lng: Number((s as any).lng),
@@ -385,8 +390,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           return 2*R*Math.asin(Math.sqrt(h));
         };
 
-        type Match = { pk: CoinParking, conv?: Spot, hot?: Spot, fee: number };
-        const matched: Match[] = [];
+        const matchedConv: Array<{ pk: CoinParking, conv: Spot, fee: number }> = [];
+        const matchedToilet: Array<{ pk: CoinParking, toilet: Spot, fee: number }> = [];
 
         for (const p of parkings) {
           // 営業時間チェック（指定時間中に1分でも営業時間外なら除外）
@@ -395,7 +400,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             if (!open) continue;
           }
           let conv: Spot | undefined;
-          let hot: Spot | undefined;
+          let toilet: Spot | undefined;
           const pLat = Number((p as any).lat);
           const pLng = Number((p as any).lng);
           if (requireConv) {
@@ -412,39 +417,65 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
               console.log(`✅ コンビニ半径OK: ${p.name} → ${(conv as any).name} 距離=${Math.round(d)}m (半径=${currentFilter.convenienceStoreRadius}m)`);
             }
           }
-          if (requireHot) {
+          if (requireToilet) {
             let best: any, bestD = Infinity;
-            for (const s of hotsprings) {
+            for (const s of toilets) {
               const d = distM(pLat, pLng, Number((s as any).lat), Number((s as any).lng));
-              if (d <= (currentFilter.hotSpringRadius || 0) && d < bestD) { best = s; bestD = d; }
+              if (d <= (currentFilter.toiletRadius || 0) && d < bestD) { best = s; bestD = d; }
             }
-            hot = best as Spot | undefined;
-            if (!hot) {
-              console.log(`🔍 温泉半径NG: ${p.name} 半径=${currentFilter.hotSpringRadius}m`);
+            toilet = best as Spot | undefined;
+            if (!toilet) {
+              console.log(`🔍 トイレ半径NG: ${p.name} 半径=${currentFilter.toiletRadius}m`);
             } else {
-              const d = distM(pLat, pLng, (hot as any).lat, (hot as any).lng);
-              console.log(`✅ 温泉半径OK: ${p.name} → ${(hot as any).name} 距離=${Math.round(d)}m (半径=${currentFilter.hotSpringRadius}m)`);
+              const d = distM(pLat, pLng, (toilet as any).lat, (toilet as any).lng);
+              console.log(`✅ トイレ半径OK: ${p.name} → ${(toilet as any).name} 距離=${Math.round(d)}m (半径=${currentFilter.toiletRadius}m)`);
             }
           }
-          const pass = (requireConv ? !!conv : true) && (requireHot ? !!hot : true);
-          if (!pass) continue;
           const fee = ParkingFeeCalculator.calculateFee(p, currentFilter.parkingDuration);
-          if (fee >= 0) matched.push({ pk: p, conv, hot, fee });
+          if (fee >= 0) {
+            if (requireConv && conv) matchedConv.push({ pk: p, conv, fee });
+            if (requireToilet && toilet) matchedToilet.push({ pk: p, toilet, fee });
+          }
         }
 
-        matched.sort((a,b) => a.fee - b.fee);
-        const top = matched.slice(0, 20);
-        const resultSpots: Spot[] = [];
-        top.forEach((m, idx) => { resultSpots.push({ ...(m.pk as any), calculatedFee: m.fee, rank: idx+1 } as any); });
-        top.forEach(m => { if (m.conv) resultSpots.push(m.conv); if (m.hot) resultSpots.push(m.hot); });
+        // それぞれ最大20件ずつ抽出（OR表示）
+        matchedConv.sort((a,b) => a.fee - b.fee);
+        matchedToilet.sort((a,b) => a.fee - b.fee);
+        const topConv = matchedConv.slice(0, 20);
+        const topToilet = matchedToilet.slice(0, 20);
 
-        // 重複排除
-        const unique = Array.from(new Map(resultSpots.map(s => [s.id, s])).values());
-        console.log(`✅ 新アルゴ: 駐車場${top.length}件 + 施設${unique.length - top.length}件`);
-        // 右上のカテゴリーで駐車場が未選択の場合は、駐車場を除外して施設のみ表示
-        const output = selectedCategories.has('コインパーキング')
-          ? unique
-          : unique.filter(s => s.category !== 'コインパーキング');
+        // まとめて安い順（OR）: 2集合を統合し、駐車場を安い順で一意化+連番rank
+        type Combined = { pk: CoinParking; fee: number; conv?: Spot; toilet?: Spot };
+        const combinedMap = new Map<string, Combined>();
+        const upsert = (id: string, rec: Combined) => {
+          const existing = combinedMap.get(id);
+          if (!existing) {
+            combinedMap.set(id, rec);
+          } else {
+            // より安い方を採用、施設情報は補完
+            if (rec.fee < existing.fee) {
+              combinedMap.set(id, { ...existing, ...rec });
+            } else {
+              if (rec.conv && !existing.conv) existing.conv = rec.conv;
+              if (rec.toilet && !existing.toilet) existing.toilet = rec.toilet;
+              combinedMap.set(id, existing);
+            }
+          }
+        };
+        topConv.forEach(m => upsert(String(m.pk.id), { pk: m.pk, fee: m.fee, conv: m.conv }));
+        topToilet.forEach(m => upsert(String(m.pk.id), { pk: m.pk, fee: m.fee, toilet: m.toilet }));
+        const combined = Array.from(combinedMap.values()).sort((a, b) => a.fee - b.fee);
+
+        const resultSpots: Spot[] = [];
+        combined.forEach((m, idx) => {
+          resultSpots.push({ ...(m.pk as any), calculatedFee: m.fee, rank: idx + 1 } as any);
+          if (m.conv) resultSpots.push(m.conv);
+          if (m.toilet) resultSpots.push(m.toilet);
+        });
+
+        // 重複排除（施設含む）
+        const output = Array.from(new Map(resultSpots.map(s => [s.id, s])).values());
+        console.log(`✅ 新アルゴ(OR/統合ランク): 駐車場${combined.length}件 + 施設, 合計ユニーク${output.length}件`);
         setSearchResults(output);
         setSearchStatus('complete');
         setTimeout(() => setSearchStatus('idle'), 3000);
@@ -469,19 +500,72 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         // 両方のフィルターが有効な場合（周辺検索 + 駐車料金）
         if (hasNearbyFilter && hasParkingTimeFilter) {
           console.log('🎯 周辺検索 + 料金フィルター有効 - バックエンドで複合処理');
-          // 周辺検索メソッドは既に料金計算も含んでいるので、これを使用
+          // OR検索: コンビニまたはトイレの近くにある駐車場を検索
           parkingSpots = await SupabaseService.fetchParkingSpotsByNearbyFilter(
             searchRegion,
             currentFilter.parkingDuration.durationInMinutes,
             currentFilter.convenienceStoreRadius,
-            currentFilter.hotSpringRadius,
+            currentFilter.toiletRadius,
             minElevation
           );
           // 営業時間チェック
           parkingSpots = parkingSpots.filter(p =>
             ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
           );
-          console.log(`🅿️ 周辺検索+料金フィルター結果: ${parkingSpots.length}件`);
+
+          // 料金順にソートして上位20件のみ取得
+          parkingSpots = parkingSpots.slice(0, 20);
+          console.log(`🅿️ 周辺検索+料金フィルター結果: ${parkingSpots.length}件（上位20件）`);
+
+          // 選択された駐車場の最寄りのコンビニとトイレを取得して表示
+          if (parkingSpots.length > 0 &&
+              currentFilter.nearbyCategories.has('コンビニ') &&
+              currentFilter.nearbyCategories.has('トイレ')) {
+
+            // 各駐車場の最寄りコンビニとトイレの情報を収集
+            const relatedConvenienceIds = new Set<string>();
+            const relatedToiletIds = new Set<string>();
+
+            parkingSpots.forEach(parking => {
+              // 最寄りコンビニ情報を解析
+              if (parking.nearest_convenience_store) {
+                try {
+                  const storeInfo = typeof parking.nearest_convenience_store === 'string'
+                    ? JSON.parse(parking.nearest_convenience_store)
+                    : parking.nearest_convenience_store;
+                  if (storeInfo.id) relatedConvenienceIds.add(storeInfo.id);
+                } catch {}
+              }
+
+              // 最寄りトイレ情報を解析
+              if (parking.nearest_toilet) {
+                try {
+                  const toiletInfo = typeof parking.nearest_toilet === 'string'
+                    ? JSON.parse(parking.nearest_toilet)
+                    : parking.nearest_toilet;
+                  if (toiletInfo.id) relatedToiletIds.add(toiletInfo.id);
+                } catch {}
+              }
+            });
+
+            // 関連するコンビニとトイレを取得
+            if (relatedConvenienceIds.size > 0) {
+              const stores = await SupabaseService.fetchConvenienceStoresByIds(
+                Array.from(relatedConvenienceIds)
+              );
+              displaySpots.push(...stores);
+              console.log(`🏪 関連コンビニ: ${stores.length}件`);
+            }
+
+            if (relatedToiletIds.size > 0) {
+              const toilets = await SupabaseService.fetchToiletsByIds(
+                Array.from(relatedToiletIds)
+              );
+              displaySpots.push(...toilets);
+              console.log(`🚻 関連トイレ: ${toilets.length}件`);
+            }
+          }
+
           displaySpots.push(...parkingSpots);
         }
         // 周辺検索のみ有効な場合
@@ -491,13 +575,66 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             searchRegion,
             currentFilter.parkingDuration.durationInMinutes,
             currentFilter.convenienceStoreRadius,
-            currentFilter.hotSpringRadius,
+            currentFilter.toiletRadius,
             minElevation
           );
           parkingSpots = parkingSpots.filter(p =>
             !hasParkingTimeFilter || ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
           );
-          console.log(`🅿️ 周辺検索結果: ${parkingSpots.length}件`);
+
+          // 料金順にソートして上位20件のみ取得
+          parkingSpots = parkingSpots.slice(0, 20);
+          console.log(`🅿️ 周辺検索結果: ${parkingSpots.length}件（上位20件）`);
+
+          // 選択された駐車場の最寄りのコンビニとトイレを取得して表示
+          if (parkingSpots.length > 0 &&
+              currentFilter.nearbyCategories.has('コンビニ') &&
+              currentFilter.nearbyCategories.has('トイレ')) {
+
+            // 各駐車場の最寄りコンビニとトイレの情報を収集
+            const relatedConvenienceIds = new Set<string>();
+            const relatedToiletIds = new Set<string>();
+
+            parkingSpots.forEach(parking => {
+              // 最寄りコンビニ情報を解析
+              if (parking.nearest_convenience_store) {
+                try {
+                  const storeInfo = typeof parking.nearest_convenience_store === 'string'
+                    ? JSON.parse(parking.nearest_convenience_store)
+                    : parking.nearest_convenience_store;
+                  if (storeInfo.id) relatedConvenienceIds.add(storeInfo.id);
+                } catch {}
+              }
+
+              // 最寄りトイレ情報を解析
+              if (parking.nearest_toilet) {
+                try {
+                  const toiletInfo = typeof parking.nearest_toilet === 'string'
+                    ? JSON.parse(parking.nearest_toilet)
+                    : parking.nearest_toilet;
+                  if (toiletInfo.id) relatedToiletIds.add(toiletInfo.id);
+                } catch {}
+              }
+            });
+
+            // 関連するコンビニとトイレを取得
+            if (relatedConvenienceIds.size > 0) {
+              const stores = await SupabaseService.fetchConvenienceStoresByIds(
+                Array.from(relatedConvenienceIds)
+              );
+              displaySpots.push(...stores);
+              console.log(`🏪 関連コンビニ: ${stores.length}件`);
+            }
+
+            if (relatedToiletIds.size > 0) {
+              const toilets = await SupabaseService.fetchToiletsByIds(
+                Array.from(relatedToiletIds)
+              );
+              displaySpots.push(...toilets);
+              console.log(`🚻 関連トイレ: ${toilets.length}件`);
+            }
+          }
+
           displaySpots.push(...parkingSpots);
         }
         // 料金時間フィルターのみ有効な場合
@@ -820,8 +957,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
               }
             }
 
-            // 温泉のID収集
-            if ((currentFilter.hotSpringRadius || 0) > 0 && parking.nearestHotspring) {
+            // トイレのID収集
+            if ((currentFilter.toiletRadius || 0) > 0 && parking.nearestToilet) {
               const hotspringData = parking.nearestHotspring as any;
               const springId = hotspringData?.id || hotspringData?.spring_id || hotspringData?.facility_id;
               const distance = hotspringData?.distance || hotspringData?.distance_m || hotspringData?.distance_meters || 0;
@@ -904,14 +1041,22 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       let nonParkingSpots: Spot[] = [];
       
       // コンビニ（周辺検索で既に追加されている場合はスキップ）
-      if (selectedCategories.has('コンビニ') && 
+      if (selectedCategories.has('コンビニ') &&
           !(currentFilter.nearbyFilterEnabled && (currentFilter.convenienceStoreRadius || 0) > 0)) {
         const convenienceStores = validSpots.filter(spot => spot.category === 'コンビニ').slice(0, 100);
         nonParkingSpots.push(...convenienceStores);
         displaySpots.push(...convenienceStores);
         console.log(`🏪 コンビニ: ${convenienceStores.length}件（最大100件）`);
       }
-      
+
+      // トイレ（絞り込みに関係なく表示）
+      if (selectedCategories.has('トイレ')) {
+        const toilets = validSpots.filter(spot => spot.category === 'トイレ').slice(0, 100);
+        nonParkingSpots.push(...toilets);
+        displaySpots.push(...toilets);
+        console.log(`🚻 トイレ: ${toilets.length}件（最大100件）`);
+      }
+
       // ガソリンスタンド（絞り込みに関係なく表示）
       if (selectedCategories.has('ガソリンスタンド')) {
         const gasStations = validSpots.filter(spot => spot.category === 'ガソリンスタンド').slice(0, 100);
@@ -919,9 +1064,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         displaySpots.push(...gasStations);
         console.log(`⛽ ガソリンスタンド: ${gasStations.length}件（最大100件）`);
       }
-      
+
       // 温泉（周辺検索で既に追加されている場合はスキップ）
-      if (selectedCategories.has('温泉') && 
+      if (selectedCategories.has('温泉') &&
           !(currentFilter.nearbyFilterEnabled && (currentFilter.hotSpringRadius || 0) > 0)) {
         const hotSprings = validSpots.filter(spot => spot.category === '温泉').slice(0, 100);
         nonParkingSpots.push(...hotSprings);
@@ -1417,8 +1562,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         return [];
       }
       
-      // 1. カテゴリーを表示順序で追加（後ろから順に：花火大会 → ガソリン → 温泉 → コンビニ）
-      const categoryOrder = ['お祭り・花火大会', 'ガソリンスタンド', '温泉', 'コンビニ'];
+      // 1. カテゴリーを表示順序で追加（後ろから順に：花火大会 → ガソリン → 温泉 → トイレ → コンビニ）
+      const categoryOrder = ['お祭り・花火大会', 'ガソリンスタンド', '温泉', 'トイレ', 'コンビニ'];
 
       // カテゴリー別にマーカーを追加
       categoryOrder.forEach((category) => {
@@ -1493,7 +1638,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                 spot={spot}
                 onPress={() => handleMarkerPress(spot)}
                 isSelected={false}
-                isNearbyFacility={searchFilter.nearbyFilterEnabled && (category === 'コンビニ' || category === '温泉')}
+                isNearbyFacility={searchFilter.nearbyFilterEnabled && (category === 'コンビニ' || category === '温泉' || category === 'トイレ')}
               />
             );
 
@@ -1713,7 +1858,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   // - 2回目以降は保存した地図範囲を復元し、地図は動かさない
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <StatusBar style="light" translucent backgroundColor="transparent" />
       <View style={styles.mapWrapper}>
         <CrossPlatformMap
           mapRef={mapRef}

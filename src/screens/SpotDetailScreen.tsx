@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CrossPlatformMap, Marker } from '@/components/Map/CrossPlatformMap';
 import { Ionicons } from '@expo/vector-icons';
@@ -185,6 +186,7 @@ export const SpotDetailScreen: React.FC<SpotDetailScreenProps> = ({ navigation }
   
   return (
     <View style={styles.container}>
+      <StatusBar style="light" translucent backgroundColor="transparent" />
       {/* Top 50%: Map */}
       <View style={styles.mapSection}>
         <CrossPlatformMap

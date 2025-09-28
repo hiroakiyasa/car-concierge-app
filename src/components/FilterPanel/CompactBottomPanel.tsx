@@ -39,11 +39,11 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const [minElevation, setMinElevation] = useState(0);
   const [sliderValue, setSliderValue] = useState(0); // 0-100のスライダー値
   const [convenienceRadius, setConvenienceRadius] = useState(30); // コンビニ検索半径（デフォルトON: 30m）
-  const [hotspringRadius, setHotspringRadius] = useState(0); // 温泉検索半径（デフォルトOFF）
+  const [toiletRadius, setToiletRadius] = useState(30); // デフォルト半径30m（未選択でも値は保持）
   const [convenienceSlider, setConvenienceSlider] = useState(16); // 約30m相当（radiusToSlider(30) ≈ 16）
-  const [hotspringSlider, setHotspringSlider] = useState(0); // 温泉スライダー初期値 0
+  const [toiletSlider, setToiletSlider] = useState(16); // 約30m相当（未選択でも値は保持）
   const [convenienceSelected, setConvenienceSelected] = useState(true); // コンビニをデフォルトON
-  const [hotspringSelected, setHotspringSelected] = useState(false); // 温泉はデフォルトOFF
+  const [toiletSelected, setToiletSelected] = useState(false); // トイレはデフォルトOFF
   
   // チェックボックス状態（各タブの有効/無効） - フィルター適用を制御
   // 初期値はストアのデフォルト（初期起動時は料金計算ON）
@@ -172,20 +172,20 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
     // 周辺検索フィルター（チェックボックスが有効な場合のみ適用）
     if (nearbyEnabled) {
       const effectiveConvenienceRadius = convenienceSelected ? convenienceRadius : 0;
-      const effectiveHotspringRadius = hotspringSelected ? hotspringRadius : 0;
+      const effectiveHotspringRadius = toiletSelected ? toiletRadius : 0;
       newFilter.nearbyFilterEnabled = effectiveConvenienceRadius > 0 || effectiveHotspringRadius > 0;
       newFilter.convenienceStoreRadius = effectiveConvenienceRadius;
-      newFilter.hotSpringRadius = effectiveHotspringRadius;
+      newFilter.toiletRadius = effectiveHotspringRadius;
 
       // チェックされた施設を絞り込み条件に反映（AND 条件）
       const categories = new Set<string>();
       if (effectiveConvenienceRadius > 0) categories.add('コンビニ');
-      if (effectiveHotspringRadius > 0) categories.add('温泉');
+      if (effectiveHotspringRadius > 0) categories.add('トイレ');
       newFilter.nearbyCategories = categories;
     } else {
       newFilter.nearbyFilterEnabled = false;
       newFilter.convenienceStoreRadius = 0;
-      newFilter.hotSpringRadius = 0;
+      newFilter.toiletRadius = 0;
       newFilter.nearbyCategories = new Set();
     }
 
@@ -199,7 +199,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
       周辺検索: nearbyEnabled ? '有効' : '無効',
       標高: elevationEnabled ? '有効' : '無効',
       コンビニ: nearbyEnabled && convenienceSelected ? `${convenienceRadius}m` : '無効',
-      温泉: nearbyEnabled && hotspringSelected ? `${hotspringRadius}m` : '無効',
+      トイレ: nearbyEnabled && toiletSelected ? `${toiletRadius}m` : '無効',
       最低標高: elevationEnabled ? `${minElevation}m` : '無効'
     });
 
@@ -252,9 +252,9 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
     setConvenienceRadius(sliderToRadius(value));
   };
   
-  const handleHotspringSliderChange = (value: number) => {
-    setHotspringSlider(value);
-    setHotspringRadius(sliderToRadius(value));
+  const handleToiletSliderChange = (value: number) => {
+    setToiletSlider(value);
+    setToiletRadius(sliderToRadius(value));
   };
   
   // 対数スケール変換関数（低標高域により細かい粒度、高標高域により広い粒度）
@@ -327,14 +327,14 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
           style={[styles.filterTab, activeTab === 'nearby' && styles.activeTab]}
           onPress={() => {
             setActiveTab('nearby');
-            // 初回選択時: コンビニのみON、温泉はOFF
-            if (!convenienceSelected && !hotspringSelected) {
+            // 初回選択時: コンビニのみON、トイレはOFF
+            if (!convenienceSelected && !toiletSelected) {
               setConvenienceSelected(true);
               setConvenienceRadius(30);
               setConvenienceSlider(radiusToSlider(30));
-              setHotspringSelected(false);
-              setHotspringRadius(0);
-              setHotspringSlider(0);
+              setToiletSelected(false);
+              setToiletRadius(30);
+              setToiletSlider(radiusToSlider(30));
             }
           }}
         >
@@ -352,16 +352,14 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
               e.stopPropagation();
               const next = !nearbyEnabled;
               setNearbyEnabled(next);
-              // ON時は「コンビニのみON、温泉OFF」で初期化
+              // ON時は「コンビニのみON、トイレOFF」で初期化
               if (next) {
                 setConvenienceSelected(true);
-                if (convenienceRadius <= 0) {
-                  setConvenienceRadius(30);
-                  setConvenienceSlider(radiusToSlider(30));
-                }
-                setHotspringSelected(false);
-                setHotspringRadius(0);
-                setHotspringSlider(0);
+                setConvenienceRadius(30);
+                setConvenienceSlider(radiusToSlider(30));
+                setToiletSelected(false);
+                setToiletRadius(30);
+                setToiletSlider(radiusToSlider(30));
               }
             }}
           >
@@ -471,7 +469,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                   onPress={() => {
                     const newSelected = !convenienceSelected;
                     setConvenienceSelected(newSelected);
-                    // 選択時にデフォルト100mを設定
+                    // 選択時にデフォルト30mを設定
                     if (newSelected && convenienceRadius < 10) {
                       setConvenienceRadius(30);
                       setConvenienceSlider(radiusToSlider(30));
@@ -510,23 +508,23 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                 </View>
               </View>
               
-              {/* 温泉 */}
+              {/* トイレ */}
               <View style={styles.facilityRow}>
                 <TouchableOpacity
-                  style={[styles.facilityButton, hotspringSelected && styles.facilityButtonActive]}
+                  style={[styles.facilityButton, toiletSelected && styles.facilityButtonActive]}
                   onPress={() => {
-                    const newSelected = !hotspringSelected;
-                    setHotspringSelected(newSelected);
-                    // 選択時にデフォルト100mを設定
-                    if (newSelected && hotspringRadius < 10) {
-                      setHotspringRadius(100);
-                      setHotspringSlider(radiusToSlider(100));
+                    const newSelected = !toiletSelected;
+                    setToiletSelected(newSelected);
+                    // 選択時にデフォルト30mを設定
+                    if (newSelected && toiletRadius < 10) {
+                      setToiletRadius(30);
+                      setToiletSlider(radiusToSlider(30));
                     }
                   }}
                 >
-                  <Text style={styles.facilityIcon}>♨️</Text>
-                  <Text style={[styles.facilityName, hotspringSelected && styles.facilityNameActive]}>
-                    温泉
+                  <Text style={styles.facilityIcon}>🚻</Text>
+                  <Text style={[styles.facilityName, toiletSelected && styles.facilityNameActive]}>
+                    トイレ
                   </Text>
                 </TouchableOpacity>
                 <View style={styles.sliderSection}>
@@ -535,13 +533,13 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                       style={styles.nearbySlider}
                       minimumValue={0}
                       maximumValue={100}
-                      value={hotspringSlider}
-                      onValueChange={handleHotspringSliderChange}
-                      minimumTrackTintColor={hotspringSelected ? '#FF6B6B' : '#E0E0E0'}
+                      value={toiletSlider}
+                      onValueChange={handleToiletSliderChange}
+                      minimumTrackTintColor={toiletSelected ? '#FF6B6B' : '#E0E0E0'}
                       maximumTrackTintColor="#E0E0E0"
-                      thumbTintColor={hotspringSelected ? '#FF6B6B' : '#999'}
+                      thumbTintColor={toiletSelected ? '#FF6B6B' : '#999'}
                       step={1}
-                      disabled={!hotspringSelected}
+                      disabled={!toiletSelected}
                     />
                     <View style={styles.sliderScaleLabels}>
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', left: 0 }]}>10m</Text>
@@ -550,8 +548,8 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
                       <Text style={[styles.sliderScaleLabel, { position: 'absolute', right: -10 }]}>1000m</Text>
                     </View>
                   </View>
-                  <Text style={[styles.radiusValue, !hotspringSelected && styles.radiusValueDisabled]}>
-                    {hotspringRadius}m
+                  <Text style={[styles.radiusValue, !toiletSelected && styles.radiusValueDisabled]}>
+                    {toiletRadius}m
                   </Text>
                 </View>
               </View>
@@ -560,9 +558,9 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
               {/* 統合検索ボタン - 右側に配置 */}
               <TouchableOpacity
                 style={[styles.nearbySearchButtonLarge, 
-                  (!convenienceSelected && !hotspringSelected) && styles.nearbySearchButtonLargeDisabled]}
+                  (!convenienceSelected && !toiletSelected) && styles.nearbySearchButtonLargeDisabled]}
                 onPress={handleSearch}
-                disabled={!convenienceSelected && !hotspringSelected}
+                disabled={!convenienceSelected && !toiletSelected}
               >
                 <Ionicons name="search" size={28} color={Colors.white} />
               </TouchableOpacity>

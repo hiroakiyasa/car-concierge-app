@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { MaterialIcons, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/utils/constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface TopCategoryTabsProps {
   selectedCategories: Set<string>;
@@ -11,6 +12,7 @@ interface TopCategoryTabsProps {
 const categories = [
   { id: 'コインパーキング', label: '駐車場', icon: 'local-parking', iconFamily: 'MaterialIcons' },
   { id: 'コンビニ', label: 'コンビニ', icon: 'store', iconFamily: 'MaterialIcons' },
+  { id: 'トイレ', label: 'トイレ', icon: 'wc', iconFamily: 'MaterialIcons' },
   { id: '温泉', label: '温泉', icon: 'hot-tub', iconFamily: 'FontAwesome5' },
   { id: 'お祭り・花火大会', label: 'お祭り', icon: 'sparkles', iconFamily: 'Ionicons' },
   { id: 'ガソリンスタンド', label: 'ガソリン', icon: 'local-gas-station', iconFamily: 'MaterialIcons' },
@@ -20,6 +22,7 @@ export const TopCategoryTabs: React.FC<TopCategoryTabsProps> = ({
   selectedCategories,
   onCategoryToggle,
 }) => {
+  const insets = useSafeAreaInsets();
   const renderIcon = (category: any) => {
     const size = 16;
     const isActive = selectedCategories.has(category.id);
@@ -35,7 +38,10 @@ export const TopCategoryTabs: React.FC<TopCategoryTabsProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[
+      styles.container,
+      { top: (Platform.OS === 'ios' ? 64 : 58) + insets.top },
+    ]}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}

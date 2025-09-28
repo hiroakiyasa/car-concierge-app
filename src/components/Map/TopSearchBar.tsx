@@ -4,6 +4,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMainStore } from '@/stores/useMainStore';
 import { Colors } from '@/utils/constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface TopSearchBarProps {
   onMenuPress: () => void;
@@ -20,6 +21,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   placeholder = 'ここで検索',
   dismissSignal,
 }) => {
+  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
@@ -89,7 +91,13 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
     setSuggestions(withPlaceHint);
   };
   return (
-    <View style={styles.wrapper} pointerEvents="box-none">
+    <View
+      style={[
+        styles.wrapper,
+        { top: (Platform.OS === 'ios' ? 6 : 4) + insets.top },
+      ]}
+      pointerEvents="box-none"
+    >
       <View style={styles.container}>
         {/* Google Maps pin icon */}
         <TouchableOpacity style={styles.leadingIcon}>
