@@ -57,6 +57,81 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       return () => clearTimeout(t);
     }
   }, [showDetailSheet, selectedSpot, mapRegion?.latitudeDelta, mapRegion?.longitudeDelta]);
+
+  // 詳細シート表示時に、駐車場の周辺施設マーカーを地図に出す（お気に入り遷移などの非マーカー起点でも確実に表示）
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!showDetailSheet || !selectedSpot) return;
+        if (selectedSpot.category !== 'コインパーキング') return;
+        if (nearbyFacilities && nearbyFacilities.length > 0) return;
+
+        const parking = selectedSpot as CoinParking;
+        const facilities: Spot[] = [];
+
+        // コンビニ
+        if (parking.nearestConvenienceStore) {
+          const raw: any = parking.nearestConvenienceStore;
+          if (raw.lat && raw.lng) {
+            facilities.push({ ...(raw as any), category: 'コンビニ' } as Spot);
+          } else if (raw.id || raw.store_id || raw.facility_id) {
+            const id = String(raw.id || raw.store_id || raw.facility_id);
+            try {
+              const store = await SupabaseService.fetchConvenienceStoreById(id);
+              if (store) facilities.push(store as any);
+            } catch {}
+          }
+        } else {
+          try {
+            const stores = await SupabaseService.fetchNearbyConvenienceStoresAround(parking.lat, parking.lng, 500, 1);
+            if (stores && stores.length > 0) facilities.push(stores[0] as any);
+          } catch {}
+        }
+
+        // 温泉
+        if (parking.nearestHotspring) {
+          const raw: any = parking.nearestHotspring;
+          if (raw.lat && raw.lng) {
+            facilities.push({ ...(raw as any), category: '温泉' } as Spot);
+          } else if (raw.id || raw.spring_id || raw.facility_id) {
+            const id = String(raw.id || raw.spring_id || raw.facility_id);
+            try {
+              const spring = await SupabaseService.fetchHotSpringById(id);
+              if (spring) facilities.push(spring as any);
+            } catch {}
+          }
+        } else {
+          try {
+            const springs = await SupabaseService.fetchNearbyHotSpringsAround(parking.lat, parking.lng, 2000, 1);
+            if (springs && springs.length > 0) facilities.push(springs[0] as any);
+          } catch {}
+        }
+
+        // トイレ
+        const rawToilet: any = (parking as any).nearest_toilet;
+        if (rawToilet) {
+          if (rawToilet.lat && rawToilet.lng) {
+            facilities.push({ ...(rawToilet as any), category: 'トイレ', id: rawToilet.id || `toilet_${rawToilet.toilet_id}` } as any);
+          } else if (rawToilet.id || rawToilet.toilet_id || rawToilet.facility_id) {
+            const id = String(rawToilet.id || rawToilet.toilet_id || rawToilet.facility_id);
+            try {
+              const toilet = await SupabaseService.fetchToiletById(id);
+              if (toilet) facilities.push(toilet as any);
+            } catch {}
+          }
+        } else {
+          try {
+            const toilets = await SupabaseService.fetchNearbyToiletsAround(parking.lat, parking.lng, 1000, 1);
+            if (toilets && toilets.length > 0) facilities.push(toilets[0] as any);
+          } catch {}
+        }
+
+        if (facilities.length > 0) setNearbyFacilities(facilities);
+      } catch (e) {
+        console.warn('周辺施設マーカー初期化失敗:', e);
+      }
+    })();
+  }, [showDetailSheet, selectedSpot]);
   
   const {
     mapRegion,

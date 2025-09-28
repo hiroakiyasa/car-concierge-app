@@ -19,6 +19,7 @@ import { useMainStore } from '@/stores/useMainStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { Colors } from '@/utils/constants';
 import { FavoriteButton } from '@/components/FavoriteButton';
+import { ConvenienceBrandLogo } from '@/components/BrandLogos';
 import { RatingDisplay } from '@/components/RatingDisplay';
 import { ReviewService } from '@/services/review.service';
 import { ReviewModal } from '@/components/Reviews/ReviewModal';
@@ -77,8 +78,9 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
 
   // パネル内で即時に周辺施設を表示するためのローカル状態
   const [panelNearby, setPanelNearby] = React.useState<{
-    convenience?: { id: string; name: string; distance?: number };
+    convenience?: { id: string; name: string; distance?: number; brand?: string };
     hotspring?: { id: string; name: string; distance?: number };
+    toilet?: { id: string; name: string; distance?: number };
   }>({});
   const [nearbyLoading, setNearbyLoading] = React.useState(false);
   
@@ -212,17 +214,52 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         const updated: any = { ...initialNearby };
 
         // コンビニ: 詳細情報を取得
-        if (parking.nearestConvenienceStore && !updated.convenience?.name.includes('コンビニ')) {
+        if (parking.nearestConvenienceStore) {
           const raw = parking.nearestConvenienceStore as any;
           const id = String(raw.id || raw.store_id || '');
 
-          if (id && !raw.name) {  // nameが既にある場合はスキップ
+          if (id) {
             const store = await SupabaseService.fetchConvenienceStoreById(id);
             if (store) {
               updated.convenience = {
                 ...updated.convenience,
                 id: store.id,
-                name: store.name
+                name: store.name,
+                brand: store.brand || store.name
+              };
+            }
+          }
+        }
+
+        // トイレ: 詳細情報を取得
+        if (parking.nearest_toilet) {
+          const raw = parking.nearest_toilet as any;
+          const id = String(raw.id || raw.toilet_id || '');
+          const distance = raw.distance_m || raw.distance || undefined;
+
+          if (raw.name) {
+            updated.toilet = {
+              id: id,
+              name: raw.name,
+              distance: distance ? Math.round(distance) : undefined
+            };
+          } else if (id) {
+            // IDから詳細情報を取得
+            try {
+              const toilet = await SupabaseService.fetchToiletById(id);
+              if (toilet) {
+                updated.toilet = {
+                  id: toilet.id,
+                  name: toilet.name || 'トイレ',
+                  distance: distance ? Math.round(distance) : undefined
+                };
+              }
+            } catch (e) {
+              console.warn('トイレ情報取得エラー:', e);
+              updated.toilet = {
+                id: id,
+                name: 'トイレ',
+                distance: distance ? Math.round(distance) : undefined
               };
             }
           }
@@ -296,18 +333,21 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     });
 
     // まず即座に仮の名前を設定
-    const tempNames: { convenience?: string; hotspring?: string } = {};
+    const tempNames: { convenience?: string; hotspring?: string; toilet?: string } = {};
     if (parkingSpot.nearestConvenienceStore) {
       tempNames.convenience = 'コンビニ';
     }
     if (parkingSpot.nearestHotspring) {
       tempNames.hotspring = '温泉';
     }
+    if (parkingSpot.nearest_toilet) {
+      tempNames.toilet = 'トイレ';
+    }
     setFacilityNames(tempNames);
 
     // 施設名を取得（IDベースで正確な情報を取得）
     const fetchFacilityNames = async () => {
-      const names: { convenience?: string; hotspring?: string } = {};
+      const names: { convenience?: string; hotspring?: string; toilet?: string } = {};
 
       // デバッグ: データ構造を確認
       console.log('🔍 駐車場の周辺施設データ:', {
@@ -315,6 +355,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         parkingName: parkingSpot.name,
         nearestConvenienceStore: parkingSpot.nearestConvenienceStore,
         nearestHotspring: parkingSpot.nearestHotspring,
+        nearest_toilet: parkingSpot.nearest_toilet,
       });
 
       // コンビニ情報
@@ -917,19 +958,32 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         onPress={onClose}
       />
       
-      <View style={styles.sheet}>
-        {/* Premium Header with Handle */}
-        <View style={styles.handleContainer}>
-          <View style={styles.handle} />
-        </View>
+      <View style={[styles.sheet, !isParking && styles.sheetNonParking]}>
+        {/* Premium Header with Handle (非駐車場ではハンドルを非表示にして更に上に詰める) */}
+        {isParking && (
+          <View style={styles.handleContainer}>
+            <View style={styles.handle} />
+          </View>
+        )}
         
         {/* Title Section */}
-        <View style={styles.titleSection}>
+        <View
+          style={[
+            styles.titleSection,
+            isParking ? styles.titleSectionParking : styles.titleSectionNonParking,
+          ]}
+        >
           <View style={styles.titleLeft}>
             {!isParking && (
-              <Text style={styles.categoryIcon}>
-                {isHotSpring ? '♨️' : isGasStation ? '⛽' : isConvenienceStore ? '🏪' : '📍'}
-              </Text>
+              isConvenienceStore ? (
+                <View style={{ marginRight: 10 }}>
+                  <ConvenienceBrandLogo brand={(selectedSpot as any).brand || selectedSpot.name} size={24} label={false} />
+                </View>
+              ) : (
+                <Text style={styles.categoryIcon}>
+                  {isHotSpring ? '♨️' : isGasStation ? '⛽' : '📍'}
+                </Text>
+              )
             )}
             <View style={styles.titleInfo}>
               <View style={styles.nameRow}>
@@ -1146,13 +1200,34 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 <Ionicons name="location-outline" size={14} color="#666" />
                 <Text style={styles.nearbyTitle}>周辺施設</Text>
               </View>
-              
+
               {/* 可能な限り即時に表示（ローディング文言は出さない） */}
-              
+
               {/* コンビニ情報 */}
               {(parkingSpot.nearestConvenienceStore || panelNearby.convenience) && (
-                <View style={styles.nearbyItemCompact}>
-                  <Text style={styles.nearbyIconCompact}>🏪</Text>
+                <TouchableOpacity
+                  style={styles.nearbyItemCompact}
+                  onPress={() => {
+                    (async () => {
+                      try {
+                        const id = panelNearby.convenience?.id;
+                        if (!id) return;
+                        const store = await SupabaseService.fetchConvenienceStoreById(String(id));
+                        if (store) {
+                          useMainStore.getState().selectSpot(store);
+                        }
+                      } catch (e) { console.warn('コンビニ詳細遷移エラー:', e); }
+                    })();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.nearbyIconContainer}>
+                    {panelNearby.convenience?.brand ? (
+                      <ConvenienceBrandLogo brand={panelNearby.convenience.brand} size={20} label={false} />
+                    ) : (
+                      <Text style={styles.nearbyIconCompact}>🏪</Text>
+                    )}
+                  </View>
                   <Text style={styles.nearbyNameCompact} numberOfLines={1}>
                     {panelNearby.convenience?.name || facilityNames.convenience || 'コンビニ'}
                   </Text>
@@ -1165,12 +1240,27 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                           return distance !== undefined ? `${Math.round(distance)}m` : '---';
                         })()}
                   </Text>
-                </View>
+                </TouchableOpacity>
               )}
 
               {/* 温泉情報 */}
               {(parkingSpot.nearestHotspring || panelNearby.hotspring) && (
-                <View style={styles.nearbyItemCompact}>
+                <TouchableOpacity
+                  style={styles.nearbyItemCompact}
+                  onPress={() => {
+                    (async () => {
+                      try {
+                        const id = panelNearby.hotspring?.id;
+                        if (!id) return;
+                        const spring = await SupabaseService.fetchHotSpringById(String(id));
+                        if (spring) {
+                          useMainStore.getState().selectSpot(spring);
+                        }
+                      } catch (e) { console.warn('温泉詳細遷移エラー:', e); }
+                    })();
+                  }}
+                  activeOpacity={0.7}
+                >
                   <Text style={styles.nearbyIconCompact}>♨️</Text>
                   <Text style={styles.nearbyNameCompact} numberOfLines={1}>
                     {panelNearby.hotspring?.name || facilityNames.hotspring || '温泉'}
@@ -1184,7 +1274,41 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                           return distance !== undefined ? `${Math.round(distance)}m` : '---';
                         })()}
                   </Text>
-                </View>
+                </TouchableOpacity>
+              )}
+
+              {/* トイレ情報 */}
+              {(parkingSpot.nearest_toilet || panelNearby.toilet) && (
+                <TouchableOpacity
+                  style={styles.nearbyItemCompact}
+                  onPress={() => {
+                    (async () => {
+                      try {
+                        const id = panelNearby.toilet?.id;
+                        if (!id) return;
+                        const toilet = await SupabaseService.fetchToiletById(String(id).replace('toilet_', ''));
+                        if (toilet) {
+                          useMainStore.getState().selectSpot(toilet);
+                        }
+                      } catch (e) { console.warn('トイレ詳細遷移エラー:', e); }
+                    })();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.nearbyIconCompact}>🚻</Text>
+                  <Text style={styles.nearbyNameCompact} numberOfLines={1}>
+                    {panelNearby.toilet?.name || facilityNames.toilet || 'トイレ'}
+                  </Text>
+                  <Text style={styles.nearbyDistanceCompact}>
+                    {panelNearby.toilet?.distance !== undefined
+                      ? `${panelNearby.toilet.distance}m`
+                      : (() => {
+                          const data = (parkingSpot.nearest_toilet as any) || {};
+                          const distance = data.distance_m || data.distance || data.distance_meters;
+                          return distance !== undefined ? `${Math.round(distance)}m` : '---';
+                        })()}
+                  </Text>
+                </TouchableOpacity>
               )}
             </View>
             
@@ -1359,6 +1483,8 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         {isHotSpring && (
           <ScrollView 
             style={styles.content}
+            contentInsetAdjustmentBehavior="never"
+            contentContainerStyle={{ paddingTop: 0 }}
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
@@ -1472,6 +1598,8 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         {isGasStation && (
           <ScrollView 
             style={styles.content}
+            contentInsetAdjustmentBehavior="never"
+            contentContainerStyle={{ paddingTop: 0 }}
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
@@ -1567,6 +1695,8 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         {isConvenienceStore && (
           <ScrollView
             style={styles.content}
+            contentInsetAdjustmentBehavior="never"
+            contentContainerStyle={{ paddingTop: 0 }}
             showsVerticalScrollIndicator={false}
             bounces={false}
           >
@@ -1678,14 +1808,18 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 10,
   },
+  sheetNonParking: {
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+  },
   handleContainer: {
     alignItems: 'center',
-    paddingTop: 6,
-    paddingBottom: 4,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   handle: {
-    width: 36,
-    height: 4,
+    width: 32,
+    height: 3,
     backgroundColor: '#E0E0E0',
     borderRadius: 2,
   },
@@ -1693,10 +1827,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 6,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
+  },
+  titleSectionParking: {
+    paddingTop: 4,
+    paddingBottom: 2,
+    borderBottomWidth: 1,
+  },
+  titleSectionNonParking: {
+    paddingTop: 0,
+    paddingBottom: 0,
+    borderBottomWidth: 0,
   },
   titleLeft: {
     flexDirection: 'row',
@@ -1774,6 +1917,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 0, // 上に詰める
   },
   tabContent: {
     flex: 1,
@@ -2133,6 +2278,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     width: 20,
   },
+  nearbyIconContainer: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   nearbyNameCompact: {
     flex: 1,
     fontSize: 15,
@@ -2346,7 +2497,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     marginHorizontal: 16,
-    marginTop: 6,
+    marginTop: 0, // 上に詰める
     marginBottom: 12,
     padding: 16,
     borderWidth: 1,

@@ -1,5 +1,5 @@
 import { supabase } from '@/config/supabase';
-import { Spot, CoinParking, HotSpring, ConvenienceStore, GasStation, Festival, Region } from '@/types';
+import { Spot, CoinParking, HotSpring, ConvenienceStore, GasStation, Festival, Toilet, Region } from '@/types';
 import { ParkingHoursService } from './parking-hours.service';
 
 export class SupabaseService {
@@ -325,25 +325,25 @@ export class SupabaseService {
   // Fetch festivals
   static async fetchFestivals(region: Region): Promise<Festival[]> {
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
-    
+
     // NaNチェック
     if (isNaN(latitude) || isNaN(longitude) || isNaN(latitudeDelta) || isNaN(longitudeDelta)) {
       console.error('無効な座標値:', { latitude, longitude, latitudeDelta, longitudeDelta });
       return [];
     }
-    
+
     const minLat = latitude - (latitudeDelta / 2);
     const maxLat = latitude + (latitudeDelta / 2);
     const minLng = longitude - (longitudeDelta / 2);
     const maxLng = longitude + (longitudeDelta / 2);
-    
+
     console.log('🎆 お祭り・花火大会検索範囲:', {
       北端緯度: maxLat.toFixed(6),
       南端緯度: minLat.toFixed(6),
       東端経度: maxLng.toFixed(6),
       西端経度: minLng.toFixed(6),
     });
-    
+
     const { data, error } = await supabase
       .from('festivals')
       .select('*')
@@ -352,21 +352,70 @@ export class SupabaseService {
       .gte('lng', minLng)
       .lte('lng', maxLng)
       .limit(30);
-    
+
     if (error) {
       console.error('Error fetching festivals:', error);
       return [];
     }
-    
+
     console.log(`🎆 Supabaseから${data?.length || 0}件のお祭り・花火大会を取得`);
-    
+
     return (data || []).map(festival => ({
       ...festival,
       category: 'お祭り・花火大会',
       operatingHours: festival.Hours || festival.operating_hours || festival.operatingHours,
     })) as Festival[];
   }
-  
+
+  // Fetch toilets
+  static async fetchToilets(region: Region): Promise<Toilet[]> {
+    const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
+
+    // NaNチェック
+    if (isNaN(latitude) || isNaN(longitude) || isNaN(latitudeDelta) || isNaN(longitudeDelta)) {
+      console.error('無効な座標値:', { latitude, longitude, latitudeDelta, longitudeDelta });
+      return [];
+    }
+
+    const minLat = latitude - (latitudeDelta / 2);
+    const maxLat = latitude + (latitudeDelta / 2);
+    const minLng = longitude - (longitudeDelta / 2);
+    const maxLng = longitude + (longitudeDelta / 2);
+
+    console.log('🚻 トイレ検索範囲:', {
+      北端緯度: maxLat.toFixed(6),
+      南端緯度: minLat.toFixed(6),
+      東端経度: maxLng.toFixed(6),
+      西端経度: minLng.toFixed(6),
+    });
+
+    const { data, error } = await supabase
+      .from('toilets')
+      .select('*')
+      .gte('lat', minLat)
+      .lte('lat', maxLat)
+      .gte('lng', minLng)
+      .lte('lng', maxLng)
+      .limit(100);
+
+    if (error) {
+      console.error('Error fetching toilets:', error);
+      return [];
+    }
+
+    console.log(`🚻 Supabaseから${data?.length || 0}件のトイレを取得`);
+
+    return (data || []).map(toilet => ({
+      id: `toilet_${toilet.id}`,
+      idNumber: toilet.id,
+      name: toilet.name,
+      lat: toilet.lat,
+      lng: toilet.lng,
+      address: toilet.address,
+      category: 'トイレ',
+    })) as Toilet[];
+  }
+
   // Fetch all spots by category
   static async fetchSpotsByCategories(
     region: Region,
@@ -374,35 +423,109 @@ export class SupabaseService {
     minElevation?: number
   ): Promise<Spot[]> {
     const results: Spot[] = [];
-    
+
     if (categories.has('コインパーキング')) {
       const parkingSpots = await this.fetchParkingSpots(region, minElevation);
       results.push(...parkingSpots);
     }
-    
+
     if (categories.has('コンビニ')) {
       const stores = await this.fetchConvenienceStores(region);
       results.push(...stores);
     }
-    
+
+    if (categories.has('トイレ')) {
+      const toilets = await this.fetchToilets(region);
+      results.push(...toilets);
+    }
+
     if (categories.has('温泉')) {
       const springs = await this.fetchHotSprings(region);
       results.push(...springs);
     }
-    
+
     if (categories.has('ガソリンスタンド')) {
       const stations = await this.fetchGasStations(region);
       results.push(...stations);
     }
-    
+
     if (categories.has('お祭り・花火大会')) {
       const festivals = await this.fetchFestivals(region);
       results.push(...festivals);
     }
-    
+
     return results;
   }
   
+  // Fetch convenience stores by IDs
+  static async fetchConvenienceStoresByIds(ids: string[]): Promise<ConvenienceStore[]> {
+    if (!ids || ids.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from('convenience_stores')
+      .select('*')
+      .in('id', ids);
+
+    if (error) {
+      console.error('Error fetching convenience stores by IDs:', error);
+      return [];
+    }
+
+    return (data || []).map(store => ({
+      ...store,
+      category: 'コンビニ' as const,
+      lat: store.lat || store.latitude,
+      lng: store.lng || store.longitude,
+    }));
+  }
+
+  // Fetch toilets by IDs
+  static async fetchToiletsByIds(ids: string[]): Promise<Toilet[]> {
+    if (!ids || ids.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from('toilets')
+      .select('*')
+      .in('id', ids);
+
+    if (error) {
+      console.error('Error fetching toilets by IDs:', error);
+      return [];
+    }
+
+    return (data || []).map(toilet => ({
+      ...toilet,
+      category: 'トイレ' as const,
+      lat: toilet.lat || toilet.latitude,
+      lng: toilet.lng || toilet.longitude,
+    }));
+  }
+
+  // Fetch single toilet by ID
+  static async fetchToiletById(id: string): Promise<Toilet | null> {
+    if (!id) return null;
+
+    const { data, error } = await supabase
+      .from('toilets')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('Error fetching toilet by ID:', error);
+      return null;
+    }
+
+    if (!data) return null;
+
+    return {
+      ...data,
+      category: 'トイレ' as const,
+      lat: data.lat || data.latitude,
+      lng: data.lng || data.longitude,
+    };
+  }
+
   // Subscribe to realtime updates
   static subscribeToUpdates(
     tableName: string,
@@ -416,10 +539,10 @@ export class SupabaseService {
         callback
       )
       .subscribe();
-    
+
     return subscription;
   }
-  
+
   // Unsubscribe from updates
   static unsubscribe(subscription: any) {
     supabase.removeChannel(subscription);
@@ -430,7 +553,7 @@ export class SupabaseService {
     region: Region,
     durationMinutes: number,
     convenienceRadius?: number,
-    hotspringRadius?: number,
+    toiletRadius?: number,
     minElevation?: number
   ): Promise<CoinParking[]> {
     const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
@@ -444,7 +567,7 @@ export class SupabaseService {
       地図範囲: `${minLat.toFixed(4)}-${maxLat.toFixed(4)}, ${minLng.toFixed(4)}-${maxLng.toFixed(4)}`,
       駐車時間: `${durationMinutes}分`,
       コンビニ: convenienceRadius ? `${convenienceRadius}m以内` : '指定なし',
-      温泉: hotspringRadius ? `${hotspringRadius}m以内` : '指定なし',
+      トイレ: toiletRadius ? `${toiletRadius}m以内` : '指定なし',
       最低標高: minElevation ? `${minElevation}m` : '制限なし',
     });
 
@@ -455,7 +578,7 @@ export class SupabaseService {
         .select(`
           *,
           nearest_convenience_store,
-          nearest_hotspring
+          nearest_toilet
         `)
         .gte('lat', minLat)
         .lte('lat', maxLat)
@@ -481,41 +604,45 @@ export class SupabaseService {
       
       console.log(`📍 地図範囲内の駐車場: ${data.length}件`);
       
-      // フィルタリング処理
+      // フィルタリング処理 (OR検索: コンビニまたはトイレのいずれかが範囲内)
       let filteredData = data;
-      
-      // コンビニ距離フィルター
-      if (convenienceRadius && convenienceRadius > 0) {
+
+      // コンビニとトイレのOR検索
+      if ((convenienceRadius && convenienceRadius > 0) || (toiletRadius && toiletRadius > 0)) {
         filteredData = filteredData.filter(spot => {
-          if (!spot.nearest_convenience_store) return false;
-          try {
-            const nearestStore = typeof spot.nearest_convenience_store === 'string' 
-              ? JSON.parse(spot.nearest_convenience_store) 
-              : spot.nearest_convenience_store;
-            const distance = nearestStore.distance_m || nearestStore.distance || 999999;
-            return distance <= convenienceRadius;
-          } catch {
-            return false;
+          let isNearConvenience = false;
+          let isNearToilet = false;
+
+          // コンビニ距離チェック
+          if (convenienceRadius && convenienceRadius > 0 && spot.nearest_convenience_store) {
+            try {
+              const nearestStore = typeof spot.nearest_convenience_store === 'string'
+                ? JSON.parse(spot.nearest_convenience_store)
+                : spot.nearest_convenience_store;
+              const distance = nearestStore.distance_m || nearestStore.distance || 999999;
+              isNearConvenience = distance <= convenienceRadius;
+            } catch {
+              isNearConvenience = false;
+            }
           }
-        });
-        console.log(`🏪 コンビニフィルター適用後: ${filteredData.length}件`);
-      }
-      
-      // 温泉距離フィルター
-      if (hotspringRadius && hotspringRadius > 0) {
-        filteredData = filteredData.filter(spot => {
-          if (!spot.nearest_hotspring) return false;
-          try {
-            const nearestSpring = typeof spot.nearest_hotspring === 'string' 
-              ? JSON.parse(spot.nearest_hotspring) 
-              : spot.nearest_hotspring;
-            const distance = nearestSpring.distance_m || nearestSpring.distance || 999999;
-            return distance <= hotspringRadius;
-          } catch {
-            return false;
+
+          // トイレ距離チェック
+          if (toiletRadius && toiletRadius > 0 && spot.nearest_toilet) {
+            try {
+              const nearestToilet = typeof spot.nearest_toilet === 'string'
+                ? JSON.parse(spot.nearest_toilet)
+                : spot.nearest_toilet;
+              const distance = nearestToilet.distance_m || nearestToilet.distance || 999999;
+              isNearToilet = distance <= toiletRadius;
+            } catch {
+              isNearToilet = false;
+            }
           }
+
+          // OR条件: いずれかが範囲内ならtrue
+          return isNearConvenience || isNearToilet;
         });
-        console.log(`♨️ 温泉フィルター適用後: ${filteredData.length}件`);
+        console.log(`🏪🚻 コンビニ(${convenienceRadius}m)またはトイレ(${toiletRadius}m)フィルター適用後: ${filteredData.length}件`);
       }
       
       // 料金計算とソート（フロントエンドの料金計算ロジックを簡易実装）
@@ -1164,6 +1291,51 @@ export class SupabaseService {
         category: '温泉',
         operatingHours: spring.Hours || spring.operating_hours || spring.operatingHours,
       } as HotSpring));
+
+    return withDist;
+  }
+
+  // Fetch nearby toilets around a lat/lng within radius (meters)
+  static async fetchNearbyToiletsAround(
+    lat: number,
+    lng: number,
+    radiusMeters: number,
+    limit: number = 1
+  ): Promise<Toilet[]> {
+    if (!lat || !lng || !radiusMeters || radiusMeters <= 0) return [];
+
+    const latDelta = radiusMeters / 111000;
+    const lngDelta = radiusMeters / (111000 * Math.cos((lat * Math.PI) / 180));
+
+    const minLat = lat - latDelta;
+    const maxLat = lat + latDelta;
+    const minLng = lng - lngDelta;
+    const maxLng = lng + lngDelta;
+
+    const { data, error } = await supabase
+      .from('toilets')
+      .select('*')
+      .gte('lat', minLat)
+      .lte('lat', maxLat)
+      .gte('lng', minLng)
+      .lte('lng', maxLng)
+      .limit(200);
+
+    if (error || !data) return [];
+
+    const withDist = data.map((s: any) => ({
+      ...s,
+      _dist: Math.hypot((s.lat - lat) * 111000, (s.lng - lng) * 111000 * Math.cos((lat * Math.PI) / 180))
+    }))
+      .filter(s => s._dist <= radiusMeters)
+      .sort((a, b) => a._dist - b._dist)
+      .slice(0, limit)
+      .map(t => ({
+        ...t,
+        id: `toilet_${t.id}`,
+        idNumber: t.id,
+        category: 'トイレ',
+      } as Toilet));
 
     return withDist;
   }
