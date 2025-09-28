@@ -13,6 +13,7 @@ interface MainStore {
   errorMessage: string | null;
   userLocation: Location | null;
   locationPermission: 'granted' | 'denied' | 'restricted' | null;
+  appBootReady: boolean;
   
   // Actions
   setSearchFilter: (filter: Partial<SearchFilter>) => void;
@@ -25,6 +26,7 @@ interface MainStore {
   setUserLocation: (location: Location | null) => void;
   setLocationPermission: (permission: 'granted' | 'denied' | 'restricted' | null) => void;
   toggleCategory: (category: string) => void;
+  setAppBootReady: (ready: boolean) => void;
   resetState: () => void;
 }
 
@@ -73,6 +75,7 @@ export const useMainStore = create<MainStore>((set, get) => ({
   errorMessage: null,
   userLocation: null,
   locationPermission: null,
+  appBootReady: false,
   
   // Actions
   setSearchFilter: (filter) => set((state) => ({
@@ -94,6 +97,8 @@ export const useMainStore = create<MainStore>((set, get) => ({
   setUserLocation: (location) => set({ userLocation: location }),
   
   setLocationPermission: (permission) => set({ locationPermission: permission }),
+  
+  setAppBootReady: (ready) => set({ appBootReady: ready }),
   
   toggleCategory: (category) => set((state) => {
     const newCategories = new Set(state.searchFilter.selectedCategories);
@@ -118,5 +123,6 @@ export const useMainStore = create<MainStore>((set, get) => ({
     showingSpotDetail: false,
     isLoading: false,
     errorMessage: null,
+    appBootReady: false,
   }),
 }));
