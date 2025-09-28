@@ -207,10 +207,11 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
 
     // トイレの即座表示
     if (parking.nearest_toilet) {
-      const raw = parking.nearest_toilet as any;
+      const rawAny = parking.nearest_toilet as any;
+      const raw = typeof rawAny === 'string' ? (() => { try { return JSON.parse(rawAny); } catch { return {}; } })() : rawAny;
       const storedDistance = raw.distance_m || raw.distance || raw.distance_meters;
       initialNearby.toilet = {
-        id: raw.id || raw.toilet_id,
+        id: String(raw.id || raw.toilet_id || ''),
         name: raw.name || 'トイレ',
         distance: storedDistance ? Math.round(storedDistance) : undefined
       };
@@ -245,9 +246,10 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
 
         // トイレ: 詳細情報を取得（既にRPCから名前が取得されているので、それを使用）
         if (parking.nearest_toilet) {
-          const raw = parking.nearest_toilet as any;
+          const rawAny = parking.nearest_toilet as any;
+          const raw = typeof rawAny === 'string' ? (() => { try { return JSON.parse(rawAny); } catch { return {}; } })() : rawAny;
           const id = String(raw.id || raw.toilet_id || '');
-          const distance = raw.distance_m || raw.distance || undefined;
+          const distance = raw.distance_m || raw.distance || raw.distance_meters || undefined;
 
           // RPCから既に名前が取得されているので、それを使用
           updated.toilet = {
@@ -1272,13 +1274,18 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                     {panelNearby.toilet?.name || facilityNames.toilet || 'トイレ'}
                   </Text>
                   <Text style={styles.nearbyDistanceCompact}>
-                    {panelNearby.toilet?.distance !== undefined
-                      ? `${panelNearby.toilet.distance}m`
-                      : (() => {
-                          const data = (parkingSpot.nearest_toilet as any) || {};
-                          const distance = data.distance_m || data.distance || data.distance_meters;
-                          return distance !== undefined ? `${Math.round(distance)}m` : '---';
-                        })()}
+                    {(() => {
+                      if (panelNearby.toilet?.distance !== undefined) return `${panelNearby.toilet.distance}m`;
+                      const rawAny = (parkingSpot as any).nearest_toilet;
+                      if (!rawAny) return '---';
+                      try {
+                        const data = typeof rawAny === 'string' ? JSON.parse(rawAny) : rawAny;
+                        const distance = data.distance_m || data.distance || data.distance_meters;
+                        return distance !== undefined ? `${Math.round(distance)}m` : '---';
+                      } catch {
+                        return '---';
+                      }
+                    })()}
                   </Text>
                 </TouchableOpacity>
               )}

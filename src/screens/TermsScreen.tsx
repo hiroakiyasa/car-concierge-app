@@ -170,6 +170,17 @@ export const TermsScreen: React.FC<TermsScreenProps> = ({ navigation }) => {
           </Text>
         </View>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>第12条（駐車場利用に関する遵守事項）</Text>
+          <Text style={styles.sectionContent}>
+            1. ユーザーは、コインパーキングを利用する際、各駐車場運営会社が定める利用規約・場内掲示・係員の指示等に従うものとします。
+            {'\n\n'}
+            2. 当社は駐車場の運営に関与しておらず、駐車場内外で発生した事故・盗難・損壊・トラブルその他一切の事項について責任を負いません。問題が生じた場合は、当事者間または駐車場運営会社の規定に従い解決してください。
+            {'\n\n'}
+            3. 駐車中の長時間アイドリングや騒音行為、周辺住民・他の利用者に迷惑となる行為は禁止します。各地域の条例・駐車場のルールに従ってください。
+          </Text>
+        </View>
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>
             以上

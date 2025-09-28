@@ -25,7 +25,7 @@ export class SupabaseService {
     // クエリビルダーを作成
     let query = supabase
       .from('parking_spots')
-      .select('*, nearest_convenience_store, nearest_hotspring')
+      .select('*, nearest_convenience_store, nearest_hotspring, nearest_toilet')
       .gte('lat', minLat)
       .lte('lat', maxLat)
       .gte('lng', minLng)
@@ -99,6 +99,19 @@ export class SupabaseService {
           console.error('Raw data:', spot.nearest_hotspring);
         }
       }
+
+      // トイレ情報（iOS/Android差異対策: string JSON or object 両対応）
+      let nearestToilet = null as any;
+      if ((spot as any).nearest_toilet) {
+        try {
+          nearestToilet = typeof (spot as any).nearest_toilet === 'string'
+            ? JSON.parse((spot as any).nearest_toilet)
+            : (spot as any).nearest_toilet;
+        } catch (error) {
+          console.error('Nearest toilet JSON parse error:', error);
+          console.error('Raw data:', (spot as any).nearest_toilet);
+        }
+      }
       
       return {
         ...spot,
@@ -111,6 +124,9 @@ export class SupabaseService {
         parkingType: spot.type, // 駐車場タイプ（平面駐車場、立体駐車場、機械式など）
         nearestConvenienceStore,
         nearestHotspring,
+        // 両表記をサポート: nearest_toilet は元データ互換、nearestToilet はJS側互換
+        nearest_toilet: nearestToilet,
+        nearestToilet,
       };
     }) as CoinParking[];
     
@@ -119,7 +135,8 @@ export class SupabaseService {
     // 近隣施設データの詳細確認
     const withConvenience = results.filter(p => p.nearestConvenienceStore).length;
     const withHotspring = results.filter(p => p.nearestHotspring).length;
-    console.log(`📊 近隣施設データ: コンビニ付き ${withConvenience}件, 温泉付き ${withHotspring}件`);
+    const withToilet = results.filter(p => (p as any).nearestToilet).length;
+    console.log(`📊 近隣施設データ: コンビニ付き ${withConvenience}件, 温泉付き ${withHotspring}件, トイレ付き ${withToilet}件`);
     
     // さらに詳細なデバッグ
     if (results && results.length > 0) {
@@ -131,8 +148,9 @@ export class SupabaseService {
         hasNearestHotspring: !!sample.nearestHotspring,
         nearestHotspring: sample.nearestHotspring,
         rawData: {
-          nearest_convenience_store: (data && data[0]) ? data[0].nearest_convenience_store : null,
-          nearest_hotspring: (data && data[0]) ? data[0].nearest_hotspring : null
+          nearest_convenience_store: (data && data[0]) ? (data as any)[0].nearest_convenience_store : null,
+          nearest_hotspring: (data && data[0]) ? (data as any)[0].nearest_hotspring : null,
+          nearest_toilet: (data && data[0]) ? (data as any)[0].nearest_toilet : null,
         }
       });
       

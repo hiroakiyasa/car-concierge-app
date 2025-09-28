@@ -48,6 +48,23 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   const [hasInitialized, setHasInitialized] = useState(false);
   const [nearbyFacilities, setNearbyFacilities] = useState<Spot[]>([]);
   
+  // ストア（render前に参照する値はここで初期化してTDZを回避）
+  const {
+    mapRegion,
+    setMapRegion,
+    searchResults,
+    setSearchResults,
+    userLocation,
+    setUserLocation,
+    isLoading,
+    setIsLoading,
+    searchFilter,
+    selectedSpot,
+    selectSpot,
+  } = useMainStore();
+  // Androidで検索中に一瞬マーカーが消える現象を防ぐため、最後に取得した非空の結果を保持
+  const [stableResults, setStableResults] = useState<Spot[]>([]);
+  
   // 詳細シート表示中に、パネルのアニメーション完了後もう一度確実に25%位置へ再センタリング
   useEffect(() => {
     if (showDetailSheet && selectedSpot) {
@@ -133,19 +150,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     })();
   }, [showDetailSheet, selectedSpot]);
   
-  const {
-    mapRegion,
-    setMapRegion,
-    searchResults,
-    setSearchResults,
-    userLocation,
-    setUserLocation,
-    isLoading,
-    setIsLoading,
-    searchFilter,
-    selectedSpot,
-    selectSpot,
-  } = useMainStore();
+  // （上で初期化済み）
+
+  // 検索結果が非空の時にのみ、描画用の安定配列を更新
+  useEffect(() => {
+    if (Array.isArray(searchResults) && searchResults.length > 0) {
+      setStableResults(searchResults);
+    }
+  }, [searchResults]);
   
   // Initialize location
   useEffect(() => {
@@ -1948,9 +1960,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           showsCompass={false}
           rotateEnabled={false}
         >
-          {isMapReady && !isLoading && (() => {
+          {isMapReady && (() => {
             try {
-              const allMarkers = renderMarkers();
+              // 検索結果が空の間は直近の安定結果を使って描画
+              const currentResults = (searchResults && searchResults.length > 0) ? searchResults : stableResults;
+              const allMarkers = (() => {
+                const original = searchResults;
+                // 一時的にレンダリング対象を差し替え
+                (useMainStore.getState() as any).searchResults = currentResults as any;
+                const m = renderMarkers();
+                // 元に戻す
+                (useMainStore.getState() as any).searchResults = original as any;
+                return m;
+              })();
               const validMarkers = allMarkers.filter((marker, index) => {
                 if (!marker) {
                   console.log(`⚠️ Null marker detected at index ${index}`);

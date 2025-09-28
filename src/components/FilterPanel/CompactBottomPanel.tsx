@@ -43,7 +43,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const [convenienceSlider, setConvenienceSlider] = useState(16); // 約30m相当（radiusToSlider(30) ≈ 16）
   const [toiletSlider, setToiletSlider] = useState(16); // 約30m相当（未選択でも値は保持）
   const [convenienceSelected, setConvenienceSelected] = useState(true); // コンビニをデフォルトON
-  const [toiletSelected, setToiletSelected] = useState(true); // トイレもデフォルトON
+  const [toiletSelected, setToiletSelected] = useState(false); // トイレはデフォルトOFF（周辺検索OFFのため無効）
   
   // チェックボックス状態（各タブの有効/無効） - フィルター適用を制御
   // 初期値はストアのデフォルト（初期起動時は料金計算ON）
@@ -54,7 +54,7 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
   const [parkingEnabled, setParkingEnabled] = useState<boolean>(
     !!searchFilter?.parkingTimeFilterEnabled
   );
-  const [nearbyEnabled, setNearbyEnabled] = useState(true);
+  const [nearbyEnabled, setNearbyEnabled] = useState(false);
   const [elevationEnabled, setElevationEnabled] = useState(false);
   
   // スワイプ用のAnimation値（初期値を設定）
