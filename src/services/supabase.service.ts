@@ -505,10 +505,13 @@ export class SupabaseService {
   static async fetchToiletById(id: string): Promise<Toilet | null> {
     if (!id) return null;
 
+    // IDから数値部分を抽出（例: "toilet_7462" → 7462）
+    const numericId = id.replace(/^toilet_/, '');
+
     const { data, error } = await supabase
       .from('toilets')
       .select('*')
-      .eq('id', id)
+      .eq('id', numericId)
       .single();
 
     if (error) {
@@ -912,7 +915,7 @@ export class SupabaseService {
     }
 
     console.log('🚀 RPC呼び出し実行:', { function: 'get_parking_spots_sorted_by_fee', params: rpcParams });
-    
+
     const { data, error } = await supabase.rpc('get_parking_spots_sorted_by_fee', rpcParams);
 
     console.log('📡 RPC呼び出し結果:', {
@@ -920,6 +923,38 @@ export class SupabaseService {
       hasError: !!error,
       errorDetails: error ? { message: error.message, details: error.details, hint: error.hint } : null
     });
+
+    // 生データを詳細に確認
+    if (data && data.length > 0) {
+      console.log('🔍🔍 RPC生データ詳細チェック:', {
+        firstItem: data[0],
+        allKeys: Object.keys(data[0]),
+        hasNearest: {
+          convenience: 'nearest_convenience_store' in data[0],
+          hotspring: 'nearest_hotspring' in data[0],
+          toilet: 'nearest_toilet' in data[0]
+        },
+        values: {
+          convenience: data[0].nearest_convenience_store,
+          hotspring: data[0].nearest_hotspring,
+          toilet: data[0].nearest_toilet
+        }
+      });
+    }
+
+    // より詳細なデバッグログ
+    if (data && data.length > 0) {
+      console.log('🔍 RPC結果の詳細確認 - 最初のスポット:', {
+        name: data[0].name,
+        has_nearest_toilet: 'nearest_toilet' in data[0],
+        nearest_toilet_value: data[0].nearest_toilet,
+        has_nearest_convenience: 'nearest_convenience_store' in data[0],
+        nearest_convenience_value: data[0].nearest_convenience_store,
+        has_nearest_hotspring: 'nearest_hotspring' in data[0],
+        nearest_hotspring_value: data[0].nearest_hotspring,
+        全データ: JSON.stringify(data[0])
+      });
+    }
 
     // 最初のデータのtypeフィールドを確認
     if (data && data.length > 0) {
@@ -995,6 +1030,17 @@ export class SupabaseService {
         }
       }
 
+      let nearestToilet = null;
+      if (spot.nearest_toilet) {
+        try {
+          nearestToilet = typeof spot.nearest_toilet === 'string'
+            ? JSON.parse(spot.nearest_toilet)
+            : spot.nearest_toilet;
+        } catch (e) {
+          console.warn(`トイレデータパース失敗 for ${spot.name}:`, e);
+        }
+      }
+
       // 営業時間チェック
       const parkingStartTime = entryAt || new Date();
       const isOpenDuringParking = ParkingHoursService.isOpenDuringParkingTime(
@@ -1017,6 +1063,7 @@ export class SupabaseService {
         parkingType: spot.type, // 駐車場タイプ
         nearestConvenienceStore: nearestConvenienceStore,
         nearestHotspring: nearestHotspring,
+        nearest_toilet: nearestToilet,
         calculatedFee: spot.calculated_fee, // バックエンドで計算された料金
         rank: spot.rank, // バックエンドで付与されたランキング
         isOpenDuringParking, // 営業時間内かのフラグ

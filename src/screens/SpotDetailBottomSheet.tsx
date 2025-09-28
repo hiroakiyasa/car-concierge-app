@@ -52,6 +52,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   const [facilityNames, setFacilityNames] = React.useState<{
     convenience?: string;
     hotspring?: string;
+    toilet?: string;
   }>({});
   const [reviewStats, setReviewStats] = React.useState<{
     average: number;
@@ -204,6 +205,17 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       };
     }
 
+    // トイレの即座表示
+    if (parking.nearest_toilet) {
+      const raw = parking.nearest_toilet as any;
+      const storedDistance = raw.distance_m || raw.distance || raw.distance_meters;
+      initialNearby.toilet = {
+        id: raw.id || raw.toilet_id,
+        name: raw.name || 'トイレ',
+        distance: storedDistance ? Math.round(storedDistance) : undefined
+      };
+    }
+
     // 即座に初期データを表示
     setPanelNearby(initialNearby);
 
@@ -231,52 +243,33 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
           }
         }
 
-        // トイレ: 詳細情報を取得
+        // トイレ: 詳細情報を取得（既にRPCから名前が取得されているので、それを使用）
         if (parking.nearest_toilet) {
           const raw = parking.nearest_toilet as any;
           const id = String(raw.id || raw.toilet_id || '');
           const distance = raw.distance_m || raw.distance || undefined;
 
-          if (raw.name) {
-            updated.toilet = {
-              id: id,
-              name: raw.name,
-              distance: distance ? Math.round(distance) : undefined
-            };
-          } else if (id) {
-            // IDから詳細情報を取得
-            try {
-              const toilet = await SupabaseService.fetchToiletById(id);
-              if (toilet) {
-                updated.toilet = {
-                  id: toilet.id,
-                  name: toilet.name || 'トイレ',
-                  distance: distance ? Math.round(distance) : undefined
-                };
-              }
-            } catch (e) {
-              console.warn('トイレ情報取得エラー:', e);
-              updated.toilet = {
-                id: id,
-                name: 'トイレ',
-                distance: distance ? Math.round(distance) : undefined
-              };
-            }
-          }
+          // RPCから既に名前が取得されているので、それを使用
+          updated.toilet = {
+            id: id,
+            name: raw.name || 'トイレ',
+            distance: distance ? Math.round(distance) : undefined
+          };
         }
 
         // 温泉: 詳細情報を取得
-        if (parking.nearestHotspring && !updated.hotspring?.name.includes('温泉')) {
+        if (parking.nearestHotspring) {
           const raw = parking.nearestHotspring as any;
           const id = String(raw.id || raw.spring_id || '');
 
-          if (id && !raw.name) {  // nameが既にある場合はスキップ
+          if (id) {
             const spring = await SupabaseService.fetchHotSpringById(id);
             if (spring) {
               updated.hotspring = {
                 ...updated.hotspring,
                 id: spring.id,
-                name: spring.name
+                name: spring.name,
+                distance: updated.hotspring?.distance
               };
             }
           }
@@ -329,6 +322,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       capacity: parkingSpot.capacity,
       nearestConvenienceStore: parkingSpot.nearestConvenienceStore,
       nearestHotspring: parkingSpot.nearestHotspring,
+      nearest_toilet: parkingSpot.nearest_toilet,
       全オブジェクト: parkingSpot,
     });
 
@@ -387,6 +381,25 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         } else {
           console.log('⚠️ コンビニIDが存在しません');
           names.convenience = 'コンビニ';
+        }
+      }
+
+      // トイレ情報（既にRPCから名前が取得されている）
+      if (parkingSpot.nearest_toilet) {
+        const toiletData = parkingSpot.nearest_toilet as any;
+
+        // RPCから既に名前が取得されているので、それを使用
+        if (toiletData.name) {
+          names.toilet = toiletData.name;
+          console.log('✅ トイレ名取得成功（RPCから）:', {
+            id: toiletData.id,
+            name: toiletData.name,
+            distance: toiletData.distance_m || toiletData.distance
+          });
+        } else {
+          // デフォルト名を使用
+          names.toilet = 'トイレ';
+          console.log('⚠️ トイレ名が見つかりません、デフォルト名使用');
         }
       }
 
@@ -1243,6 +1256,33 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 </TouchableOpacity>
               )}
 
+              {/* トイレ情報 */}
+              {(parkingSpot.nearest_toilet || panelNearby.toilet) && (
+                <TouchableOpacity
+                  style={styles.nearbyItemCompact}
+                  onPress={() => {
+                    // トイレの詳細ページへの遷移は現在無効化
+                    // （トイレの詳細情報がないため）
+                    console.log('トイレ詳細は現在利用できません');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.nearbyIconCompact}>🚻</Text>
+                  <Text style={styles.nearbyNameCompact} numberOfLines={1}>
+                    {panelNearby.toilet?.name || facilityNames.toilet || 'トイレ'}
+                  </Text>
+                  <Text style={styles.nearbyDistanceCompact}>
+                    {panelNearby.toilet?.distance !== undefined
+                      ? `${panelNearby.toilet.distance}m`
+                      : (() => {
+                          const data = (parkingSpot.nearest_toilet as any) || {};
+                          const distance = data.distance_m || data.distance || data.distance_meters;
+                          return distance !== undefined ? `${Math.round(distance)}m` : '---';
+                        })()}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               {/* 温泉情報 */}
               {(parkingSpot.nearestHotspring || panelNearby.hotspring) && (
                 <TouchableOpacity
@@ -1276,42 +1316,8 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                   </Text>
                 </TouchableOpacity>
               )}
-
-              {/* トイレ情報 */}
-              {(parkingSpot.nearest_toilet || panelNearby.toilet) && (
-                <TouchableOpacity
-                  style={styles.nearbyItemCompact}
-                  onPress={() => {
-                    (async () => {
-                      try {
-                        const id = panelNearby.toilet?.id;
-                        if (!id) return;
-                        const toilet = await SupabaseService.fetchToiletById(String(id).replace('toilet_', ''));
-                        if (toilet) {
-                          useMainStore.getState().selectSpot(toilet);
-                        }
-                      } catch (e) { console.warn('トイレ詳細遷移エラー:', e); }
-                    })();
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.nearbyIconCompact}>🚻</Text>
-                  <Text style={styles.nearbyNameCompact} numberOfLines={1}>
-                    {panelNearby.toilet?.name || facilityNames.toilet || 'トイレ'}
-                  </Text>
-                  <Text style={styles.nearbyDistanceCompact}>
-                    {panelNearby.toilet?.distance !== undefined
-                      ? `${panelNearby.toilet.distance}m`
-                      : (() => {
-                          const data = (parkingSpot.nearest_toilet as any) || {};
-                          const distance = data.distance_m || data.distance || data.distance_meters;
-                          return distance !== undefined ? `${Math.round(distance)}m` : '---';
-                        })()}
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
-            
+
             </ScrollView>
           )}
           

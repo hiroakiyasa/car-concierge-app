@@ -21,6 +21,7 @@ const getMarkerColor = (category: string): string => {
     case 'コインパーキング': return '#007AFF';
     case 'コンビニ': return '#FF9500';
     case '温泉': return '#FFD700';
+    case 'トイレ': return '#00BCD4';
     case 'ガソリンスタンド': return '#FF3B30';
     case 'お祭り・花火大会': return '#AF52DE';
     default: return '#8E8E93';
@@ -32,6 +33,7 @@ const getMarkerIcon = (category: string): string => {
     case 'コインパーキング': return 'P';
     case 'コンビニ': return '🏪';
     case '温泉': return '♨️';
+    case 'トイレ': return '🚻';
     case 'ガソリンスタンド': return '⛽';
     case 'お祭り・花火大会': return '🎆';
     default: return '📍';

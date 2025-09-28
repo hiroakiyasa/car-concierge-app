@@ -38,8 +38,11 @@ const createDefaultSearchFilter = (): SearchFilter => ({
   parkingTimeFilterEnabled: true,
   radiusFilterEnabled: false,
   elevationFilterEnabled: false,
-  nearbyCategories: new Set(['コンビニ']),
+  nearbyFilterEnabled: false,
+  nearbyCategories: new Set(['コンビニ', 'トイレ']),
   convenienceStoreRadius: 30,
+  // 型の整合により SearchFilter に toiletRadius を追加済み
+  toiletRadius: 30,
   hotSpringRadius: 0,
   showFlatParking: true,
   showMultiStoryParking: true,
