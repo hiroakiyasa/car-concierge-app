@@ -30,6 +30,7 @@ import { Colors } from '@/utils/constants';
 import { Region, Spot, CoinParking } from '@/types';
 import { TopSearchBar } from '@/components/Map/TopSearchBar';
 import { TopCategoryTabs } from '@/components/Map/TopCategoryTabs';
+import { PlaceSearchResult } from '@/services/places-search.service';
 
 interface MapScreenProps {
   navigation: any;
@@ -284,10 +285,40 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       console.error('❌ 地図範囲の保存エラー:', error);
     }
   };
-  
-  // searchParkingWithExpansion関数は削除（自動検索は使用しない）
 
-  // handleSearchForCategory関数は削除（使用されていない）
+  // 指定された地域で検索を実行
+  const handleSearchWithRegion = async (region: Region) => {
+    console.log('🔍 指定された地域で検索開始:', region);
+    setSearchStatus('searching');
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const data = await SearchService.search(
+        region,
+        searchFilter,
+        userLocation
+      );
+
+      const { results, stats } = data;
+      console.log('📊 検索完了:', stats);
+
+      if (results.length === 0) {
+        console.log('⚠️ 検索結果なし');
+        setErrorMessage('この地域には該当する施設が見つかりませんでした');
+      }
+
+      setSearchResults(results);
+      setStableResults(results.filter(r => r != null));
+    } catch (error) {
+      console.error('❌ 検索エラー:', error);
+      setErrorMessage('検索中にエラーが発生しました');
+      setSearchResults([]);
+    } finally {
+      setIsLoading(false);
+      setSearchStatus('complete');
+    }
+  };
 
   const handleSearch = async (isExpanded?: boolean, overrideFilter?: any) => {
     setIsLoading(true);
@@ -1405,6 +1436,35 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     Alert.alert('検索', '該当する場所やスポットが見つかりませんでした。');
   };
 
+  // 予測検索で選択された場所へ移動
+  const handlePlaceSelect = async (place: PlaceSearchResult) => {
+    console.log('📍 場所選択:', place.displayName, place.latitude, place.longitude);
+
+    // 統一されたズームレベル（0.02）を使用
+    const delta = 0.02;
+
+    // 地図を選択された場所へ移動
+    const newRegion = {
+      latitude: place.latitude,
+      longitude: place.longitude,
+      latitudeDelta: delta,
+      longitudeDelta: delta,
+    };
+
+    // 状態を更新
+    setMapRegion(newRegion);
+
+    // 地図をアニメーションで移動
+    if (mapRef.current) {
+      mapRef.current.animateToRegion(newRegion, 1000);
+    }
+
+    // 地図範囲を保存
+    await saveMapRegion(newRegion);
+
+    // 自動検索は行わない（ユーザーが手動で検索ボタンを押すまで待つ）
+  };
+
   // カテゴリートグル機能
   const handleCategoryToggle = (category: string) => {
     const newCategories = new Set(searchFilter.selectedCategories);
@@ -2041,6 +2101,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         <TopSearchBar
           onMenuPress={() => setShowMenuModal(true)}
           onSearch={handleTextSearch}
+          onPlaceSelect={handlePlaceSelect}
           dismissSignal={dismissSearchUI}
         />
 

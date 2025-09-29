@@ -903,7 +903,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     const latLng = `${lat},${lng}`;
 
     try {
-      // 1) Google Maps アプリ優先（両OSで comgooglemaps スキームを試す）
+      // 1) Google Maps アプリ優先 - 場所を表示（経路ではなく）
       const googleMapsAppURL = Platform.select({
         ios: `comgooglemaps://?q=${label}&center=${latLng}&zoom=16`,
         android: `comgooglemaps://?q=${latLng}(${label})`
@@ -914,13 +914,14 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         return;
       }
 
-      // 2) OSデフォルトの地図アプリ
+      // 2) OSデフォルトの地図アプリ - 場所を表示
       if (Platform.OS === 'ios') {
-        const appleMapsURL = `http://maps.apple.com/?q=${label}&ll=${latLng}`;
+        // Apple Mapsで場所を表示（経路ではなく）
+        const appleMapsURL = `http://maps.apple.com/?q=${label}&ll=${latLng}&z=16`;
         await Linking.openURL(appleMapsURL);
         return;
       } else {
-        // geo: はデフォルト地図（Google/その他）に委ねる
+        // Androidのデフォルト地図アプリで場所を表示
         const geoURL = `geo:${latLng}?q=${latLng}(${label})`;
         if (await Linking.canOpenURL(geoURL)) {
           await Linking.openURL(geoURL);
@@ -928,12 +929,13 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         }
       }
 
-      // 3) 最後のフォールバック: ブラウザでGoogle Maps
-      const browserUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      // 3) 最後のフォールバック: ブラウザでGoogle Mapsの場所を表示
+      // place_idではなく座標とラベルで場所を検索
+      const browserUrl = `https://www.google.com/maps/search/?api=1&query=${label}&query_place_id=`;
       await Linking.openURL(browserUrl);
     } catch (e) {
-      // 念のためブラウザにフォールバック
-      const browserUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      // エラー時は座標で場所を表示
+      const browserUrl = `https://www.google.com/maps/place/${label}/@${lat},${lng},16z`;
       Linking.openURL(browserUrl);
     }
   };

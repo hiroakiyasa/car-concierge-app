@@ -1,15 +1,17 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, FlatList } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, FlatList, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMainStore } from '@/stores/useMainStore';
 import { Colors } from '@/utils/constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PlacesSearchService, PlaceSearchResult } from '@/services/places-search.service';
 
 interface TopSearchBarProps {
   onMenuPress: () => void;
   onSearchPress?: () => void;
   onSearch?: (query: string) => void;
+  onPlaceSelect?: (place: PlaceSearchResult) => void;
   placeholder?: string;
   dismissSignal?: number;
 }
@@ -18,6 +20,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   onMenuPress,
   onSearchPress,
   onSearch,
+  onPlaceSelect,
   placeholder = 'ここで検索',
   dismissSignal,
 }) => {
@@ -25,14 +28,28 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSearchResult[]>([]);
+  const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
   const { searchResults } = useMainStore();
 
   const HISTORY_KEY = 'search_history_v1';
 
   const handleSearch = () => {
-    if (searchQuery.trim() && onSearch) {
-      const q = searchQuery.trim();
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    // 予測検索結果がある場合は、一番上の候補を選択
+    if (placeSuggestions.length > 0) {
+      const firstSuggestion = placeSuggestions[0];
+      setSearchQuery(firstSuggestion.displayName);
+      onPlaceSelect?.(firstSuggestion);
+      saveToHistory(firstSuggestion.displayName);
+      setIsSearching(false);
+      return;
+    }
+
+    // 予測検索結果がない場合は通常の検索
+    if (onSearch) {
       onSearch(q);
       saveToHistory(q);
       setIsSearching(false);
@@ -70,26 +87,27 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
     }
   };
 
-  const buildSuggestions = (q: string) => {
-    const query = q.trim().toLowerCase();
-    if (!query) {
-      setSuggestions([]);
-      return;
-    }
-    // 既存の検索結果から名前一致候補を生成
-    const pool = (searchResults || [])
-      .map(s => s.name)
-      .filter(Boolean) as string[];
-    const uniq = Array.from(new Set(pool));
-    const matched = uniq
-      .filter(name => name.toLowerCase().includes(query))
-      .slice(0, 8);
-    // 末尾に「地名で検索: q」を付与
-    const withPlaceHint = matched.includes(`地名で検索: ${q}`)
-      ? matched
-      : [...matched, `地名で検索: ${q}`];
-    setSuggestions(withPlaceHint);
-  };
+  // 場所の予測検索
+  useEffect(() => {
+    const searchTimer = setTimeout(async () => {
+      if (searchQuery.trim().length > 0) {
+        setIsLoadingPlaces(true);
+        try {
+          const results = await PlacesSearchService.searchPlaces(searchQuery);
+          setPlaceSuggestions(results);
+        } catch (error) {
+          console.error('Place search error:', error);
+          setPlaceSuggestions([]);
+        } finally {
+          setIsLoadingPlaces(false);
+        }
+      } else {
+        setPlaceSuggestions([]);
+      }
+    }, 300); // 300msのデバウンス
+
+    return () => clearTimeout(searchTimer);
+  }, [searchQuery]);
   return (
     <View
       style={[
@@ -106,24 +124,32 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
 
         {/* Search Input */}
         {isSearching ? (
-          <TextInput
-            style={styles.searchInput}
-            placeholder={placeholder}
-            placeholderTextColor="#9CA3AF"
-            value={searchQuery}
-            onChangeText={(t) => {
-              setSearchQuery(t);
-              if (t.trim().length === 0) {
-                setSuggestions([]);
-              } else {
-                buildSuggestions(t);
-              }
-            }}
-            onSubmitEditing={handleSearch}
-            onBlur={() => setIsSearching(false)}
-            autoFocus
-            returnKeyType="search"
-          />
+          <>
+            <TextInput
+              style={styles.searchInput}
+              placeholder={placeholder}
+              placeholderTextColor="#9CA3AF"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={handleSearch}
+              onBlur={() => setIsSearching(false)}
+              autoFocus
+              returnKeyType="search"
+            />
+            {/* Clear button */}
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={() => {
+                  setSearchQuery('');
+                  setPlaceSuggestions([]);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            )}
+          </>
         ) : (
           <TouchableOpacity
             style={styles.searchTextArea}
@@ -188,28 +214,56 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
               )}
             </>
           ) : (
-            <FlatList
-              keyboardShouldPersistTaps="handled"
-              data={suggestions}
-              keyExtractor={(item, idx) => `${item}-${idx}`}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.suggestionRow}
-                  onPress={() => {
-                    const value = item.startsWith('地名で検索: ')
-                      ? item.replace('地名で検索: ', '')
-                      : item;
-                    setSearchQuery(value);
-                    onSearch?.(value);
-                    saveToHistory(value);
-                    setIsSearching(false);
-                  }}
-                >
-                  <Ionicons name="search" size={18} color="#6B7280" />
-                  <Text style={styles.suggestionText}>{item}</Text>
-                </TouchableOpacity>
+            <>
+              {isLoadingPlaces && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#3B82F6" />
+                  <Text style={styles.loadingText}>場所を検索中...</Text>
+                </View>
               )}
-            />
+              {!isLoadingPlaces && placeSuggestions.length > 0 && (
+                <FlatList
+                  keyboardShouldPersistTaps="handled"
+                  data={placeSuggestions}
+                  keyExtractor={(item) => `${item.name}-${item.type}`}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.suggestionRow}
+                      onPress={() => {
+                        setSearchQuery(item.displayName);
+                        onPlaceSelect?.(item);
+                        saveToHistory(item.displayName);
+                        setIsSearching(false);
+                      }}
+                    >
+                      <MaterialIcons
+                        name={PlacesSearchService.getIconForPlaceType(item.type) as any}
+                        size={18}
+                        color="#6B7280"
+                      />
+                      <View style={styles.suggestionTextContainer}>
+                        <Text style={styles.suggestionText}>{item.displayName}</Text>
+                        <View style={styles.suggestionDetailsRow}>
+                          {item.description && (
+                            <Text style={styles.suggestionDescription}>{item.description}</Text>
+                          )}
+                          {item.address && (
+                            <Text style={styles.suggestionAddress} numberOfLines={1}>
+                              {item.address}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                />
+              )}
+              {!isLoadingPlaces && placeSuggestions.length === 0 && searchQuery.trim().length > 0 && (
+                <View style={styles.noResultsContainer}>
+                  <Text style={styles.noResultsText}>該当する場所が見つかりません</Text>
+                </View>
+              )}
+            </>
           )}
         </View>
       )}
@@ -297,21 +351,62 @@ const styles = StyleSheet.create({
   },
   suggestionRow: {
     paddingHorizontal: 12,
-    height: 44,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    paddingVertical: 8,
+  },
+  suggestionTextContainer: {
+    flex: 1,
   },
   suggestionText: {
     fontSize: 14,
     color: '#111827',
     fontWeight: '500',
   },
+  suggestionDescription: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  suggestionDetailsRow: {
+    flexDirection: 'column',
+    marginTop: 2,
+  },
+  suggestionAddress: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  noResultsContainer: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
   searchInput: {
     flex: 1,
     fontSize: 16,
     color: '#333',
     paddingHorizontal: 8,
+  },
+  clearButton: {
+    paddingHorizontal: 8,
+    justifyContent: 'center',
   },
   placeholder: {
     fontSize: 16,
