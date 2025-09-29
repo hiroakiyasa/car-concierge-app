@@ -352,12 +352,12 @@ export const CompactBottomPanel: React.FC<CompactBottomPanelProps> = ({
               e.stopPropagation();
               const next = !nearbyEnabled;
               setNearbyEnabled(next);
-              // ON時は「コンビニのみON、トイレOFF」で初期化
+              // ON時は「コンビニとトイレ両方ON」で初期化
               if (next) {
                 setConvenienceSelected(true);
                 setConvenienceRadius(30);
                 setConvenienceSlider(radiusToSlider(30));
-                setToiletSelected(false);
+                setToiletSelected(true);
                 setToiletRadius(30);
                 setToiletSlider(radiusToSlider(30));
               }
