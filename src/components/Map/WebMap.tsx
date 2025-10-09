@@ -44,10 +44,29 @@ export const WebMap: React.FC<WebMapProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
+    // regionの検証とデフォルト値へのフォールバック
+    const validRegion = {
+      latitude: region.latitude && !isNaN(region.latitude) && region.latitude !== 0
+        ? region.latitude
+        : 35.6812,  // 東京駅
+      longitude: region.longitude && !isNaN(region.longitude) && region.longitude !== 0
+        ? region.longitude
+        : 139.7671,  // 東京駅
+      latitudeDelta: region.latitudeDelta && !isNaN(region.latitudeDelta) && region.latitudeDelta > 0
+        ? region.latitudeDelta
+        : 0.045,  // 上下約5km
+    };
+
+    console.log('🗺️ WebMap初期化:', {
+      元のregion: region,
+      検証後のregion: validRegion,
+      計算されたzoom: calculateZoomLevel(validRegion.latitudeDelta)
+    });
+
     // 地図を初期化
     const map = L.map(mapContainerRef.current).setView(
-      [region.latitude, region.longitude],
-      calculateZoomLevel(region.latitudeDelta)
+      [validRegion.latitude, validRegion.longitude],
+      calculateZoomLevel(validRegion.latitudeDelta)
     );
 
     // OpenStreetMapタイルを追加
@@ -86,9 +105,22 @@ export const WebMap: React.FC<WebMapProps> = ({
   // リージョンが変更されたら地図を移動
   useEffect(() => {
     if (mapRef.current) {
+      // regionの検証
+      const validLat = region.latitude && !isNaN(region.latitude) && region.latitude !== 0
+        ? region.latitude
+        : 35.6812;
+      const validLng = region.longitude && !isNaN(region.longitude) && region.longitude !== 0
+        ? region.longitude
+        : 139.7671;
+      const validDelta = region.latitudeDelta && !isNaN(region.latitudeDelta) && region.latitudeDelta > 0
+        ? region.latitudeDelta
+        : 0.045;
+
+      console.log('🗺️ WebMap地図移動:', { lat: validLat, lng: validLng, delta: validDelta });
+
       mapRef.current.setView(
-        [region.latitude, region.longitude],
-        calculateZoomLevel(region.latitudeDelta)
+        [validLat, validLng],
+        calculateZoomLevel(validDelta)
       );
     }
   }, [region.latitude, region.longitude, region.latitudeDelta]);
@@ -171,8 +203,21 @@ export const WebMap: React.FC<WebMapProps> = ({
 
 // latitudeDeltaからズームレベルを計算
 function calculateZoomLevel(latitudeDelta: number): number {
+  // 無効な値の場合はデフォルトズームレベルを返す
+  if (!latitudeDelta || isNaN(latitudeDelta) || latitudeDelta <= 0) {
+    console.warn('⚠️ 無効なlatitudeDelta:', latitudeDelta, 'デフォルトズーム13を使用');
+    return 13;  // latitudeDelta = 0.045に相当するズームレベル
+  }
+
   const angle = latitudeDelta;
-  return Math.round(Math.log(360 / angle) / Math.LN2);
+  const zoom = Math.round(Math.log(360 / angle) / Math.LN2);
+
+  // ズームレベルを1-19の範囲に制限
+  const clampedZoom = Math.max(1, Math.min(19, zoom));
+
+  console.log(`🔍 ズームレベル計算: latitudeDelta=${latitudeDelta} → zoom=${clampedZoom}`);
+
+  return clampedZoom;
 }
 
 const styles = StyleSheet.create({
