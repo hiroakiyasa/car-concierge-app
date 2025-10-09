@@ -28,6 +28,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundColor: '#0B1220',
     },
   },
+  web: {
+    favicon: './assets/favicon.png',
+    bundler: 'metro',
+    output: 'static',
+  },
   extra: {
     eas: {
       projectId: 'faf23c02-6ed4-4585-bd02-6c6e5130890c'
