@@ -457,10 +457,26 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         categoriesForFetch,
         minElevation
       );
-      
+
       // spotsがnullまたはundefinedの場合は空配列として処理
-      const validSpots = spots || [];
-      
+      let validSpots = spots || [];
+
+      // 各カテゴリを最大20件に制限（Web対応）
+      const limitedSpotsByCategory: { [key: string]: Spot[] } = {};
+      const categories = ['コインパーキング', 'コンビニ', '温泉', 'トイレ', 'お祭り', 'ガソリンスタンド'];
+
+      categories.forEach(category => {
+        const categorySpots = validSpots.filter(s => s.category === category);
+        limitedSpotsByCategory[category] = categorySpots.slice(0, 20);
+      });
+
+      // 制限後のスポットを結合
+      validSpots = Object.values(limitedSpotsByCategory).flat();
+
+      console.log('📊 カテゴリ別件数（最大20件）:',
+        categories.map(cat => `${cat}: ${limitedSpotsByCategory[cat]?.length || 0}件`).join(', ')
+      );
+
       // 周辺検索・料金フィルターのフラグを先に計算（以降の処理で参照）
       const hasNearbyFilter = currentFilter.nearbyFilterEnabled &&
         (((currentFilter.convenienceStoreRadius || 0) > 0) || ((currentFilter.toiletRadius || 0) > 0));

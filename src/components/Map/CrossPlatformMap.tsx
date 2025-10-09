@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Platform, View, Text, StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 // Platform-specific import - will use .web.ts on web
 import { MapView, Marker, PROVIDER_GOOGLE, Callout as NativeCallout } from './NativeMaps';
 
@@ -43,32 +43,28 @@ export const CrossPlatformMap: React.FC<CrossPlatformMapProps> = ({
   showsScale = true,
   rotateEnabled = true,
 }) => {
-  // Web版の場合は簡易的なプレースホルダーを表示し、onMapReadyを即座に呼ぶ
+  // Web版の場合はLeaflet地図を表示
   useEffect(() => {
     if (Platform.OS === 'web' && onMapReady) {
       // Webの場合、マウント後すぐにonMapReadyを呼び出す
       const timer = setTimeout(() => {
         onMapReady();
-      }, 100);
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [onMapReady]);
 
   if (Platform.OS === 'web') {
+    // Web版ではWebMapコンポーネントを動的インポート
+    const WebMap = require('./WebMap').WebMap;
     return (
-      <View style={[style, styles.webMapPlaceholder]}>
-        <Text style={styles.webMapText}>
-          🗺️ Web版地図
-          {'\n\n'}
-          緯度: {region.latitude.toFixed(4)}
-          {'\n'}
-          経度: {region.longitude.toFixed(4)}
-          {'\n\n'}
-          ※ Web版では地図機能は開発中です
-          {'\n'}
-          モバイルアプリをご利用ください
-        </Text>
-      </View>
+      <WebMap
+        region={region}
+        onRegionChangeComplete={onRegionChangeComplete}
+        style={style}
+      >
+        {children}
+      </WebMap>
     );
   }
 
@@ -101,17 +97,3 @@ export { Marker };
 // Calloutを再エクスポート
 const Callout = Platform.OS === 'web' ? ({ children }: any) => null : NativeCallout;
 export { Callout };
-
-const styles = StyleSheet.create({
-  webMapPlaceholder: {
-    backgroundColor: '#0B1220',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  webMapText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-});
