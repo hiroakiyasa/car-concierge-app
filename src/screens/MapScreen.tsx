@@ -234,10 +234,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         const currentRegion = {
           latitude: location.latitude,
           longitude: location.longitude,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
+          latitudeDelta: 0.045,  // 上下約5km
+          longitudeDelta: 0.045,
         };
-        console.log('📍 起動時 - 現在地を中心に設定:', currentRegion);
+        console.log('📍 起動時 - 現在地を中心に設定（上下5km）:', currentRegion);
         setMapRegion(currentRegion);
         await saveMapRegion(currentRegion);
         if (mapRef.current && isMapReady) {
@@ -259,10 +259,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       const defaultRegion = {
         latitude: 35.6812,
         longitude: 139.7671,
-        latitudeDelta: 0.02,
-        longitudeDelta: 0.02,
+        latitudeDelta: 0.045,  // 上下約5km
+        longitudeDelta: 0.045,
       };
-      console.log('📍 現在地・保存範囲なし - デフォルト位置を使用');
+      console.log('📍 現在地・保存範囲なし - デフォルト位置を使用（上下5km）');
       setMapRegion(defaultRegion);
       await saveMapRegion(defaultRegion);
     } catch (error) {
@@ -270,8 +270,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       const defaultRegion = {
         latitude: 35.6812,
         longitude: 139.7671,
-        latitudeDelta: 0.02,
-        longitudeDelta: 0.02,
+        latitudeDelta: 0.045,  // 上下約5km
+        longitudeDelta: 0.045,
       };
       setMapRegion(defaultRegion);
     }

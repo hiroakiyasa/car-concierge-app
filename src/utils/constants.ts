@@ -129,10 +129,10 @@ export const UIElements = {
   iconXLarge: 48,
 } as const;
 
-// Default region (Tokyo Station)
+// Default region (Tokyo Station) - 上下5km範囲
 export const DEFAULT_REGION = {
   latitude: 35.6812,
   longitude: 139.7671,
-  latitudeDelta: 0.02,
-  longitudeDelta: 0.02,
+  latitudeDelta: 0.045,  // 上下約5km (5km / 111km/度 ≈ 0.045)
+  longitudeDelta: 0.045,
 };
