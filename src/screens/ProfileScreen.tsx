@@ -299,6 +299,62 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
           <TouchableOpacity
             style={styles.menuItem}
+            onPress={() => navigation.navigate('AddParking')}
+          >
+            <BlurView intensity={50} style={styles.menuBlur}>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']}
+                style={styles.menuGradient}
+              >
+                <View style={styles.menuItemLeft}>
+                  <View style={styles.menuIconContainer}>
+                    <LinearGradient
+                      colors={['#10B981', '#059669']}
+                      style={styles.menuIconGradient}
+                    >
+                      <Ionicons name="add-circle" size={20} color="#fff" />
+                    </LinearGradient>
+                  </View>
+                  <View>
+                    <Text style={styles.menuItemText}>駐車場の追加</Text>
+                    <Text style={styles.menuItemSubtext}>新しい駐車場を投稿</Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
+              </LinearGradient>
+            </BlurView>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate('AdminSubmissions')}
+          >
+            <BlurView intensity={50} style={styles.menuBlur}>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']}
+                style={styles.menuGradient}
+              >
+                <View style={styles.menuItemLeft}>
+                  <View style={styles.menuIconContainer}>
+                    <LinearGradient
+                      colors={['#F59E0B', '#D97706']}
+                      style={styles.menuIconGradient}
+                    >
+                      <Ionicons name="shield-checkmark" size={20} color="#fff" />
+                    </LinearGradient>
+                  </View>
+                  <View>
+                    <Text style={styles.menuItemText}>投稿管理（管理者）</Text>
+                    <Text style={styles.menuItemSubtext}>投稿の承認・却下</Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
+              </LinearGradient>
+            </BlurView>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
             onPress={() => navigation.navigate('Settings')}
           >
             <BlurView intensity={50} style={styles.menuBlur}>

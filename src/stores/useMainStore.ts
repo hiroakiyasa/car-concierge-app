@@ -14,7 +14,8 @@ interface MainStore {
   userLocation: Location | null;
   locationPermission: 'granted' | 'denied' | 'restricted' | null;
   appBootReady: boolean;
-  
+  highlightedParkingId: number | string | null;
+
   // Actions
   setSearchFilter: (filter: Partial<SearchFilter>) => void;
   setSearchResults: (results: Spot[]) => void;
@@ -27,6 +28,7 @@ interface MainStore {
   setLocationPermission: (permission: 'granted' | 'denied' | 'restricted' | null) => void;
   toggleCategory: (category: string) => void;
   setAppBootReady: (ready: boolean) => void;
+  setHighlightedParkingId: (id: number | string | null) => void;
   resetState: () => void;
 }
 
@@ -79,6 +81,7 @@ export const useMainStore = create<MainStore>((set, get) => ({
   userLocation: null,
   locationPermission: null,
   appBootReady: false,
+  highlightedParkingId: null,
   
   // Actions
   setSearchFilter: (filter) => set((state) => ({
@@ -102,7 +105,9 @@ export const useMainStore = create<MainStore>((set, get) => ({
   setLocationPermission: (permission) => set({ locationPermission: permission }),
   
   setAppBootReady: (ready) => set({ appBootReady: ready }),
-  
+
+  setHighlightedParkingId: (id) => set({ highlightedParkingId: id }),
+
   toggleCategory: (category) => set((state) => {
     const newCategories = new Set(state.searchFilter.selectedCategories);
     if (newCategories.has(category)) {
@@ -127,5 +132,6 @@ export const useMainStore = create<MainStore>((set, get) => ({
     isLoading: false,
     errorMessage: null,
     appBootReady: false,
+    highlightedParkingId: null,
   }),
 }));

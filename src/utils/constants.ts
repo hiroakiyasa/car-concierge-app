@@ -12,8 +12,9 @@ export const Colors = {
   
   // Background Colors
   background: '#fafafa',
+  backgroundLight: '#f5f5f5',
   surface: '#ffffff',
-  
+
   // Status Colors
   error: '#f44336',
   success: '#4caf50',
@@ -22,6 +23,7 @@ export const Colors = {
   info: '#2196f3',
   
   // Text Colors
+  text: 'rgba(0, 0, 0, 0.87)',
   textPrimary: 'rgba(0, 0, 0, 0.87)',
   textSecondary: 'rgba(0, 0, 0, 0.6)',
   textDisabled: 'rgba(0, 0, 0, 0.38)',
@@ -37,6 +39,7 @@ export const Colors = {
   // UI Colors
   disabled: '#e0e0e0',
   divider: '#e0e0e0',
+  border: '#e0e0e0',
   overlay: 'rgba(0, 0, 0, 0.5)',
   white: '#ffffff',
   black: '#000000',
@@ -129,10 +132,10 @@ export const UIElements = {
   iconXLarge: 48,
 } as const;
 
-// Default region (Tokyo Station) - 上下5km範囲
+// Default region (Tokyo Station)
 export const DEFAULT_REGION = {
   latitude: 35.6812,
   longitude: 139.7671,
-  latitudeDelta: 0.045,  // 上下約5km (5km / 111km/度 ≈ 0.045)
-  longitudeDelta: 0.045,
+  latitudeDelta: 0.02,
+  longitudeDelta: 0.02,
 };

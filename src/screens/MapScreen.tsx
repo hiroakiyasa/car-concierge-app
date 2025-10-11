@@ -234,10 +234,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         const currentRegion = {
           latitude: location.latitude,
           longitude: location.longitude,
-          latitudeDelta: 0.045,  // 上下約5km
-          longitudeDelta: 0.045,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
         };
-        console.log('📍 起動時 - 現在地を中心に設定（上下5km）:', currentRegion);
+        console.log('📍 起動時 - 現在地を中心に設定:', currentRegion);
         setMapRegion(currentRegion);
         await saveMapRegion(currentRegion);
         if (mapRef.current && isMapReady) {
@@ -259,10 +259,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       const defaultRegion = {
         latitude: 35.6812,
         longitude: 139.7671,
-        latitudeDelta: 0.045,  // 上下約5km
-        longitudeDelta: 0.045,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
       };
-      console.log('📍 現在地・保存範囲なし - デフォルト位置を使用（上下5km）');
+      console.log('📍 現在地・保存範囲なし - デフォルト位置を使用');
       setMapRegion(defaultRegion);
       await saveMapRegion(defaultRegion);
     } catch (error) {
@@ -270,8 +270,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       const defaultRegion = {
         latitude: 35.6812,
         longitude: 139.7671,
-        latitudeDelta: 0.045,  // 上下約5km
-        longitudeDelta: 0.045,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
       };
       setMapRegion(defaultRegion);
     }
@@ -457,26 +457,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         categoriesForFetch,
         minElevation
       );
-
+      
       // spotsがnullまたはundefinedの場合は空配列として処理
-      let validSpots = spots || [];
-
-      // 各カテゴリを最大20件に制限（Web対応）
-      const limitedSpotsByCategory: { [key: string]: Spot[] } = {};
-      const categories = ['コインパーキング', 'コンビニ', '温泉', 'トイレ', 'お祭り', 'ガソリンスタンド'];
-
-      categories.forEach(category => {
-        const categorySpots = validSpots.filter(s => s.category === category);
-        limitedSpotsByCategory[category] = categorySpots.slice(0, 20);
-      });
-
-      // 制限後のスポットを結合
-      validSpots = Object.values(limitedSpotsByCategory).flat();
-
-      console.log('📊 カテゴリ別件数（最大20件）:',
-        categories.map(cat => `${cat}: ${limitedSpotsByCategory[cat]?.length || 0}件`).join(', ')
-      );
-
+      const validSpots = spots || [];
+      
       // 周辺検索・料金フィルターのフラグを先に計算（以降の処理で参照）
       const hasNearbyFilter = currentFilter.nearbyFilterEnabled &&
         (((currentFilter.convenienceStoreRadius || 0) > 0) || ((currentFilter.toiletRadius || 0) > 0));

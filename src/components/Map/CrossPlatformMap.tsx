@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import React from 'react';
+import { Platform } from 'react-native';
 // Platform-specific import - will use .web.ts on web
 import { MapView, Marker, PROVIDER_GOOGLE, Callout as NativeCallout } from './NativeMaps';
 
@@ -43,29 +43,9 @@ export const CrossPlatformMap: React.FC<CrossPlatformMapProps> = ({
   showsScale = true,
   rotateEnabled = true,
 }) => {
-  // Web版の場合はLeaflet地図を表示
-  useEffect(() => {
-    if (Platform.OS === 'web' && onMapReady) {
-      // Webの場合、マウント後すぐにonMapReadyを呼び出す
-      const timer = setTimeout(() => {
-        onMapReady();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [onMapReady]);
-
+  // Web版の場合は未対応（モバイルアプリ専用）
   if (Platform.OS === 'web') {
-    // Web版ではWebMapコンポーネントを動的インポート
-    const WebMap = require('./WebMap').WebMap;
-    return (
-      <WebMap
-        region={region}
-        onRegionChangeComplete={onRegionChangeComplete}
-        style={style}
-      >
-        {children}
-      </WebMap>
-    );
+    return null;
   }
 
   // ネイティブ版（iOS/Android）

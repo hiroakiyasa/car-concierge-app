@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, Platform, Animated } from 'react-native';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { Marker, Callout } from './CrossPlatformMap';
+import { Ionicons } from '@expo/vector-icons';
 import { Spot, ConvenienceStore, GasStation, CoinParking, HotSpring } from '@/types';
 import { getConvenienceStoreLogo, getGasStationLogo } from '@/utils/brandLogos';
 import { Colors } from '@/utils/constants';
 import { getGasStationMarkerColor, NATIONAL_AVERAGE_PRICES, formatPriceDifference } from '@/utils/fuelPrices';
+import { useMainStore } from '@/stores/useMainStore';
 
 interface CustomMarkerProps {
   spot: Spot;
@@ -28,15 +30,15 @@ const getMarkerColor = (category: string): string => {
   }
 };
 
-const getMarkerIcon = (category: string): string => {
+const getMarkerIconName = (category: string): keyof typeof Ionicons.glyphMap => {
   switch (category) {
-    case 'コインパーキング': return 'P';
-    case 'コンビニ': return '🏪';
-    case '温泉': return '♨️';
-    case 'トイレ': return '🚻';
-    case 'ガソリンスタンド': return '⛽';
-    case 'お祭り・花火大会': return '🎆';
-    default: return '📍';
+    case 'コインパーキング': return 'car';
+    case 'コンビニ': return 'storefront';
+    case '温泉': return 'water';
+    case 'トイレ': return 'male-female';
+    case 'ガソリンスタンド': return 'gas-pump';
+    case 'お祭り・花火大会': return 'sparkles';
+    default: return 'location';
   }
 };
 
@@ -48,6 +50,10 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
   isSelected,
   isNearbyFacility
 }) => {
+  // 強調表示状態を取得
+  const highlightedParkingId = useMainStore((state) => state.highlightedParkingId);
+  const isHighlighted = highlightedParkingId != null && spot.id === highlightedParkingId;
+
   // スポットのデータ検証
   if (!spot || typeof spot.lat !== 'number' || typeof spot.lng !== 'number' || isNaN(spot.lat) || isNaN(spot.lng)) {
     console.error('CustomMarker: Invalid spot data', spot);
@@ -223,7 +229,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
       if (Platform.OS === 'android') {
         return (
           <AndroidCircle size={32} fill={gasInfo.markerColor} stroke="#FFFFFF" strokeWidth={2}>
-            <Text style={styles.simpleMarkerText}>⛽</Text>
+            <Ionicons name="gas-pump" size={16} color="#FFFFFF" />
           </AndroidCircle>
         );
       }
@@ -260,15 +266,17 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
         if (rank === 1) fill = '#FFD700';
         else if (rank === 2) fill = '#C0C0C0';
         else if (rank === 3) fill = '#CD7F32';
-        const stroke = isSelected ? '#FF0000' : '#FFFFFF';
+        // 強調表示のストロークカラー（オレンジ）を優先、次に選択状態（赤）
+        const stroke = isHighlighted ? '#FF9500' : (isSelected ? '#FF0000' : '#FFFFFF');
+        const strokeWidth = isHighlighted ? 4 : 3;
         return (
-          <AndroidCircle size={36} fill={fill} stroke={stroke} strokeWidth={3}>
+          <AndroidCircle size={36} fill={fill} stroke={stroke} strokeWidth={strokeWidth}>
             <Text style={styles.parkingMarkerText}>{rank}</Text>
           </AndroidCircle>
         );
       }
       return (
-        <View style={getMarkerStyle()}>
+        <View style={[getMarkerStyle(), isHighlighted && styles.highlightedMarker]}>
           <Text style={styles.parkingMarkerText}>{rank}</Text>
         </View>
       );
@@ -280,7 +288,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
       if (Platform.OS === 'android') {
         return (
           <AndroidCircle size={32} fill={gasInfo.markerColor} stroke="#FFFFFF" strokeWidth={2}>
-            <Text style={styles.simpleMarkerText}>⛽</Text>
+            <Ionicons name="gas-pump" size={16} color="#FFFFFF" />
           </AndroidCircle>
         );
       }
@@ -295,7 +303,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
           },
           isNearbyFacility && styles.nearbyFacilityGasMarker
         ]}>
-          <Text style={styles.gasStationMarkerIcon}>⛽</Text>
+          <Ionicons name="gas-pump" size={18} color="#FFFFFF" />
         </View>
       );
     }
@@ -309,7 +317,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
           stroke={isNearbyFacility ? '#007AFF' : '#FFFFFF'}
           strokeWidth={isNearbyFacility ? 3 : 2}
         >
-          <Text style={styles.categoryMarkerIcon}>{getMarkerIcon(spot.category)}</Text>
+          <Ionicons name={getMarkerIconName(spot.category)} size={16} color="#FFFFFF" />
         </AndroidCircle>
       );
     }
@@ -319,7 +327,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
         { backgroundColor: getMarkerColor(spot.category) },
         isNearbyFacility && styles.nearbyFacilityMarker
       ]}>
-        <Text style={styles.categoryMarkerIcon}>{getMarkerIcon(spot.category)}</Text>
+        <Ionicons name={getMarkerIconName(spot.category)} size={18} color="#FFFFFF" />
       </View>
     );
   };
@@ -416,8 +424,9 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
       tracksViewChanges={Platform.OS === 'android' ? tracks : undefined}
       // 円は中心アンカーでクリッピングを抑制
       anchor={Platform.OS === 'android' ? { x: 0.5, y: 0.5 } : { x: 0.5, y: 1 }}
-      // 重なり順を制御（ランク1が最前面、2、3と順番に後ろへ）
+      // 重なり順を制御（強調表示が最前面、次に選択、次にランク順）
       zIndex={(() => {
+        if (isHighlighted) return 1001; // 強調表示を最前面に
         if (isSelected) return 1000;
         if (rank) {
           if (rank === 1) return 999;
@@ -573,6 +582,21 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  highlightedMarker: {
+    borderColor: '#FF9500', // オレンジ色の枠
+    borderWidth: 4,
+    ...Platform.select({
+      ios: {
+        transform: [{ scale: 1.15 }],
+        shadowColor: '#FF9500',
+        shadowOpacity: 0.6,
+        shadowRadius: 8,
+      },
+      android: {
+        // elevationとtransformなし
+      },
+    }),
+  },
   parkingMarkerText: {
     color: '#FFFFFF',
     fontSize: 14,
@@ -605,6 +629,7 @@ const styles = StyleSheet.create({
   categoryMarkerIcon: {
     fontSize: 18,
     lineHeight: 18,
+    color: '#FFFFFF',
     textAlign: 'center',
     textAlignVertical: 'center',
     includeFontPadding: false as any,

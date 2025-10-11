@@ -15,6 +15,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useMainStore } from '@/stores/useMainStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { Colors } from '@/utils/constants';
@@ -42,12 +43,13 @@ interface SpotDetailBottomSheetProps {
   onClose: () => void;
 }
 
-export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({ 
-  visible, 
-  onClose 
+export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
+  visible,
+  onClose
 }) => {
   // すべてのフックを最初に定義（条件分岐なし）
-  const { selectedSpot, searchFilter } = useMainStore();
+  const navigation = useNavigation<any>();
+  const { selectedSpot, searchFilter, setHighlightedParkingId } = useMainStore();
   const { isAuthenticated, user } = useAuthStore();
   const [facilityNames, setFacilityNames] = React.useState<{
     convenience?: string;
@@ -1171,7 +1173,32 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 })()}
               </View>
             </View>
-            
+
+            {/* 料金を更新ボタン（駐車場のみ） */}
+            {isParking && (
+              <TouchableOpacity
+                style={styles.updateRatesButton}
+                onPress={() => {
+                  // 地図上で選択した駐車場を強調表示
+                  if (setHighlightedParkingId && parkingSpot.id) {
+                    setHighlightedParkingId(parkingSpot.id);
+                  }
+                  // AddParkingScreenに遷移
+                  navigation.navigate('AddParking', {
+                    mode: 'update',
+                    parkingSpotId: parkingSpot.id,
+                    parkingSpot: parkingSpot,
+                  });
+                  onClose();
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="camera-outline" size={18} color={Colors.primary} />
+                <Text style={styles.updateRatesButtonText}>料金を更新</Text>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+
             {/* Photos Preview in Overview */}
             {photos.length > 0 && (
               <View style={styles.photosPreviewSection}>
@@ -2923,5 +2950,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.primary,
+  },
+  updateRatesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0F9FF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary + '20',
+  },
+  updateRatesButtonText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginLeft: 8,
   },
 });

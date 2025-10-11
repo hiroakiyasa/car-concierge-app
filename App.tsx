@@ -31,6 +31,8 @@ import { TermsScreen } from '@/screens/TermsScreen';
 import { PrivacyScreen } from '@/screens/PrivacyScreen';
 import { GuideScreen } from '@/screens/GuideScreen';
 import { TestParkingType } from '@/screens/TestParkingType';
+import { AddParkingScreen } from '@/screens/AddParkingScreen';
+import { AdminSubmissionsScreen } from '@/screens/AdminSubmissionsScreen';
 import { SplashOverlay } from '@/components/SplashOverlay';
 import { useMainStore } from '@/stores/useMainStore';
 
@@ -91,7 +93,9 @@ export default function App() {
             <Stack.Screen name="Terms" component={TermsScreen} />
             <Stack.Screen name="Privacy" component={PrivacyScreen} />
             <Stack.Screen name="Guide" component={GuideScreen} />
-            
+            <Stack.Screen name="AddParking" component={AddParkingScreen} />
+            <Stack.Screen name="AdminSubmissions" component={AdminSubmissionsScreen} />
+
             {/* Test Screens */}
             <Stack.Screen name="TestAuth" component={TestAuth} />
             <Stack.Screen name="TestMap" component={TestMapBounds} />
