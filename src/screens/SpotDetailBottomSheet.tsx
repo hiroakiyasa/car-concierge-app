@@ -515,20 +515,19 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   
   const formatPrice = (): string => {
     if (!isParking) return '---';
-    
-    // 計算済み料金がある場合
-    if (parkingSpot.calculatedFee !== undefined && parkingSpot.calculatedFee !== null && parkingSpot.calculatedFee >= 0) {
+
+    // バックエンドで計算済みの料金のみを使用
+    // フロントエンド再計算は行わない（ややこしくなるため）
+    if (parkingSpot.calculatedFee !== undefined && parkingSpot.calculatedFee !== null) {
+      if (parkingSpot.calculatedFee < 0) {
+        return '計算不可';
+      }
       return parkingSpot.calculatedFee === 0
         ? '無料'
         : `¥${parkingSpot.calculatedFee.toLocaleString()}`;
     }
-    
-    // 現在の設定で計算
-    if (searchFilter.parkingTimeFilterEnabled && parkingSpot.rates && parkingSpot.rates.length > 0) {
-      const fee = ParkingFeeCalculator.calculateFee(parkingSpot, searchFilter.parkingDuration);
-      if (fee >= 0) return fee === 0 ? '無料' : `¥${fee.toLocaleString()}`;
-    }
-    
+
+    // calculatedFeeがない場合は料金情報なし
     return '---';
   };
   
@@ -1060,6 +1059,29 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               size={20}
               style={styles.favoriteButton}
             />
+            {/* 料金を更新ボタン（駐車場のみ） */}
+            {isParking && (
+              <TouchableOpacity
+                onPress={() => {
+                  // 地図上で選択した駐車場を強調表示
+                  if (setHighlightedParkingId && parkingSpot.id) {
+                    setHighlightedParkingId(parkingSpot.id);
+                  }
+                  // AddParkingScreenに遷移
+                  navigation.navigate('AddParking', {
+                    mode: 'update',
+                    parkingSpotId: parkingSpot.id,
+                    parkingSpot: parkingSpot,
+                  });
+                  onClose();
+                }}
+                style={[styles.actionButton, styles.updateActionButton]}
+                accessibilityLabel="料金を更新"
+                accessible
+              >
+                <Ionicons name="camera-outline" size={18} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
             {/* Google検索をカラフルに（Googleカラーの青） */}
             <TouchableOpacity onPress={openGoogleSearch} style={[styles.actionButton, styles.searchActionButton]}>
               <Ionicons name="logo-google" size={18} color="#FFFFFF" />
@@ -1173,31 +1195,6 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                 })()}
               </View>
             </View>
-
-            {/* 料金を更新ボタン（駐車場のみ） */}
-            {isParking && (
-              <TouchableOpacity
-                style={styles.updateRatesButton}
-                onPress={() => {
-                  // 地図上で選択した駐車場を強調表示
-                  if (setHighlightedParkingId && parkingSpot.id) {
-                    setHighlightedParkingId(parkingSpot.id);
-                  }
-                  // AddParkingScreenに遷移
-                  navigation.navigate('AddParking', {
-                    mode: 'update',
-                    parkingSpotId: parkingSpot.id,
-                    parkingSpot: parkingSpot,
-                  });
-                  onClose();
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="camera-outline" size={18} color={Colors.primary} />
-                <Text style={styles.updateRatesButtonText}>料金を更新</Text>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            )}
 
             {/* Photos Preview in Overview */}
             {photos.length > 0 && (
@@ -1950,6 +1947,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 4,
+  },
+  updateActionButton: {
+    backgroundColor: '#FF9500', // オレンジ（更新・編集を連想）
   },
   searchActionButton: {
     backgroundColor: '#4285F4', // Google Blue
@@ -2950,26 +2950,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.primary,
-  },
-  updateRatesButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F0F9FF',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.primary + '20',
-  },
-  updateRatesButtonText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.primary,
-    marginLeft: 8,
   },
 });

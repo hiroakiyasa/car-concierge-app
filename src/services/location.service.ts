@@ -32,25 +32,29 @@ export class LocationService {
   
   static async getCurrentLocation(): Promise<LocationType | null> {
     try {
+      console.log('📍 位置情報の取得を開始...');
+
       const permission = await this.requestPermission();
-      
+      console.log('📍 位置情報の権限:', permission);
+
       if (permission !== 'granted') {
-        console.log('Location permission not granted');
-        // Return Tokyo Station as default
-        return {
-          latitude: 35.6812,
-          longitude: 139.7671,
-          accuracy: 0,
-          timestamp: Date.now(),
-        };
+        console.warn('⚠️ 位置情報の権限が許可されていません');
+        return null; // 権限がない場合はnullを返す
       }
-      
+
+      console.log('📍 GPS位置を取得中...');
       const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: 10000,
-        distanceInterval: 10,
+        accuracy: Location.Accuracy.High, // より高精度に変更
+        maximumAge: 10000, // 10秒以内のキャッシュを使用
+        timeout: 15000, // 15秒でタイムアウト
       });
-      
+
+      console.log('✅ GPS位置を取得成功:', {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        accuracy: location.coords.accuracy,
+      });
+
       return {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
@@ -58,14 +62,8 @@ export class LocationService {
         timestamp: location.timestamp,
       };
     } catch (error) {
-      console.log('Location error (using default):', error);
-      // Return Tokyo Station as default when error occurs
-      return {
-        latitude: 35.6812,
-        longitude: 139.7671,
-        accuracy: 0,
-        timestamp: Date.now(),
-      };
+      console.log('⚠️ 位置情報の取得に失敗しました（エラーは無視されます）');
+      return null; // エラー時はnullを返す
     }
   }
   

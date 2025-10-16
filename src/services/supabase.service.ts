@@ -666,57 +666,15 @@ export class SupabaseService {
         console.log(`🏪🚻 コンビニ(${convenienceRadius}m)またはトイレ(${toiletRadius}m)フィルター適用後: ${filteredData.length}件`);
       }
       
-      // 料金計算とソート（フロントエンドの料金計算ロジックを簡易実装）
+      // 料金計算はバックエンドで行うため、フロントエンド計算は削除
+      // calculatedFeeは設定しない（undefinedのまま）
+      console.warn('⚠️ fetchParkingSpotsByNearbyFilter: フロントエンド料金計算は非推奨です');
+      console.warn('⚠️ 料金情報が必要な場合は fetchParkingSpotsSortedByFee を使用してください');
+
       const parkingSpotsWithFee = filteredData.map(spot => {
-        let calculatedFee = -1; // デフォルトは料金計算不可
-        
-        if (spot.rates && Array.isArray(spot.rates)) {
-          try {
-            const baseRate = spot.rates.find((r: any) => r.type === 'base');
-            const progressiveRate = spot.rates.find((r: any) => r.type === 'progressive');
-            const maxRate = spot.rates.find((r: any) => r.type === 'max' && (!r.time_range && !r.timeRange));
-
-            if (progressiveRate && (progressiveRate.apply_after !== undefined || progressiveRate.applyAfter !== undefined)) {
-              const applyAfter = (progressiveRate.apply_after ?? progressiveRate.applyAfter) as number;
-              if (durationMinutes <= applyAfter) {
-                // apply_after以内はbaseのみ
-                if (baseRate && baseRate.minutes > 0) {
-                  const periods = Math.ceil(durationMinutes / baseRate.minutes);
-                  calculatedFee = periods * (baseRate.price || 0);
-                } else {
-                  calculatedFee = 0;
-                }
-              } else {
-                // 初回（apply_after まで）
-                let fee = 0;
-                if (baseRate && baseRate.minutes > 0) {
-                  const basePeriods = Math.ceil(applyAfter / baseRate.minutes);
-                  fee += basePeriods * (baseRate.price || 0);
-                }
-                // 以降 progressive
-                const progMinutes = Math.max(0, durationMinutes - applyAfter);
-                const progPeriods = Math.ceil(progMinutes / (progressiveRate.minutes || 1));
-                fee += progPeriods * (progressiveRate.price || 0);
-                calculatedFee = fee;
-              }
-            } else if (baseRate) {
-              // progressiveがなければbaseのみ
-              const periods = Math.ceil(durationMinutes / Math.max(1, baseRate.minutes));
-              calculatedFee = periods * (baseRate.price || 0);
-            }
-
-            // 最大料金（全体）
-            if (maxRate && calculatedFee >= 0 && maxRate.price < calculatedFee) {
-              calculatedFee = maxRate.price;
-            }
-          } catch (error) {
-            console.error('料金計算エラー:', error);
-          }
-        }
-        
         return {
           ...spot,
-          calculatedFee
+          calculatedFee: undefined // バックエンド計算なし、料金表示は「---」
         };
       });
       

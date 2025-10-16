@@ -10,13 +10,16 @@ let Callout: any;
 // Only load react-native-maps on native platforms
 if (Platform.OS !== 'web') {
   try {
-    const ReactNativeMaps = require('react-native-maps');
-    MapView = ReactNativeMaps.default || ReactNativeMaps.MapView;
-    Marker = ReactNativeMaps.Marker;
-    PROVIDER_GOOGLE = ReactNativeMaps.PROVIDER_GOOGLE;
-    Callout = ReactNativeMaps.Callout;
+    const Maps = require('react-native-maps');
+    // Try different import patterns
+    MapView = Maps.default || Maps;
+    Marker = Maps.Marker;
+    PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
+    Callout = Maps.Callout;
+
+    console.log('[NativeMaps] Loaded react-native-maps successfully');
   } catch (e) {
-    console.warn('Failed to load react-native-maps:', e);
+    console.error('[NativeMaps] Failed to load react-native-maps:', e);
     // Fallback for environments where react-native-maps is not available
     MapView = () => null;
     Marker = () => null;

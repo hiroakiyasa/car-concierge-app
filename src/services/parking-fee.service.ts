@@ -509,9 +509,26 @@ export class ParkingFeeCalculator {
     }
 
     // 時間帯指定料金しかなく、現在時刻に適用できる料金がない場合
-    // 料金計算不可として扱う（-1を返す原因となる）
+    // 時間帯に関係なく全ての料金を返す（ユーザー体験を優先）
     if (applicableRates.length === 0 && rates.some(r => r.timeRange || r.dayType)) {
-      console.warn(`⚠️ 現在時刻に適用できる料金がありません`);
+      console.warn(`⚠️ 現在時刻に適用できる料金がないため、時間帯を無視して全料金を適用します`);
+      // 時間帯指定を無視して、曜日だけをチェックして返す
+      for (const rate of rates) {
+        // 曜日チェックのみ
+        if (rate.dayType) {
+          const isWeekend = dayOfWeek === '土' || dayOfWeek === '日';
+          const isHoliday = false;
+
+          if (rate.dayType === '月～金' && (isWeekend || isHoliday)) continue;
+          if (rate.dayType === '平日' && (isWeekend || isHoliday)) continue;
+          if (rate.dayType === '土日祝' && !isWeekend && !isHoliday) continue;
+          if (rate.dayType === '土' && dayOfWeek !== '土') continue;
+          if (rate.dayType === '日祝' && dayOfWeek !== '日' && !isHoliday) continue;
+          if (rate.dayType === '土日' && !isWeekend) continue;
+        }
+
+        applicableRates.push(rate);
+      }
     }
 
     return applicableRates;

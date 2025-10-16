@@ -38,7 +38,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   const [activeTab, setActiveTab] = useState<'entry' | 'duration'>(getInitialTab());
   
   // 駐車時間の選択
-  const [selectedDurationIndex, setSelectedDurationIndex] = useState(5); // デフォルト1時間
+  const [selectedDurationIndex, setSelectedDurationIndex] = useState(7); // デフォルト2時間
   
   // 入庫日時の選択（現在時刻をデフォルト）
   const now = new Date();

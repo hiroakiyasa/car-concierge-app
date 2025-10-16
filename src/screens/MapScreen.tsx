@@ -9,6 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import { CrossPlatformMap } from '@/components/Map/CrossPlatformMap';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -18,6 +19,7 @@ import { SupabaseService } from '@/services/supabase.service';
 import { SearchService } from '@/services/search.service';
 import { ParkingFeeCalculator } from '@/services/parking-fee.service';
 import { CustomMarker } from '@/components/Map/CustomMarker';
+import { CurrentLocationMarker } from '@/components/Map/CurrentLocationMarker';
 // Right-side category buttons are replaced by top chips
 // import { CategoryButtons } from '@/components/Map/CategoryButtons';
 import { MapScale } from '@/components/Map/MapScale';
@@ -48,6 +50,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   const [shouldReopenRanking, setShouldReopenRanking] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [nearbyFacilities, setNearbyFacilities] = useState<Spot[]>([]);
+
+  // リアルタイム位置追跡の状態
+  const [isLocationTracking, setIsLocationTracking] = useState(false);
+  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+
+  // 位置情報取得の状態管理
+  const [locationStatus, setLocationStatus] = useState<'loading' | 'success' | 'error' | 'denied'>('loading');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   
   // ストア（render前に参照する値はここで初期化してTDZを回避）
   const {
@@ -164,7 +175,93 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   useEffect(() => {
     initializeLocation();
   }, []);
-  
+
+  // リアルタイム位置追跡を開始（初期化完了後のみ）
+  useEffect(() => {
+    // 初期化が完了し、位置情報が取得できた場合のみリアルタイム追跡を開始
+    if (locationStatus !== 'success') {
+      console.log('📍 リアルタイム追跡スキップ: locationStatus =', locationStatus);
+      return;
+    }
+
+    let mounted = true;
+
+    const startLocationTracking = async () => {
+      try {
+        console.log('📍 リアルタイム位置追跡を開始...');
+
+        // 位置情報の権限を確認
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.warn('⚠️ 位置情報の権限が許可されていません');
+          return;
+        }
+
+        // リアルタイム位置追跡を開始
+        const subscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 2000, // 2秒ごとに更新
+            distanceInterval: 10, // 10m移動したら更新
+          },
+          (location) => {
+            if (!mounted) return;
+
+            const { latitude, longitude, accuracy } = location.coords;
+            console.log('📍 リアルタイム位置更新:', {
+              latitude,
+              longitude,
+              accuracy,
+            });
+
+            // ストアに保存
+            setUserLocation({
+              latitude,
+              longitude,
+              accuracy,
+              timestamp: location.timestamp,
+            });
+
+            // GPS信号受信中フラグを設定
+            if (!isLocationTracking) {
+              setIsLocationTracking(true);
+            }
+          }
+        );
+
+        locationSubscription.current = subscription;
+        console.log('✅ リアルタイム位置追跡を開始しました');
+      } catch (error) {
+        console.error('❌ リアルタイム位置追跡の開始に失敗:', error);
+        setIsLocationTracking(false);
+      }
+    };
+
+    startLocationTracking();
+
+    // クリーンアップ: コンポーネントのアンマウント時に位置追跡を停止
+    return () => {
+      mounted = false;
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+        console.log('🛑 リアルタイム位置追跡を停止しました');
+        locationSubscription.current = null;
+      }
+      setIsLocationTracking(false);
+    };
+  }, [locationStatus, setUserLocation]);
+
+  // トーストメッセージを3秒後に自動で消す
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
   // Handle navigation from favorites
   useEffect(() => {
     if (route?.params?.selectedSpot && isMapReady) {
@@ -227,10 +324,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   
   const initializeLocation = async () => {
     try {
+      setLocationStatus('loading');
+      setErrorMessage(null);
+      setToastMessage('📍 現在地を取得中...');
+      console.log('📍 位置情報の初期化を開始...');
+
       // 1) 現在地を最優先で取得し、取得できたら地図を現在地に移動
       const location = await LocationService.getCurrentLocation();
       if (location) {
+        console.log('✅ 現在地を取得成功:', location);
         setUserLocation(location);
+        setLocationStatus('success');
+        setToastMessage(null);
+
         const currentRegion = {
           latitude: location.latitude,
           longitude: location.longitude,
@@ -240,6 +346,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         console.log('📍 起動時 - 現在地を中心に設定:', currentRegion);
         setMapRegion(currentRegion);
         await saveMapRegion(currentRegion);
+
         if (mapRef.current && isMapReady) {
           mapRef.current.animateToRegion(currentRegion, 1000);
         }
@@ -247,11 +354,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       }
 
       // 2) 現在地が取得できなければ、保存済みの地図範囲を復元
+      console.log('⚠️ 現在地の取得に失敗 - 代替手段を使用');
       const savedRegion = await AsyncStorage.getItem('lastMapRegion');
       if (savedRegion) {
         const initialRegion = JSON.parse(savedRegion);
-        console.log('📍 現在地取得不可 - 前回の地図範囲を復元:', initialRegion);
+        console.log('📍 前回の地図範囲を復元:', initialRegion);
         setMapRegion(initialRegion);
+        setLocationStatus('error');
+        setToastMessage('⚠️ 現在地を取得できませんでした');
         return;
       }
 
@@ -262,11 +372,16 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         latitudeDelta: 0.02,
         longitudeDelta: 0.02,
       };
-      console.log('📍 現在地・保存範囲なし - デフォルト位置を使用');
+      console.log('📍 デフォルト位置（東京駅）を使用');
       setMapRegion(defaultRegion);
       await saveMapRegion(defaultRegion);
+      setLocationStatus('denied');
+      setToastMessage('⚠️ 現在地を取得できませんでした');
     } catch (error) {
       console.error('❌ 初期位置の設定エラー:', error);
+      setLocationStatus('error');
+      setToastMessage('⚠️ 現在地を取得できませんでした');
+
       const defaultRegion = {
         latitude: 35.6812,
         longitude: 139.7671,
@@ -1291,7 +1406,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       // 自動検索は行わない（ユーザーが手動で検索ボタンを押すまで待つ）
       console.log('📍 現在地に移動完了');
     } else {
-      Alert.alert('位置情報', '現在地を取得できませんでした');
+      setToastMessage('⚠️ 現在地を取得できませんでした');
     }
   };
   
@@ -1990,7 +2105,27 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       } catch (selectedError) {
         console.error('⚠️ Error processing selected spot marker:', selectedError);
       }
-      
+
+      // 7. 現在位置マーカーを追加（最前面）
+      if (userLocation && userLocation.latitude && userLocation.longitude) {
+        try {
+          const currentLocationMarker = (
+            <CurrentLocationMarker
+              key="current-location"
+              latitude={userLocation.latitude}
+              longitude={userLocation.longitude}
+              isTracking={isLocationTracking}
+            />
+          );
+          if (currentLocationMarker && React.isValidElement(currentLocationMarker)) {
+            markers.push(currentLocationMarker);
+            console.log('📍 現在位置マーカーを追加');
+          }
+        } catch (locationError) {
+          console.error('⚠️ Error processing current location marker:', locationError);
+        }
+      }
+
       console.log('🗺️ renderMarkers完了 - 総マーカー数:', markers.length);
       return markers;
       
@@ -2127,12 +2262,23 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         )}
         
         
+        {/* 位置情報取得中のオーバーレイ - 削除（地図操作を妨げないため） */}
+
+        {/* エラーメッセージの表示 - 削除（Alert.alertで表示するため） */}
+
         {isLoading && (
           <View style={styles.loadingOverlay}>
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={Colors.primary} />
               <Text style={styles.loadingText}>検索中...</Text>
             </View>
+          </View>
+        )}
+
+        {/* 下部トースト通知 */}
+        {toastMessage && (
+          <View style={styles.toastNotification}>
+            <Text style={styles.toastText}>{toastMessage}</Text>
           </View>
         )}
       </View>
@@ -2326,5 +2472,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.textPrimary,
     fontWeight: '600',
+  },
+  errorBanner: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(255, 59, 48, 0.95)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  toastNotification: {
+    position: 'absolute',
+    bottom: 180,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  toastText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
 });

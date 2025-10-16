@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform } from 'react-native';
 // Platform-specific import - will use .web.ts on web
-import { MapView, Marker, PROVIDER_GOOGLE, Callout as NativeCallout } from './NativeMaps';
+import { MapView, Marker, Callout as NativeCallout } from './NativeMaps';
 
 export interface Region {
   latitude: number;
@@ -11,7 +11,8 @@ export interface Region {
 }
 
 interface CrossPlatformMapProps {
-  region: Region;
+  region?: Region;
+  initialRegion?: Region;
   onRegionChangeComplete?: (region: Region) => void;
   children?: React.ReactNode;
   style?: any;
@@ -29,6 +30,7 @@ interface CrossPlatformMapProps {
 
 export const CrossPlatformMap: React.FC<CrossPlatformMapProps> = ({
   region,
+  initialRegion,
   onRegionChangeComplete,
   children,
   style,
@@ -49,16 +51,16 @@ export const CrossPlatformMap: React.FC<CrossPlatformMapProps> = ({
   }
 
   // ネイティブ版（iOS/Android）
+  // iOSはApple Maps、AndroidはGoogle Maps（デフォルト）
   return (
     <MapView
       ref={mapRef}
       style={style}
-      region={region}
+      initialRegion={initialRegion || region}
       onRegionChangeComplete={onRegionChangeComplete}
       onMapReady={onMapReady}
       onMarkerPress={onMarkerPress}
       onPress={onPress}
-      provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
       showsUserLocation={showsUserLocation}
       followsUserLocation={followsUserLocation}
       showsMyLocationButton={showsMyLocationButton}

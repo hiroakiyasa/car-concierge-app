@@ -20,12 +20,16 @@ import { FavoritesService } from '@/services/favorites.service';
 import { ReviewsService } from '@/services/reviews.service';
 import { Colors } from '@/utils/constants';
 import { JAPAN_IMAGES } from '@/constants/japanImages';
+import { supabase } from '@/config/supabase';
 
 interface ProfileScreenProps {
   navigation: any;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// 管理者として許可されたメールアドレス
+const ADMIN_EMAILS = ['hiroakiyasa@yahoo.co.jp', 'hiroakiyasa@gmail.com'];
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const { user, isAuthenticated, signOut } = useAuthStore();
@@ -35,11 +39,37 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
     likes: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (user) {
       loadUserStats();
     }
+  }, [user]);
+
+  // 管理者権限チェック
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+
+      try {
+        const { data: { user: authUser }, error } = await supabase.auth.getUser();
+        if (error || !authUser?.email) {
+          setIsAdmin(false);
+          return;
+        }
+
+        setIsAdmin(ADMIN_EMAILS.includes(authUser.email));
+      } catch (error) {
+        console.error('Failed to check admin status:', error);
+        setIsAdmin(false);
+      }
+    };
+
+    checkAdminStatus();
   }, [user]);
 
   const loadUserStats = async () => {
@@ -325,33 +355,35 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
             </BlurView>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('AdminSubmissions')}
-          >
-            <BlurView intensity={50} style={styles.menuBlur}>
-              <LinearGradient
-                colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']}
-                style={styles.menuGradient}
-              >
-                <View style={styles.menuItemLeft}>
-                  <View style={styles.menuIconContainer}>
-                    <LinearGradient
-                      colors={['#F59E0B', '#D97706']}
-                      style={styles.menuIconGradient}
-                    >
-                      <Ionicons name="shield-checkmark" size={20} color="#fff" />
-                    </LinearGradient>
+          {isAdmin && (
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('AdminSubmissions')}
+            >
+              <BlurView intensity={50} style={styles.menuBlur}>
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.02)']}
+                  style={styles.menuGradient}
+                >
+                  <View style={styles.menuItemLeft}>
+                    <View style={styles.menuIconContainer}>
+                      <LinearGradient
+                        colors={['#F59E0B', '#D97706']}
+                        style={styles.menuIconGradient}
+                      >
+                        <Ionicons name="shield-checkmark" size={20} color="#fff" />
+                      </LinearGradient>
+                    </View>
+                    <View>
+                      <Text style={styles.menuItemText}>投稿管理（管理者）</Text>
+                      <Text style={styles.menuItemSubtext}>投稿の承認・却下</Text>
+                    </View>
                   </View>
-                  <View>
-                    <Text style={styles.menuItemText}>投稿管理（管理者）</Text>
-                    <Text style={styles.menuItemSubtext}>投稿の承認・却下</Text>
-                  </View>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
-              </LinearGradient>
-            </BlurView>
-          </TouchableOpacity>
+                  <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
+                </LinearGradient>
+              </BlurView>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={styles.menuItem}

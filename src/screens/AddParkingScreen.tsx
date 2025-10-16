@@ -20,10 +20,10 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Colors } from '@/utils/constants';
 import { parkingSubmissionService } from '@/services/parking-submission.service';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { CrossPlatformMap, Marker } from '@/components/Map/CrossPlatformMap';
 
 type AddParkingRouteParams = {
   mode?: 'new' | 'update';
@@ -58,6 +58,7 @@ export const AddParkingScreen: React.FC = () => {
   const [cameraPermission, setCameraPermission] = useState(false);
   const [mediaLibraryPermission, setMediaLibraryPermission] = useState(false);
   const [isSelectingLocation, setIsSelectingLocation] = useState(false);
+  const [photoHasLocation, setPhotoHasLocation] = useState(false); // 写真にGPS情報があるかどうか
 
   useEffect(() => {
     requestPermissions();
@@ -123,6 +124,66 @@ export const AddParkingScreen: React.FC = () => {
     }
   };
 
+  /**
+   * 写真のEXIF位置情報を取得
+   */
+  const extractLocationFromPhoto = (exif: any): { latitude: number; longitude: number } | null => {
+    try {
+      // EXIFデータから位置情報を取得
+      if (exif && exif.GPSLatitude && exif.GPSLongitude) {
+        const latitude = exif.GPSLatitude;
+        const longitude = exif.GPSLongitude;
+
+        console.log('📸 写真からGPS情報を取得:', { latitude, longitude });
+
+        // 有効な座標かチェック
+        if (typeof latitude === 'number' && typeof longitude === 'number' &&
+            !isNaN(latitude) && !isNaN(longitude) &&
+            latitude >= -90 && latitude <= 90 &&
+            longitude >= -180 && longitude <= 180) {
+          return { latitude, longitude };
+        }
+      }
+
+      // iOS形式のEXIFデータ (exif.GPS)
+      if (exif && exif.GPS) {
+        const gps = exif.GPS;
+        let latitude: number | null = null;
+        let longitude: number | null = null;
+
+        // 緯度の変換
+        if (gps.Latitude !== undefined) {
+          latitude = gps.Latitude;
+          if (gps.LatitudeRef === 'S') {
+            latitude = -latitude;
+          }
+        }
+
+        // 経度の変換
+        if (gps.Longitude !== undefined) {
+          longitude = gps.Longitude;
+          if (gps.LongitudeRef === 'W') {
+            longitude = -longitude;
+          }
+        }
+
+        if (latitude !== null && longitude !== null &&
+            !isNaN(latitude) && !isNaN(longitude) &&
+            latitude >= -90 && latitude <= 90 &&
+            longitude >= -180 && longitude <= 180) {
+          console.log('📸 写真からGPS情報を取得 (iOS形式):', { latitude, longitude });
+          return { latitude, longitude };
+        }
+      }
+
+      console.log('📸 写真にGPS情報が含まれていません');
+      return null;
+    } catch (error) {
+      console.error('📸 GPS情報の抽出エラー:', error);
+      return null;
+    }
+  };
+
   const takePhoto = async () => {
     console.log('📷 カメラ撮影を開始...');
     console.log('📷 カメラ権限状態:', cameraPermission);
@@ -154,17 +215,34 @@ export const AddParkingScreen: React.FC = () => {
         mediaTypes: 'images',
         allowsEditing: false,
         quality: 0.8,
+        exif: true, // EXIF情報を取得
       });
 
       console.log('📷 カメラ結果:', result);
 
       if (!result.canceled && result.assets && result.assets[0]) {
-        console.log('📷 画像が選択されました:', result.assets[0].uri);
-        setImageUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        console.log('📷 画像が選択されました:', asset.uri);
+        console.log('📷 EXIF情報:', asset.exif);
+        setImageUri(asset.uri);
 
-        // 撮影時に位置情報を更新
-        if (locationPermission) {
-          getCurrentLocation();
+        // 写真のEXIF位置情報を優先的に使用
+        const photoLocation = extractLocationFromPhoto(asset.exif);
+        if (photoLocation) {
+          console.log('✅ 写真のGPS情報を地図に反映:', photoLocation);
+          setLocation(photoLocation);
+          setPhotoHasLocation(true);
+          Alert.alert(
+            '位置情報を検出',
+            '写真に含まれるGPS情報を使用しました。必要に応じて地図上で位置を調整してください。',
+            [{ text: 'OK' }]
+          );
+        } else {
+          // EXIF位置情報がない場合は現在地を使用
+          if (locationPermission) {
+            setPhotoHasLocation(false);
+            getCurrentLocation();
+          }
         }
       } else {
         console.log('📷 カメラがキャンセルされました');
@@ -207,13 +285,33 @@ export const AddParkingScreen: React.FC = () => {
         mediaTypes: 'images',
         allowsEditing: false,
         quality: 0.8,
+        exif: true, // EXIF情報を取得
       });
 
       console.log('🖼️  ギャラリー結果:', result);
 
       if (!result.canceled && result.assets && result.assets[0]) {
-        console.log('🖼️  画像が選択されました:', result.assets[0].uri);
-        setImageUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        console.log('🖼️  画像が選択されました:', asset.uri);
+        console.log('🖼️  EXIF情報:', asset.exif);
+        setImageUri(asset.uri);
+
+        // 写真のEXIF位置情報を優先的に使用
+        const photoLocation = extractLocationFromPhoto(asset.exif);
+        if (photoLocation) {
+          console.log('✅ 写真のGPS情報を地図に反映:', photoLocation);
+          setLocation(photoLocation);
+          setPhotoHasLocation(true);
+          Alert.alert(
+            '位置情報を検出',
+            '写真に含まれるGPS情報を使用しました。必要に応じて地図上で位置を調整してください。',
+            [{ text: 'OK' }]
+          );
+        } else {
+          // EXIF位置情報がない場合は現在地を使用
+          console.log('📸 写真にGPS情報なし - 現在の位置を維持します');
+          setPhotoHasLocation(false);
+        }
       } else {
         console.log('🖼️  ギャラリーがキャンセルされました');
       }
@@ -449,61 +547,91 @@ export const AddParkingScreen: React.FC = () => {
             <Text style={styles.locationText}>
               {isLoadingLocation
                 ? '現在地を取得中...'
-                : `緯度: ${location.latitude.toFixed(6)}, 経度: ${location.longitude.toFixed(6)}`
+                : location && location.latitude !== undefined && location.longitude !== undefined
+                  ? `緯度: ${location.latitude.toFixed(6)}, 経度: ${location.longitude.toFixed(6)}`
+                  : '位置情報を取得できませんでした'
               }
             </Text>
           </View>
 
-          {/* 地図 - 常に表示 */}
-          <View style={styles.mapContainer}>
-            <MapView
-              key={`${location.latitude}-${location.longitude}`}
-              style={styles.map}
-              provider={PROVIDER_GOOGLE}
-              initialRegion={{
-                latitude: location.latitude,
-                longitude: location.longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }}
-              region={{
-                latitude: location.latitude,
-                longitude: location.longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }}
-              onPress={mode === 'update' ? undefined : handleMapPress}
-              showsUserLocation={mode !== 'update'}
-              showsMyLocationButton={false}
-              showsCompass={true}
-              showsScale={true}
-              scrollEnabled={mode !== 'update'}
-              zoomEnabled={mode !== 'update'}
-            >
-              <Marker
-                coordinate={{
-                  latitude: location.latitude,
-                  longitude: location.longitude,
-                }}
-                draggable={mode !== 'update'}
-                onDragEnd={mode === 'update' ? undefined : handleMapPress}
-                title={mode === 'update' ? parkingSpot?.name || '更新対象の駐車場' : '駐車場の位置'}
-                description={mode === 'update' ? 'この駐車場の料金を更新します' : 'マーカーをドラッグして位置を調整できます'}
-                pinColor={mode === 'update' ? Colors.primary : 'red'}
-              />
-            </MapView>
-            <View style={styles.mapHint}>
-              <Ionicons name="information-circle" size={16} color={Colors.info} />
-              <Text style={styles.mapHintText}>
-                {mode === 'update'
-                  ? `${parkingSpot?.name || '更新対象の駐車場'}の位置（固定）`
-                  : isLoadingLocation
-                    ? '現在地取得中... デフォルト位置（東京駅）を表示しています'
-                    : '地図をタップまたはマーカーをドラッグして位置を調整'
-                }
+          {/* 地図 - ネイティブ版のみ、Web版はGoogle Mapsリンク */}
+          {Platform.OS === 'web' ? (
+            <View style={styles.webMapContainer}>
+              <View style={styles.webMapPlaceholder}>
+                <Ionicons name="map" size={48} color={Colors.primary} />
+                <Text style={styles.webMapText}>
+                  📍 位置情報：緯度 {location.latitude.toFixed(6)}, 経度 {location.longitude.toFixed(6)}
+                </Text>
+                <TouchableOpacity
+                  style={styles.webMapButton}
+                  onPress={() => {
+                    const url = `https://www.google.com/maps?q=${location.latitude},${location.longitude}`;
+                    if (Platform.OS === 'web') {
+                      window.open(url, '_blank');
+                    } else {
+                      Linking.openURL(url);
+                    }
+                  }}
+                >
+                  <Ionicons name="open-outline" size={16} color={Colors.white} />
+                  <Text style={styles.webMapButtonText}>Google Mapsで開く</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.webMapHint}>
+                💡 ネイティブアプリ（iOS/Android）では、地図上で直接位置を調整できます
               </Text>
             </View>
-          </View>
+          ) : (
+            <View style={styles.mapContainer}>
+              {isLoadingLocation ? (
+                <View style={styles.mapLoadingContainer}>
+                  <ActivityIndicator size="large" color={Colors.primary} />
+                  <Text style={styles.mapLoadingText}>地図を読み込んでいます...</Text>
+                </View>
+              ) : (
+                <>
+                  <CrossPlatformMap
+                    initialRegion={{
+                      latitude: location.latitude,
+                      longitude: location.longitude,
+                      latitudeDelta: 0.01,
+                      longitudeDelta: 0.01,
+                    }}
+                    style={styles.map}
+                    onPress={mode === 'update' ? undefined : handleMapPress}
+                    onMapReady={() => console.log('✅ Map ready in AddParkingScreen')}
+                    showsUserLocation={mode !== 'update'}
+                    showsMyLocationButton={false}
+                    showsCompass={true}
+                    showsScale={true}
+                  >
+                    <Marker
+                      coordinate={{
+                        latitude: location.latitude,
+                        longitude: location.longitude,
+                      }}
+                      draggable={mode !== 'update'}
+                      onDragEnd={mode === 'update' ? undefined : handleMapPress}
+                      title={mode === 'update' ? parkingSpot?.name || '更新対象の駐車場' : '駐車場の位置'}
+                      description={mode === 'update' ? 'この駐車場の料金を更新します' : 'マーカーをドラッグして位置を調整できます'}
+                      pinColor={mode === 'update' ? Colors.primary : 'red'}
+                    />
+                  </CrossPlatformMap>
+                  <View style={styles.mapHint}>
+                    <Ionicons name="information-circle" size={16} color={Colors.info} />
+                    <Text style={styles.mapHintText}>
+                      {mode === 'update'
+                        ? `${parkingSpot?.name || '更新対象の駐車場'}の位置（固定）`
+                        : photoHasLocation
+                          ? '📸 写真のGPS情報を使用しています - 地図をタップして調整可能'
+                          : '地図をタップまたはマーカーをドラッグして位置を調整'
+                      }
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+          )}
 
           {!locationPermission && (
             <Text style={styles.permissionWarning}>
@@ -648,7 +776,19 @@ const styles = StyleSheet.create({
   },
   map: {
     width: '100%',
-    height: 250,
+    height: 350,
+  },
+  mapLoadingContainer: {
+    width: '100%',
+    height: 350,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.backgroundLight,
+  },
+  mapLoadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: Colors.textSecondary,
   },
   mapHint: {
     flexDirection: 'row',
@@ -661,6 +801,46 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.textSecondary,
     flex: 1,
+  },
+  // Web版用のスタイル
+  webMapContainer: {
+    marginTop: 12,
+  },
+  webMapPlaceholder: {
+    padding: 24,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    borderStyle: 'dashed',
+    backgroundColor: Colors.backgroundLight,
+    alignItems: 'center',
+    gap: 12,
+  },
+  webMapText: {
+    fontSize: 14,
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  webMapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+  },
+  webMapButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.white,
+  },
+  webMapHint: {
+    marginTop: 8,
+    fontSize: 12,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   imageContainer: {
     position: 'relative',

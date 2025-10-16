@@ -16,14 +16,16 @@ import {
   TextInput,
   RefreshControl,
   Modal,
+  Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/utils/constants';
 import { supabase } from '@/config/supabase';
 import { useAuthStore } from '@/stores/useAuthStore';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { parkingSubmissionService } from '@/services/parking-submission.service';
+import { CrossPlatformMap, Marker } from '@/components/Map/CrossPlatformMap';
 
 interface Submission {
   id: string;
@@ -67,6 +69,24 @@ interface AdminSubmissionsScreenProps {
   navigation: any;
 }
 
+interface ParkingSpot {
+  id: number;
+  name: string;
+  lat: number;
+  lng: number;
+  rates: any[];
+  capacity?: number;
+  hours?: any;
+  address?: string;
+  phone_number?: string;
+  images?: string[];
+  is_user_submitted: boolean;
+  created_at: string;
+}
+
+// 管理者として許可されたメールアドレス
+const ADMIN_EMAILS = ['hiroakiyasa@yahoo.co.jp', 'hiroakiyasa@gmail.com'];
+
 export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
   navigation,
 }) => {
@@ -88,6 +108,11 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
   const [isEditMode, setIsEditMode] = useState(false);
   const [jsonEditError, setJsonEditError] = useState<string | null>(null);
 
+  // ユーザー投稿駐車場の管理用
+  const [viewMode, setViewMode] = useState<'submissions' | 'parking'>('submissions');
+  const [userParkingSpots, setUserParkingSpots] = useState<ParkingSpot[]>([]);
+  const [selectedParkingSpot, setSelectedParkingSpot] = useState<ParkingSpot | null>(null);
+
   // モーダルを閉じる関数（すべての関連状態をリセット）
   const closeDetailModal = () => {
     setSelectedSubmission(null);
@@ -101,13 +126,71 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
     setJsonEditError(null);
   };
 
+  // 管理者権限チェック
   useEffect(() => {
-    loadSubmissions();
+    const checkAdminAccess = async () => {
+      if (!user) {
+        Alert.alert('アクセス拒否', '管理画面にアクセスするにはログインが必要です', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+        return;
+      }
+
+      // ユーザーのメールアドレスを取得
+      const { data: { user: authUser }, error } = await supabase.auth.getUser();
+
+      if (error || !authUser?.email) {
+        Alert.alert('エラー', 'ユーザー情報の取得に失敗しました', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+        return;
+      }
+
+      // 管理者メールアドレスをチェック
+      if (!ADMIN_EMAILS.includes(authUser.email)) {
+        Alert.alert(
+          'アクセス拒否',
+          'この画面は管理者のみアクセスできます',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      }
+    };
+
+    checkAdminAccess();
   }, []);
+
+  useEffect(() => {
+    if (viewMode === 'submissions') {
+      loadSubmissions();
+    } else {
+      loadUserParkingSpots();
+    }
+  }, [viewMode]);
 
   useEffect(() => {
     filterSubmissionsByStatus();
   }, [filterStatus, submissions]);
+
+  const loadUserParkingSpots = async () => {
+    try {
+      setIsLoading(true);
+
+      const { data, error } = await supabase
+        .from('parking_spots')
+        .select('*')
+        .eq('is_user_submitted', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setUserParkingSpots(data || []);
+    } catch (error) {
+      console.error('ユーザー投稿駐車場の読み込みエラー:', error);
+      Alert.alert('エラー', 'ユーザー投稿駐車場の読み込みに失敗しました');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const loadSubmissions = async () => {
     try {
@@ -167,8 +250,70 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
 
   const onRefresh = async () => {
     setIsRefreshing(true);
-    await loadSubmissions();
+    if (viewMode === 'submissions') {
+      await loadSubmissions();
+    } else {
+      await loadUserParkingSpots();
+    }
     setIsRefreshing(false);
+  };
+
+  const handleDeleteParkingSpot = async (spotId: number) => {
+    Alert.alert(
+      '駐車場を削除',
+      'この駐車場を完全に削除しますか？\n\n※ この操作は取り消せません',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '削除',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsProcessing(true);
+
+              const { error } = await supabase
+                .from('parking_spots')
+                .delete()
+                .eq('id', spotId);
+
+              if (error) throw error;
+
+              Alert.alert('削除完了', '駐車場を削除しました');
+              await loadUserParkingSpots();
+              setSelectedParkingSpot(null);
+            } catch (error) {
+              console.error('削除エラー:', error);
+              Alert.alert('エラー', '削除に失敗しました');
+            } finally {
+              setIsProcessing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleUpdateParkingSpot = async (spotId: number, updatedData: any) => {
+    try {
+      setIsProcessing(true);
+
+      const { error } = await supabase
+        .from('parking_spots')
+        .update(updatedData)
+        .eq('id', spotId);
+
+      if (error) throw error;
+
+      Alert.alert('更新完了', '駐車場情報を更新しました');
+      await loadUserParkingSpots();
+      setSelectedParkingSpot(null);
+      setIsEditMode(false);
+    } catch (error) {
+      console.error('更新エラー:', error);
+      Alert.alert('エラー', '更新に失敗しました');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const filterSubmissionsByStatus = () => {
@@ -340,6 +485,58 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
       // 編集されたデータまたは元のデータを使用
       const dataToUse = editableData || selectedSubmission.extracted_data;
 
+      let imageUrl: string | null = null;
+
+      // 画像をparking-imagesバケットにコピー
+      try {
+        console.log('📸 画像をコピー中:', selectedSubmission.image_path);
+
+        // 1. parking-submissionsバケットから画像をダウンロード
+        const { data: imageData, error: downloadError } = await supabase.storage
+          .from('parking-submissions')
+          .download(selectedSubmission.image_path);
+
+        if (downloadError) {
+          console.error('画像ダウンロードエラー:', downloadError);
+          throw downloadError;
+        }
+
+        // 2. ファイル名を生成（タイムスタンプ + ランダム文字列）
+        const timestamp = Date.now();
+        const randomStr = Math.random().toString(36).substring(7);
+        const fileExt = selectedSubmission.image_path.split('.').pop() || 'jpg';
+        const newFileName = `parking_${timestamp}_${randomStr}.${fileExt}`;
+
+        // 3. parking-imagesバケットにアップロード
+        const { error: uploadError } = await supabase.storage
+          .from('parking-images')
+          .upload(newFileName, imageData, {
+            contentType: 'image/jpeg',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          console.error('画像アップロードエラー:', uploadError);
+          throw uploadError;
+        }
+
+        // 4. 公開URLを取得
+        const { data: urlData } = supabase.storage
+          .from('parking-images')
+          .getPublicUrl(newFileName);
+
+        imageUrl = urlData.publicUrl;
+        console.log('✅ 画像コピー成功:', imageUrl);
+      } catch (imageError) {
+        console.error('画像処理エラー:', imageError);
+        // 画像コピーに失敗しても処理は続行（警告のみ）
+        Alert.alert(
+          '警告',
+          '画像のコピーに失敗しましたが、駐車場情報は登録されます。',
+          [{ text: 'OK' }]
+        );
+      }
+
       // 1. parking_spotsテーブルに新規レコードを作成
       if (selectedSubmission.submission_type === 'new_parking') {
         const { error: insertError } = await supabase
@@ -353,6 +550,12 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
             hours: dataToUse?.hours || null,
             address: dataToUse?.address,
             phone_number: dataToUse?.phone_number,
+            images: imageUrl ? [imageUrl] : [],
+            elevation: (dataToUse as any)?.elevation,
+            nearest_toilet: (dataToUse as any)?.nearest_toilet
+              ? JSON.stringify((dataToUse as any).nearest_toilet)
+              : null,
+            is_user_submitted: true, // ユーザー投稿由来のフラグ
           });
 
         if (insertError) throw insertError;
@@ -453,8 +656,27 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
     }
   };
 
+  // データ欠損をチェックする関数
+  const getMissingDataFields = (submission: Submission): string[] => {
+    const missing: string[] = [];
+    const data = submission.extracted_data;
+
+    if (!data) return ['すべてのデータ'];
+
+    if (!data.name || data.name.trim() === '') missing.push('駐車場名');
+    if (!data.rates || data.rates.length === 0) missing.push('料金情報');
+    if (!data.capacity) missing.push('収容台数');
+    if (!data.address || data.address.trim() === '') missing.push('住所');
+    if (!data.phone_number || data.phone_number.trim() === '') missing.push('電話番号');
+    if (!data.hours) missing.push('営業時間');
+
+    return missing;
+  };
+
   const renderSubmissionCard = (submission: Submission) => {
     const statusBadge = getStatusBadgeStyle(submission.status);
+    const missingFields = getMissingDataFields(submission);
+    const hasWarning = missingFields.length > 0;
 
     return (
       <TouchableOpacity
@@ -470,13 +692,21 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
         }}
       >
         <View style={styles.cardHeader}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.cardTitle}>
               {submission.extracted_data?.name || '駐車場情報'}
             </Text>
             <Text style={styles.cardSubtitle}>
               投稿者: {submission.user_email}
             </Text>
+            {hasWarning && (
+              <View style={styles.warningBadgeSmall}>
+                <Ionicons name="warning" size={12} color="#F57C00" />
+                <Text style={styles.warningBadgeSmallText}>
+                  データ不足 ({missingFields.length}項目)
+                </Text>
+              </View>
+            )}
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusBadge.backgroundColor }]}>
             <Text style={styles.statusBadgeText}>{statusBadge.text}</Text>
@@ -488,37 +718,252 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
 
           <View style={styles.cardInfo}>
             <View style={styles.infoRow}>
-              <Ionicons name="location" size={16} color={Colors.textSecondary} />
-              <Text style={styles.infoText}>
-                緯度: {submission.latitude.toFixed(6)}, 経度: {submission.longitude.toFixed(6)}
+              <Ionicons name="location" size={14} color={Colors.textSecondary} />
+              <Text style={styles.infoText} numberOfLines={1} ellipsizeMode="tail">
+                {submission.extracted_data?.address ||
+                 `${submission.latitude.toFixed(4)}, ${submission.longitude.toFixed(4)}`}
               </Text>
             </View>
-
-            {submission.confidence_score !== null && submission.confidence_score !== undefined && (
-              <View style={styles.infoRow}>
-                <Ionicons name="analytics" size={16} color={Colors.textSecondary} />
-                <Text style={styles.infoText}>
-                  信頼度: {(submission.confidence_score * 100).toFixed(0)}%
-                </Text>
-              </View>
-            )}
 
             <View style={styles.infoRow}>
-              <Ionicons name="time" size={16} color={Colors.textSecondary} />
+              <Ionicons name="time" size={14} color={Colors.textSecondary} />
               <Text style={styles.infoText}>
-                {new Date(submission.created_at).toLocaleString('ja-JP')}
+                {new Date(submission.created_at).toLocaleDateString('ja-JP')}
               </Text>
+              {submission.confidence_score !== null && submission.confidence_score !== undefined && (
+                <>
+                  <Text style={styles.infoText}> • </Text>
+                  <Ionicons name="analytics" size={14} color={Colors.textSecondary} />
+                  <Text style={styles.infoText}>
+                    {(submission.confidence_score * 100).toFixed(0)}%
+                  </Text>
+                </>
+              )}
             </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
-            {submission.submission_type === 'update_rates' && (
-              <View style={styles.infoRow}>
-                <Ionicons name="refresh" size={16} color={Colors.info} />
-                <Text style={[styles.infoText, { color: Colors.info }]}>料金更新</Text>
-              </View>
+  const renderParkingSpotCard = (spot: ParkingSpot) => {
+    return (
+      <TouchableOpacity
+        key={spot.id}
+        style={styles.submissionCard}
+        onPress={() => {
+          setSelectedParkingSpot(spot);
+          setEditableData({
+            name: spot.name,
+            rates: spot.rates,
+            capacity: spot.capacity,
+            hours: spot.hours,
+            address: spot.address,
+            phone_number: spot.phone_number,
+          });
+        }}
+      >
+        <View style={styles.cardHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>{spot.name}</Text>
+            <Text style={styles.cardSubtitle}>
+              ID: {spot.id} • {spot.capacity ? `${spot.capacity}台` : '台数不明'}
+            </Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: Colors.success }]}>
+            <Text style={styles.statusBadgeText}>ユーザー投稿</Text>
+          </View>
+        </View>
+
+        <View style={styles.cardInfo}>
+          <View style={styles.infoRow}>
+            <Ionicons name="location" size={14} color={Colors.textSecondary} />
+            <Text style={styles.infoText} numberOfLines={1} ellipsizeMode="tail">
+              {spot.address || `${spot.lat.toFixed(4)}, ${spot.lng.toFixed(4)}`}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Ionicons name="time" size={14} color={Colors.textSecondary} />
+            <Text style={styles.infoText}>
+              {new Date(spot.created_at).toLocaleDateString('ja-JP')}
+            </Text>
+            {spot.rates && spot.rates.length > 0 && (
+              <>
+                <Text style={styles.infoText}> • </Text>
+                <Ionicons name="pricetag" size={14} color={Colors.textSecondary} />
+                <Text style={styles.infoText}>
+                  {spot.rates.length}件の料金情報
+                </Text>
+              </>
             )}
           </View>
         </View>
       </TouchableOpacity>
+    );
+  };
+
+  const renderParkingSpotDetailModal = () => {
+    if (!selectedParkingSpot) return null;
+
+    return (
+      <Modal
+        visible={!!selectedParkingSpot}
+        animationType="slide"
+        onRequestClose={() => {
+          setSelectedParkingSpot(null);
+          setIsEditMode(false);
+          setEditableData(null);
+        }}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              onPress={() => {
+                setSelectedParkingSpot(null);
+                setIsEditMode(false);
+                setEditableData(null);
+              }}
+              style={styles.modalHeaderButton}
+            >
+              <Ionicons name="arrow-back" size={24} color={Colors.text} />
+              <Text style={styles.modalHeaderButtonText}>戻る</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>駐車場管理</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.detailSection}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={styles.sectionTitle}>駐車場情報</Text>
+                {!isEditMode && (
+                  <TouchableOpacity
+                    onPress={() => setIsEditMode(true)}
+                    style={{ padding: 8, backgroundColor: Colors.primary, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  >
+                    <Ionicons name="create-outline" size={16} color={Colors.white} />
+                    <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '600' }}>編集</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {isEditMode ? (
+                <View>
+                  <Text style={styles.detailLabel}>JSONを編集:</Text>
+                  <TextInput
+                    style={[
+                      styles.reviewNotesInput,
+                      { minHeight: 300, fontFamily: 'Courier', fontSize: 12 },
+                      jsonEditError && { borderColor: Colors.error, borderWidth: 2 }
+                    ]}
+                    multiline
+                    value={JSON.stringify(editableData, null, 2)}
+                    onChangeText={(text) => {
+                      try {
+                        const parsed = JSON.parse(text);
+                        setEditableData(parsed);
+                        setJsonEditError(null);
+                      } catch (e) {
+                        setJsonEditError((e as Error).message);
+                      }
+                    }}
+                  />
+                  {jsonEditError && (
+                    <Text style={{ fontSize: 11, color: Colors.error, marginTop: 4 }}>
+                      ⚠️ JSON構文エラー: {jsonEditError}
+                    </Text>
+                  )}
+
+                  <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setIsEditMode(false);
+                        setEditableData({
+                          name: selectedParkingSpot.name,
+                          rates: selectedParkingSpot.rates,
+                          capacity: selectedParkingSpot.capacity,
+                          hours: selectedParkingSpot.hours,
+                          address: selectedParkingSpot.address,
+                          phone_number: selectedParkingSpot.phone_number,
+                        });
+                        setJsonEditError(null);
+                      }}
+                      style={[styles.actionButton, styles.rejectButton]}
+                    >
+                      <Ionicons name="close" size={20} color={Colors.white} />
+                      <Text style={styles.actionButtonText}>キャンセル</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => handleUpdateParkingSpot(selectedParkingSpot.id, editableData)}
+                      disabled={!!jsonEditError || isProcessing}
+                      style={[styles.actionButton, styles.approveButton, (jsonEditError || isProcessing) && { opacity: 0.5 }]}
+                    >
+                      {isProcessing ? (
+                        <ActivityIndicator color={Colors.white} />
+                      ) : (
+                        <>
+                          <Ionicons name="checkmark" size={20} color={Colors.white} />
+                          <Text style={styles.actionButtonText}>保存</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>ID:</Text>
+                    <Text style={styles.detailValue}>{selectedParkingSpot.id}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>駐車場名:</Text>
+                    <Text style={styles.detailValue}>{selectedParkingSpot.name}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>収容台数:</Text>
+                    <Text style={styles.detailValue}>{selectedParkingSpot.capacity ? `${selectedParkingSpot.capacity}台` : '不明'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>住所:</Text>
+                    <Text style={styles.detailValue}>{selectedParkingSpot.address || '不明'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>電話番号:</Text>
+                    <Text style={styles.detailValue}>{selectedParkingSpot.phone_number || '不明'}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>位置:</Text>
+                    <Text style={styles.detailValue}>
+                      {selectedParkingSpot.lat.toFixed(6)}, {selectedParkingSpot.lng.toFixed(6)}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+
+            {!isEditMode && (
+              <View style={styles.detailSection}>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.rejectButton, { width: '100%' }]}
+                  onPress={() => handleDeleteParkingSpot(selectedParkingSpot.id)}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <ActivityIndicator color={Colors.white} />
+                  ) : (
+                    <>
+                      <Ionicons name="trash" size={20} color={Colors.white} />
+                      <Text style={styles.actionButtonText}>削除</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     );
   };
 
@@ -585,7 +1030,17 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
             {selectedSubmission.extracted_data && (
               <View style={styles.detailSection}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <Text style={styles.sectionTitle}>抽出データ</Text>
+                  <View>
+                    <Text style={styles.sectionTitle}>抽出データ</Text>
+                    {getMissingDataFields(selectedSubmission).length > 0 && !isEditMode && (
+                      <View style={styles.warningBadge}>
+                        <Ionicons name="warning" size={16} color="#F57C00" />
+                        <Text style={styles.warningBadgeText}>
+                          {getMissingDataFields(selectedSubmission).length}項目が未抽出: {getMissingDataFields(selectedSubmission).join('、')}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                   {!isEditMode && (
                     <TouchableOpacity
                       onPress={() => {
@@ -762,24 +1217,48 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
             {/* 地図 */}
             <View style={styles.detailSection}>
               <Text style={styles.sectionTitle}>位置情報</Text>
-              <MapView
-                style={styles.map}
-                provider={PROVIDER_GOOGLE}
-                initialRegion={{
-                  latitude: selectedSubmission.latitude,
-                  longitude: selectedSubmission.longitude,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }}
-              >
-                <Marker
-                  coordinate={{
+              {Platform.OS === 'web' ? (
+                <View style={styles.webMapPlaceholder}>
+                  <Ionicons name="map" size={40} color={Colors.primary} />
+                  <Text style={styles.webMapText}>
+                    📍 緯度: {selectedSubmission.latitude.toFixed(6)}{'\n'}
+                    経度: {selectedSubmission.longitude.toFixed(6)}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.webMapButton}
+                    onPress={() => {
+                      const url = `https://www.google.com/maps?q=${selectedSubmission.latitude},${selectedSubmission.longitude}`;
+                      if (Platform.OS === 'web') {
+                        window.open(url, '_blank');
+                      } else {
+                        Linking.openURL(url);
+                      }
+                    }}
+                  >
+                    <Ionicons name="open-outline" size={16} color={Colors.white} />
+                    <Text style={styles.webMapButtonText}>Google Mapsで開く</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <CrossPlatformMap
+                  initialRegion={{
                     latitude: selectedSubmission.latitude,
                     longitude: selectedSubmission.longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
                   }}
-                  title={selectedSubmission.extracted_data?.name || '駐車場'}
-                />
-              </MapView>
+                  style={styles.map}
+                  onMapReady={() => console.log('✅ Map ready in AdminSubmissionsScreen')}
+                >
+                  <Marker
+                    coordinate={{
+                      latitude: selectedSubmission.latitude,
+                      longitude: selectedSubmission.longitude,
+                    }}
+                    title={selectedSubmission.extracted_data?.name || '駐車場'}
+                  />
+                </CrossPlatformMap>
+              )}
             </View>
 
             {/* ユーザーメモ */}
@@ -915,41 +1394,66 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* フィルター */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterContainer}
-      >
-        {[
-          { key: 'all', label: '全て' },
-          { key: 'pending', label: '承認待ち' },
-          { key: 'processing', label: '処理中' },
-          { key: 'approved', label: '承認済み' },
-          { key: 'rejected', label: '却下' },
-          { key: 'merged', label: '反映済み' },
-        ].map((filter) => (
-          <TouchableOpacity
-            key={filter.key}
-            style={[
-              styles.filterButton,
-              filterStatus === filter.key && styles.filterButtonActive,
-            ]}
-            onPress={() => setFilterStatus(filter.key)}
-          >
-            <Text
-              style={[
-                styles.filterButtonText,
-                filterStatus === filter.key && styles.filterButtonTextActive,
-              ]}
-            >
-              {filter.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* ビューモード切替 */}
+      <View style={styles.viewModeContainer}>
+        <TouchableOpacity
+          style={[styles.viewModeButton, viewMode === 'submissions' && styles.viewModeButtonActive]}
+          onPress={() => setViewMode('submissions')}
+        >
+          <Ionicons name="document-text" size={20} color={viewMode === 'submissions' ? Colors.white : Colors.primary} />
+          <Text style={[styles.viewModeText, viewMode === 'submissions' && styles.viewModeTextActive]}>
+            投稿レビュー
+          </Text>
+        </TouchableOpacity>
 
-      {/* 投稿一覧 */}
+        <TouchableOpacity
+          style={[styles.viewModeButton, viewMode === 'parking' && styles.viewModeButtonActive]}
+          onPress={() => setViewMode('parking')}
+        >
+          <Ionicons name="car" size={20} color={viewMode === 'parking' ? Colors.white : Colors.primary} />
+          <Text style={[styles.viewModeText, viewMode === 'parking' && styles.viewModeTextActive]}>
+            駐車場管理
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* フィルター（投稿レビューモードのみ） */}
+      {viewMode === 'submissions' && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterContainer}
+        >
+          {[
+            { key: 'all', label: '全て' },
+            { key: 'pending', label: '承認待ち' },
+            { key: 'processing', label: '処理中' },
+            { key: 'approved', label: '承認済み' },
+            { key: 'rejected', label: '却下' },
+            { key: 'merged', label: '反映済み' },
+          ].map((filter) => (
+            <TouchableOpacity
+              key={filter.key}
+              style={[
+                styles.filterButton,
+                filterStatus === filter.key && styles.filterButtonActive,
+              ]}
+              onPress={() => setFilterStatus(filter.key)}
+            >
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  filterStatus === filter.key && styles.filterButtonTextActive,
+                ]}
+              >
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* コンテンツ一覧 */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Colors.primary} />
@@ -961,19 +1465,31 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
             <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
           }
         >
-          {filteredSubmissions.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="document-text-outline" size={64} color={Colors.textSecondary} />
-              <Text style={styles.emptyStateText}>投稿がありません</Text>
-            </View>
+          {viewMode === 'submissions' ? (
+            filteredSubmissions.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="document-text-outline" size={64} color={Colors.textSecondary} />
+                <Text style={styles.emptyStateText}>投稿がありません</Text>
+              </View>
+            ) : (
+              filteredSubmissions.map(renderSubmissionCard)
+            )
           ) : (
-            filteredSubmissions.map(renderSubmissionCard)
+            userParkingSpots.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="car-outline" size={64} color={Colors.textSecondary} />
+                <Text style={styles.emptyStateText}>ユーザー投稿駐車場がありません</Text>
+              </View>
+            ) : (
+              userParkingSpots.map(renderParkingSpotCard)
+            )
           )}
         </ScrollView>
       )}
 
       {/* 詳細モーダル */}
       {renderDetailModal()}
+      {renderParkingSpotDetailModal()}
     </SafeAreaView>
   );
 };
@@ -1001,6 +1517,8 @@ const styles = StyleSheet.create({
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   filterButton: {
     paddingHorizontal: 16,
@@ -1008,6 +1526,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: Colors.backgroundLight,
     marginRight: 8,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   filterButtonActive: {
     backgroundColor: Colors.primary,
@@ -1027,8 +1548,8 @@ const styles = StyleSheet.create({
   submissionCard: {
     backgroundColor: Colors.white,
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    padding: 12,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1039,7 +1560,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   cardTitle: {
     fontSize: 16,
@@ -1062,16 +1583,16 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   cardBody: {
-    gap: 12,
+    gap: 8,
   },
   cardImage: {
     width: '100%',
-    height: 200,
+    height: 150,
     borderRadius: 8,
     backgroundColor: Colors.backgroundLight,
   },
   cardInfo: {
-    gap: 8,
+    gap: 4,
   },
   infoRow: {
     flexDirection: 'row',
@@ -1119,8 +1640,16 @@ const styles = StyleSheet.create({
   modalHeaderButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    padding: 4,
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: Colors.white,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   modalHeaderButtonText: {
     fontSize: 16,
@@ -1284,5 +1813,99 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
     lineHeight: 18,
+  },
+  warningBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  warningBadgeSmallText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#F57C00',
+  },
+  warningBadge: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: 8,
+    padding: 12,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F57C00',
+  },
+  warningBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#F57C00',
+    flex: 1,
+    lineHeight: 18,
+  },
+  viewModeContainer: {
+    flexDirection: 'row',
+    padding: 12,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  viewModeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: Colors.backgroundLight,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    gap: 8,
+  },
+  viewModeButtonActive: {
+    backgroundColor: Colors.primary,
+  },
+  viewModeText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  viewModeTextActive: {
+    color: Colors.white,
+  },
+  // Web版用のスタイル
+  webMapPlaceholder: {
+    padding: 24,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    borderStyle: 'dashed',
+    backgroundColor: Colors.backgroundLight,
+    alignItems: 'center',
+    gap: 12,
+  },
+  webMapText: {
+    fontSize: 14,
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  webMapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+  },
+  webMapButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.white,
   },
 });
