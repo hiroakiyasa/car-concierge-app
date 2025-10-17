@@ -19,13 +19,50 @@ export class LocationService {
   static async geocode(query: string): Promise<{ latitude: number; longitude: number } | null> {
     try {
       const results = await Location.geocodeAsync(query);
-      const first = results && results.length > 0 ? results[0] : null;
+
+      // デバッグログ：すべての結果を表示
+      console.log(`🔍 ジオコーディング結果 (クエリ: ${query}):`, results.length, '件');
+      results.forEach((r, i) => {
+        console.log(`  [${i}] 緯度: ${r.latitude}, 経度: ${r.longitude}`);
+      });
+
+      if (!results || results.length === 0) {
+        console.log('⚠️ ジオコーディング結果なし');
+        return null;
+      }
+
+      // 日本の範囲
+      const JAPAN_BOUNDS = {
+        minLat: 20.0,
+        maxLat: 46.5,
+        minLng: 122.0,
+        maxLng: 154.0,
+      };
+
+      // 日本国内の結果のみをフィルタリング
+      const japanResults = results.filter(r =>
+        r.latitude >= JAPAN_BOUNDS.minLat &&
+        r.latitude <= JAPAN_BOUNDS.maxLat &&
+        r.longitude >= JAPAN_BOUNDS.minLng &&
+        r.longitude <= JAPAN_BOUNDS.maxLng
+      );
+
+      console.log(`📍 日本国内の結果: ${japanResults.length}件`);
+
+      // 日本国内の結果があればそれを使用、なければ全結果から選択
+      const filteredResults = japanResults.length > 0 ? japanResults : results;
+
+      // 最初の有効な結果を使用
+      const first = filteredResults[0];
       if (first && typeof first.latitude === 'number' && typeof first.longitude === 'number') {
+        console.log(`✅ 選択された座標: 緯度 ${first.latitude}, 経度 ${first.longitude}`);
         return { latitude: first.latitude, longitude: first.longitude };
       }
+
+      console.log('⚠️ 有効なジオコーディング結果なし');
       return null;
     } catch (e) {
-      console.log('Geocoding error:', e);
+      console.log('❌ ジオコーディングエラー:', e);
       return null;
     }
   }

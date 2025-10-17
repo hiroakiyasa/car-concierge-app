@@ -1,6 +1,7 @@
 import { LocationService } from './location.service';
 import { SupabaseService } from './supabase.service';
 import { supabase } from '@/config/supabase';
+import { searchPredefinedLocations } from '@/utils/predefined-locations';
 
 export interface PlaceSearchResult {
   name: string;
@@ -23,9 +24,24 @@ export class PlacesSearchService {
 
     const normalizedQuery = query.toLowerCase().trim();
     const results: PlaceSearchResult[] = [];
+    let predefined = null;
 
     try {
-      // 並列で複数のソースから検索
+      // 1. まず事前定義の場所を検索（最優先）
+      predefined = searchPredefinedLocations(query);
+      if (predefined) {
+        results.push({
+          name: predefined.displayName,
+          displayName: predefined.displayName,
+          type: 'geocoded',
+          latitude: predefined.latitude,
+          longitude: predefined.longitude,
+          description: predefined.description
+        });
+        console.log(`🎯 事前定義の場所を最優先で使用: ${predefined.displayName}`);
+      }
+
+      // 2. 並列で複数のソースから検索
       const [dbResults, geocodeResults] = await Promise.all([
         this.searchFromDatabase(normalizedQuery),
         this.searchFromGeocoding(query)
@@ -48,9 +64,17 @@ export class PlacesSearchService {
       console.error('Place search error:', error);
     }
 
+    // 事前定義の場所があるかチェック
+    const hasPredefined = predefined !== null;
+
     // スコアリングして並び替え
-    const scoredResults = results.map(result => {
+    const scoredResults = results.map((result, index) => {
       let score = 0;
+
+      // 事前定義の場所（最初の結果）は最高スコア
+      if (index === 0 && hasPredefined) {
+        score += 100;
+      }
 
       // 完全一致
       if (result.name.toLowerCase() === normalizedQuery) {
@@ -85,6 +109,22 @@ export class PlacesSearchService {
    */
   private static async searchFromDatabase(query: string): Promise<PlaceSearchResult[]> {
     const results: PlaceSearchResult[] = [];
+
+    // 日本の範囲
+    const JAPAN_BOUNDS = {
+      minLat: 20.0,
+      maxLat: 46.5,
+      minLng: 122.0,
+      maxLng: 154.0,
+    };
+
+    // 座標が日本国内かチェックする関数
+    const isInJapan = (lat: number, lng: number): boolean => {
+      return lat >= JAPAN_BOUNDS.minLat &&
+        lat <= JAPAN_BOUNDS.maxLat &&
+        lng >= JAPAN_BOUNDS.minLng &&
+        lng <= JAPAN_BOUNDS.maxLng;
+    };
 
     try {
       // 各テーブルから並列検索
@@ -135,7 +175,7 @@ export class PlacesSearchService {
       // 駐車場の結果を追加
       if (parkingData.data) {
         parkingData.data.forEach(item => {
-          if (item.lat && item.lng) {
+          if (item.lat && item.lng && isInJapan(item.lat, item.lng)) {
             results.push({
               name: item.name || 'コインパーキング',
               displayName: item.name || 'コインパーキング',
@@ -152,7 +192,7 @@ export class PlacesSearchService {
       // コンビニの結果を追加
       if (convenienceData.data) {
         convenienceData.data.forEach(item => {
-          if (item.lat && item.lng) {
+          if (item.lat && item.lng && isInJapan(item.lat, item.lng)) {
             results.push({
               name: item.name || 'コンビニ',
               displayName: `${item.brand || ''}${item.name || 'コンビニ'}`.trim(),
@@ -169,7 +209,7 @@ export class PlacesSearchService {
       // 温泉の結果を追加
       if (hotspringData.data) {
         hotspringData.data.forEach(item => {
-          if (item.lat && item.lng) {
+          if (item.lat && item.lng && isInJapan(item.lat, item.lng)) {
             results.push({
               name: item.name || '温泉',
               displayName: item.name || '温泉',
@@ -186,7 +226,7 @@ export class PlacesSearchService {
       // ガソリンスタンドの結果を追加
       if (gasstationData.data) {
         gasstationData.data.forEach(item => {
-          if (item.lat && item.lng) {
+          if (item.lat && item.lng && isInJapan(item.lat, item.lng)) {
             results.push({
               name: item.name || 'ガソリンスタンド',
               displayName: `${item.brand || ''}${item.name || 'ガソリンスタンド'}`.trim(),
@@ -203,7 +243,7 @@ export class PlacesSearchService {
       // お祭り・花火大会の結果を追加
       if (festivalData.data) {
         festivalData.data.forEach(item => {
-          if (item.lat && item.lng) {
+          if (item.lat && item.lng && isInJapan(item.lat, item.lng)) {
             results.push({
               name: item.name || 'お祭り',
               displayName: item.name || 'お祭り',
@@ -220,7 +260,7 @@ export class PlacesSearchService {
       // トイレの結果を追加
       if (toiletData.data) {
         toiletData.data.forEach(item => {
-          if (item.lat && item.lng) {
+          if (item.lat && item.lng && isInJapan(item.lat, item.lng)) {
             results.push({
               name: item.name || 'トイレ',
               displayName: item.name || 'トイレ',
@@ -248,54 +288,76 @@ export class PlacesSearchService {
     const results: PlaceSearchResult[] = [];
 
     try {
-      // 日本の地名として検索するため「〜、日本」を追加
-      const japanQuery = query.includes('日本') ? query : `${query}、日本`;
+      // 複数のクエリパターンを試す（優先度順）
+      const queryPatterns: { query: string; priority: number; description: string }[] = [];
 
-      // Expo Location APIでジオコーディング
-      const geocodeResult = await LocationService.geocode(japanQuery);
-
-      if (geocodeResult) {
-        results.push({
-          name: query,
-          displayName: query,
-          type: 'geocoded',
-          latitude: geocodeResult.latitude,
-          longitude: geocodeResult.longitude,
-          description: '地名・住所'
+      // パターン1: 都道府県 + クエリ（駅の場合は最優先）
+      if (query.includes('駅')) {
+        queryPatterns.push({
+          query: `東京都 ${query}`,
+          priority: 10,
+          description: query
         });
       }
 
-      // 駅として検索
+      // パターン2: クエリ + 日本
+      queryPatterns.push({
+        query: query.includes('日本') ? query : `${query}、日本`,
+        priority: 5,
+        description: query
+      });
+
+      // パターン3: 英語 + Japan（有名な駅の場合）
+      if (query === '東京駅') {
+        queryPatterns.push({
+          query: 'Tokyo Station, Japan',
+          priority: 8,
+          description: '東京駅'
+        });
+      }
+
+      // パターン4: 駅として検索（駅が含まれていない場合のみ）
       if (!query.includes('駅')) {
-        const stationQuery = `${query}駅、日本`;
-        const stationResult = await LocationService.geocode(stationQuery);
-        if (stationResult) {
+        queryPatterns.push({
+          query: `${query}駅、日本`,
+          priority: 6,
+          description: `${query}駅`
+        });
+      }
+
+      // パターン5: 大学として検索（駅や大学が含まれていない場合のみ）
+      if (!query.includes('大学') && !query.includes('駅')) {
+        queryPatterns.push({
+          query: `${query}大学、日本`,
+          priority: 3,
+          description: `${query}大学`
+        });
+      }
+
+      // すべてのパターンで検索
+      for (const pattern of queryPatterns) {
+        const geocodeResult = await LocationService.geocode(pattern.query);
+
+        if (geocodeResult) {
+          console.log(`✅ ジオコーディング成功: "${pattern.query}" → 緯度${geocodeResult.latitude}, 経度${geocodeResult.longitude}`);
+
           results.push({
-            name: `${query}駅`,
-            displayName: `${query}駅`,
+            name: pattern.description,
+            displayName: pattern.description,
             type: 'geocoded',
-            latitude: stationResult.latitude,
-            longitude: stationResult.longitude,
-            description: '駅'
+            latitude: geocodeResult.latitude,
+            longitude: geocodeResult.longitude,
+            description: '地名・住所',
+            // @ts-ignore - 内部的に優先度を保持
+            _priority: pattern.priority
           });
+        } else {
+          console.log(`⚠️ ジオコーディング失敗: "${pattern.query}"`);
         }
       }
 
-      // 大学として検索
-      if (!query.includes('大学')) {
-        const universityQuery = `${query}大学、日本`;
-        const universityResult = await LocationService.geocode(universityQuery);
-        if (universityResult) {
-          results.push({
-            name: `${query}大学`,
-            displayName: `${query}大学`,
-            type: 'geocoded',
-            latitude: universityResult.latitude,
-            longitude: universityResult.longitude,
-            description: '大学'
-          });
-        }
-      }
+      // 優先度でソート（高い方が先）
+      results.sort((a: any, b: any) => (b._priority || 0) - (a._priority || 0));
 
     } catch (error) {
       console.error('Geocoding search error:', error);

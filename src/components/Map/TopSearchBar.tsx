@@ -225,7 +225,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
                 <FlatList
                   keyboardShouldPersistTaps="handled"
                   data={placeSuggestions}
-                  keyExtractor={(item) => `${item.name}-${item.type}`}
+                  keyExtractor={(item, index) => `${item.name}-${item.type}-${index}`}
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       style={styles.suggestionRow}
