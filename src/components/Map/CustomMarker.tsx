@@ -33,12 +33,19 @@ const getMarkerColor = (category: string): string => {
 const getMarkerIconName = (category: string): keyof typeof Ionicons.glyphMap => {
   switch (category) {
     case 'コインパーキング': return 'car';
-    case 'コンビニ': return 'storefront';
-    case '温泉': return 'water';
-    case 'トイレ': return 'male-female';
     case 'ガソリンスタンド': return 'gas-pump';
-    case 'お祭り・花火大会': return 'sparkles';
     default: return 'location';
+  }
+};
+
+const getMarkerEmoji = (category: string): string | null => {
+  switch (category) {
+    case 'コンビニ': return '🏪';
+    case '温泉': return '♨️';
+    case 'トイレ': return '🚻';
+    case 'お祭り・花火大会': return '🎆';
+    case 'ガソリンスタンド': return '⛽';
+    default: return null;
   }
 };
 
@@ -288,7 +295,7 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
       if (Platform.OS === 'android') {
         return (
           <AndroidCircle size={32} fill={gasInfo.markerColor} stroke="#FFFFFF" strokeWidth={2}>
-            <Ionicons name="gas-pump" size={16} color="#FFFFFF" />
+            <Text style={styles.emojiMarkerText}>⛽</Text>
           </AndroidCircle>
         );
       }
@@ -296,19 +303,20 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
       // iOSでは詳細なデザインを使用
       return (
         <View style={[
-          styles.gasStationMarker,
+          styles.categoryMarker,
           {
             backgroundColor: gasInfo.markerColor,
             borderColor: gasInfo.isWhite ? '#CCCCCC' : '#FFFFFF'
           },
-          isNearbyFacility && styles.nearbyFacilityGasMarker
+          isNearbyFacility && styles.nearbyFacilityMarker
         ]}>
-          <Ionicons name="gas-pump" size={18} color="#FFFFFF" />
+          <Text style={styles.emojiMarkerText}>⛽</Text>
         </View>
       );
     }
 
     // その他のカテゴリー
+    const emoji = getMarkerEmoji(spot.category);
     if (Platform.OS === 'android') {
       return (
         <AndroidCircle
@@ -317,7 +325,11 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
           stroke={isNearbyFacility ? '#007AFF' : '#FFFFFF'}
           strokeWidth={isNearbyFacility ? 3 : 2}
         >
-          <Ionicons name={getMarkerIconName(spot.category)} size={16} color="#FFFFFF" />
+          {emoji ? (
+            <Text style={styles.emojiMarkerText}>{emoji}</Text>
+          ) : (
+            <Ionicons name={getMarkerIconName(spot.category)} size={16} color="#FFFFFF" />
+          )}
         </AndroidCircle>
       );
     }
@@ -327,7 +339,11 @@ export const CustomMarker: React.FC<CustomMarkerProps> = ({
         { backgroundColor: getMarkerColor(spot.category) },
         isNearbyFacility && styles.nearbyFacilityMarker
       ]}>
-        <Ionicons name={getMarkerIconName(spot.category)} size={18} color="#FFFFFF" />
+        {emoji ? (
+          <Text style={styles.emojiMarkerText}>{emoji}</Text>
+        ) : (
+          <Ionicons name={getMarkerIconName(spot.category)} size={18} color="#FFFFFF" />
+        )}
       </View>
     );
   };
@@ -883,5 +899,11 @@ const styles = StyleSheet.create({
   gasLogoImage: {
     width: 28,
     height: 28,
+  },
+  emojiMarkerText: {
+    fontSize: 18,
+    lineHeight: 18,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
 });

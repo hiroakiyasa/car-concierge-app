@@ -13,6 +13,8 @@ import {
   PanResponder,
   ActivityIndicator,
   Image,
+  Alert,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -37,6 +39,7 @@ import { supabase } from '@/config/supabase';
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const SHEET_HEIGHT = SCREEN_HEIGHT * 0.6; // 60% of screen height
 const PHOTO_SIZE = (SCREEN_WIDTH - 64) / 3;
+const ADMIN_EMAILS = ['hiroakiyasa@yahoo.co.jp', 'hiroakiyasa@gmail.com'];
 
 interface SpotDetailBottomSheetProps {
   visible: boolean;
@@ -78,6 +81,13 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
   const [photos, setPhotos] = React.useState<any[]>([]);
   const [photosLoading, setPhotosLoading] = React.useState(false);
   const [photoUploadModalVisible, setPhotoUploadModalVisible] = React.useState(false);
+
+  // Admin functionality states
+  const [isAdmin, setIsAdmin] = React.useState(false);
+  const [isEditMode, setIsEditMode] = React.useState(false);
+  const [editedData, setEditedData] = React.useState<Partial<CoinParking>>({});
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
 
   // パネル内で即時に周辺施設を表示するためのローカル状態
   const [panelNearby, setPanelNearby] = React.useState<{
@@ -176,6 +186,23 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       fetchPhotos();
     }
   }, [selectedSpot, visible, fetchPhotos]);
+
+  // Check if user is admin
+  React.useEffect(() => {
+    if (user?.email) {
+      setIsAdmin(ADMIN_EMAILS.includes(user.email));
+    } else {
+      setIsAdmin(false);
+    }
+  }, [user]);
+
+  // Reset edit mode when panel closes or spot changes
+  React.useEffect(() => {
+    if (!visible) {
+      setIsEditMode(false);
+      setEditedData({});
+    }
+  }, [visible, selectedSpot]);
 
   // パネルを開いたら即座に周辺施設を解決して表示
   React.useEffect(() => {
@@ -941,6 +968,105 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     }
   };
 
+  // Admin handler functions
+  const handleEdit = () => {
+    if (!isParking || !isAdmin) return;
+    setIsEditMode(true);
+    // Initialize edited data with current spot data
+    setEditedData({
+      name: parkingSpot.name,
+      address: parkingSpot.address,
+      capacity: parkingSpot.capacity,
+      parkingType: parkingSpot.parkingType,
+      rates: parkingSpot.rates,
+      hours: parkingSpot.hours,
+      lat: parkingSpot.lat,
+      lng: parkingSpot.lng,
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    setEditedData({});
+  };
+
+  const handleSave = async () => {
+    if (!isParking || !isAdmin || !parkingSpot.id) return;
+
+    setIsSaving(true);
+    try {
+      const result = await SupabaseService.updateParkingSpot(
+        parkingSpot.id.toString(),
+        editedData
+      );
+
+      if (result.success) {
+        Alert.alert('成功', '駐車場情報を更新しました', [
+          {
+            text: 'OK',
+            onPress: () => {
+              setIsEditMode(false);
+              setEditedData({});
+              onClose();
+              // Optionally refresh the data
+            }
+          }
+        ]);
+      } else {
+        Alert.alert('エラー', result.error || '更新に失敗しました');
+      }
+    } catch (error: any) {
+      Alert.alert('エラー', error.message || '更新中にエラーが発生しました');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = () => {
+    if (!isParking || !isAdmin || !parkingSpot.id) return;
+
+    Alert.alert(
+      '確認',
+      '本当にこの駐車場を削除してよろしいですか？この操作は取り消せません。',
+      [
+        {
+          text: 'キャンセル',
+          style: 'cancel'
+        },
+        {
+          text: '削除',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              const result = await SupabaseService.deleteParkingSpot(
+                parkingSpot.id.toString()
+              );
+
+              if (result.success) {
+                Alert.alert('成功', '駐車場を削除しました', [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      onClose();
+                      // Optionally refresh the map
+                    }
+                  }
+                ]);
+              } else {
+                Alert.alert('エラー', result.error || '削除に失敗しました');
+              }
+            } catch (error: any) {
+              Alert.alert('エラー', error.message || '削除中にエラーが発生しました');
+            } finally {
+              setIsDeleting(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleReviewSubmitted = () => {
     setReviewKey(prev => prev + 1);
   };
@@ -1009,31 +1135,51 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                   style={styles.nameContainer}
                   onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
                 >
-                  <Animated.View
-                    style={{
-                      flexDirection: 'row',
-                      transform: [{ translateX: scrollX }],
-                    }}
-                  >
-                    <Text 
-                      style={styles.spotName}
-                      onLayout={(e) => setNameWidth(e.nativeEvent.layout.width)}
+                  {isEditMode && isParking ? (
+                    <TextInput
+                      style={[styles.spotName, styles.editableInput]}
+                      value={editedData.name ?? parkingSpot.name}
+                      onChangeText={(text) => setEditedData({ ...editedData, name: text })}
+                      placeholder="駐車場名"
+                      placeholderTextColor="#999"
+                    />
+                  ) : (
+                    <Animated.View
+                      style={{
+                        flexDirection: 'row',
+                        transform: [{ translateX: scrollX }],
+                      }}
                     >
-                      {selectedSpot.name}
-                    </Text>
-                    {nameWidth > containerWidth && (
-                      <Text style={[styles.spotName, { marginLeft: 20 }]}>
+                      <Text
+                        style={styles.spotName}
+                        onLayout={(e) => setNameWidth(e.nativeEvent.layout.width)}
+                      >
                         {selectedSpot.name}
                       </Text>
-                    )}
-                  </Animated.View>
+                      {nameWidth > containerWidth && (
+                        <Text style={[styles.spotName, { marginLeft: 20 }]}>
+                          {selectedSpot.name}
+                        </Text>
+                      )}
+                    </Animated.View>
+                  )}
                 </View>
               </View>
               <View style={styles.addressRow}>
-                {selectedSpot.address && !isHotSpring && !isGasStation && !isConvenienceStore && (
-                  <Text style={styles.address} numberOfLines={1}>
-                    {selectedSpot.address}
-                  </Text>
+                {isEditMode && isParking ? (
+                  <TextInput
+                    style={[styles.address, styles.editableInput]}
+                    value={editedData.address ?? parkingSpot.address}
+                    onChangeText={(text) => setEditedData({ ...editedData, address: text })}
+                    placeholder="住所"
+                    placeholderTextColor="#999"
+                  />
+                ) : (
+                  selectedSpot.address && !isHotSpring && !isGasStation && !isConvenienceStore && (
+                    <Text style={styles.address} numberOfLines={1}>
+                      {selectedSpot.address}
+                    </Text>
+                  )
                 )}
                 {reviewStats.count > 0 && isParking && (
                   <RatingDisplay
@@ -1053,6 +1199,50 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
             </View>
           </View>
           <View style={styles.titleActions}>
+            {/* Admin buttons (parking only) */}
+            {isParking && isAdmin && !isEditMode && (
+              <>
+                <TouchableOpacity
+                  onPress={handleDelete}
+                  style={[styles.actionButton, styles.deleteActionButton]}
+                  disabled={isDeleting}
+                  accessibilityLabel="削除"
+                  accessible
+                >
+                  <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleEdit}
+                  style={[styles.actionButton, styles.editActionButton]}
+                  accessibilityLabel="編集"
+                  accessible
+                >
+                  <Ionicons name="pencil-outline" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </>
+            )}
+            {/* Save/Cancel buttons in edit mode */}
+            {isParking && isAdmin && isEditMode && (
+              <>
+                <TouchableOpacity
+                  onPress={handleCancelEdit}
+                  style={[styles.actionButton, styles.cancelActionButton]}
+                  accessibilityLabel="キャンセル"
+                  accessible
+                >
+                  <Ionicons name="close-outline" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSave}
+                  style={[styles.actionButton, styles.saveActionButton]}
+                  disabled={isSaving}
+                  accessibilityLabel="保存"
+                  accessible
+                >
+                  <Ionicons name="checkmark-outline" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </>
+            )}
             <FavoriteButton
               spotId={selectedSpot.id}
               spotType={selectedSpot.category}
@@ -1132,11 +1322,12 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
             </TouchableOpacity>
           </View>
         )}
-        
+
         {/* Tab Content with Swipe Gesture */}
-        <View style={styles.content} {...panResponder.panHandlers}>
-          {/* Premium Info Cards */}
-          {isParking && activeTab === 'overview' && (
+        {isParking && (
+          <View style={styles.content} {...panResponder.panHandlers}>
+            {/* Premium Info Cards */}
+            {activeTab === 'overview' && (
             <ScrollView 
               style={styles.tabContent}
               showsVerticalScrollIndicator={false}
@@ -1165,36 +1356,136 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
             </View>
 
             {/* ===== コンパクト統合情報（チップ表示） ===== */}
-            <View style={styles.compactStatsContainer}>
-              {parkingSpot.capacity && (
-                <View style={styles.statChip}>
-                  <Ionicons name="car-outline" size={14} color="#374151" />
-                  <Text style={styles.statText}>{parkingSpot.capacity}台</Text>
+            {isEditMode ? (
+              <View style={styles.editFormContainer}>
+                {/* 収容台数 */}
+                <View style={styles.editField}>
+                  <Text style={styles.editLabel}>収容台数</Text>
+                  <TextInput
+                    style={styles.editInput}
+                    value={editedData.capacity?.toString() ?? parkingSpot.capacity?.toString() ?? ''}
+                    onChangeText={(text) => setEditedData({ ...editedData, capacity: parseInt(text) || 0 })}
+                    placeholder="収容台数"
+                    keyboardType="number-pad"
+                    placeholderTextColor="#999"
+                  />
                 </View>
-              )}
-              <View style={styles.statChip}>
-                <Ionicons name="time-outline" size={14} color="#374151" />
-                <Text style={styles.statText}>{formatOperatingHoursShort()}</Text>
+
+                {/* 営業時間 */}
+                <View style={styles.editField}>
+                  <Text style={styles.editLabel}>営業時間</Text>
+                  <TextInput
+                    style={styles.editInput}
+                    value={typeof (editedData.hours ?? parkingSpot.hours) === 'string'
+                      ? (editedData.hours ?? parkingSpot.hours)
+                      : JSON.stringify(editedData.hours ?? parkingSpot.hours)}
+                    onChangeText={(text) => setEditedData({ ...editedData, hours: text })}
+                    placeholder="例: 24時間営業 or {'is_24h': true}"
+                    placeholderTextColor="#999"
+                  />
+                </View>
+
+                {/* 駐車場タイプ */}
+                <View style={styles.editField}>
+                  <Text style={styles.editLabel}>駐車場タイプ</Text>
+                  <TextInput
+                    style={styles.editInput}
+                    value={editedData.parkingType ?? parkingSpot.parkingType ?? ''}
+                    onChangeText={(text) => setEditedData({ ...editedData, parkingType: text })}
+                    placeholder="例: 平面, 立体"
+                    placeholderTextColor="#999"
+                  />
+                </View>
+
+                {/* 緯度・経度 */}
+                <View style={styles.editFieldRow}>
+                  <View style={[styles.editField, { flex: 1 }]}>
+                    <Text style={styles.editLabel}>緯度</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={editedData.lat?.toString() ?? parkingSpot.lat?.toString() ?? ''}
+                      onChangeText={(text) => {
+                        const lat = parseFloat(text);
+                        if (!isNaN(lat)) {
+                          setEditedData({ ...editedData, lat });
+                        }
+                      }}
+                      placeholder="例: 35.6812"
+                      keyboardType="decimal-pad"
+                      placeholderTextColor="#999"
+                    />
+                  </View>
+                  <View style={[styles.editField, { flex: 1 }]}>
+                    <Text style={styles.editLabel}>経度</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={editedData.lng?.toString() ?? parkingSpot.lng?.toString() ?? ''}
+                      onChangeText={(text) => {
+                        const lng = parseFloat(text);
+                        if (!isNaN(lng)) {
+                          setEditedData({ ...editedData, lng });
+                        }
+                      }}
+                      placeholder="例: 139.7671"
+                      keyboardType="decimal-pad"
+                      placeholderTextColor="#999"
+                    />
+                  </View>
+                </View>
+
+                {/* 料金体系（JSON編集） */}
+                <View style={styles.editField}>
+                  <Text style={styles.editLabel}>料金体系（JSON）</Text>
+                  <TextInput
+                    style={[styles.editInput, styles.multilineInput]}
+                    value={JSON.stringify(editedData.rates ?? parkingSpot.rates, null, 2)}
+                    onChangeText={(text) => {
+                      try {
+                        const parsed = JSON.parse(text);
+                        setEditedData({ ...editedData, rates: parsed });
+                      } catch (e) {
+                        // Invalid JSON, don't update
+                      }
+                    }}
+                    placeholder="料金体系のJSON"
+                    placeholderTextColor="#999"
+                    multiline
+                    numberOfLines={10}
+                  />
+                </View>
               </View>
-              {/* 標高と駐車場タイプ */}
-              <View style={styles.statsPair}>
-                {(parkingSpot as any).elevation !== undefined && (parkingSpot as any).elevation !== null && (
+            ) : (
+              <View style={styles.compactStatsContainer}>
+                {parkingSpot.capacity && (
                   <View style={styles.statChip}>
-                    <Ionicons name="trending-up-outline" size={14} color="#374151" />
-                    <Text style={styles.statText}>標高 {(parkingSpot as any).elevation}m</Text>
+                    <Ionicons name="car-outline" size={14} color="#374151" />
+                    <Text style={styles.statText}>{parkingSpot.capacity}台</Text>
                   </View>
                 )}
-                {(() => {
-                  const typeText = formatParkingType();
-                  return (
+                <View style={styles.statChip}>
+                  <Ionicons name="time-outline" size={14} color="#374151" />
+                  <Text style={styles.statText}>{formatOperatingHoursShort()}</Text>
+                </View>
+                {/* 標高と駐車場タイプ */}
+                <View style={styles.statsPair}>
+                  {(parkingSpot as any).elevation !== undefined && (parkingSpot as any).elevation !== null && (
                     <View style={styles.statChip}>
-                      <Ionicons name="car-sport-outline" size={14} color="#374151" />
-                      <Text style={styles.statText}>{typeText === '---' ? '—' : typeText}</Text>
+                      <Ionicons name="trending-up-outline" size={14} color="#374151" />
+                      <Text style={styles.statText}>標高 {(parkingSpot as any).elevation}m</Text>
                     </View>
-                  );
-                })()}
+                  )}
+                  {(() => {
+                    const typeText = formatParkingType();
+                    return (
+                      <View style={styles.statChip}>
+                        <Ionicons name="car-sport-outline" size={14} color="#374151" />
+                        <Text style={styles.statText}>{typeText === '---' ? '—' : typeText}</Text>
+                      </View>
+                    );
+                  })()}
+                </View>
               </View>
-            </View>
+            )}
 
             {/* Photos Preview in Overview */}
             {photos.length > 0 && (
@@ -1353,9 +1644,9 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
 
             </ScrollView>
           )}
-          
+
           {/* Reviews Tab Content */}
-          {isParking && activeTab === 'reviews' && (
+          {activeTab === 'reviews' && (
             <ScrollView 
               style={styles.tabContent}
               showsVerticalScrollIndicator={false}
@@ -1460,9 +1751,9 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
             />
             </ScrollView>
           )}
-          
+
           {/* Photos Tab Content */}
-          {isParking && activeTab === 'photos' && (
+          {activeTab === 'photos' && (
             <ScrollView 
               style={styles.tabContent}
               showsVerticalScrollIndicator={false}
@@ -1516,8 +1807,9 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               )}
             </ScrollView>
           )}
-        </View>
-        
+          </View>
+        )}
+
         {/* Hot Spring Info - Compact Premium Design */}
         {isHotSpring && (
           <ScrollView 
@@ -1649,7 +1941,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
               </View>
               
               <View style={styles.fuelPriceRows}>
-                {/* Regular */}
+                {/* Regular only */}
                 <View style={styles.fuelPriceRow}>
                   <View style={[styles.fuelBadgeCompact, styles.regularBadgeCompact]}>
                     <Text style={styles.fuelBadgeTextCompact}>レギュラー</Text>
@@ -1659,32 +1951,6 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
                     { color: getPriceDifferenceColor(gasStationSpot.services?.regular_price, NATIONAL_AVERAGE_PRICES.regular) }
                   ]}>
                     {formatPriceDifference(gasStationSpot.services?.regular_price, NATIONAL_AVERAGE_PRICES.regular)}
-                  </Text>
-                </View>
-                
-                {/* Premium */}
-                <View style={styles.fuelPriceRow}>
-                  <View style={[styles.fuelBadgeCompact, styles.premiumBadgeCompact]}>
-                    <Text style={styles.fuelBadgeTextCompact}>ハイオク</Text>
-                  </View>
-                  <Text style={[
-                    styles.fuelPriceDiff,
-                    { color: getPriceDifferenceColor(gasStationSpot.services?.premium_price, NATIONAL_AVERAGE_PRICES.premium) }
-                  ]}>
-                    {formatPriceDifference(gasStationSpot.services?.premium_price, NATIONAL_AVERAGE_PRICES.premium)}
-                  </Text>
-                </View>
-                
-                {/* Diesel */}
-                <View style={styles.fuelPriceRow}>
-                  <View style={[styles.fuelBadgeCompact, styles.dieselBadgeCompact]}>
-                    <Text style={styles.fuelBadgeTextCompact}>軽油</Text>
-                  </View>
-                  <Text style={[
-                    styles.fuelPriceDiff,
-                    { color: getPriceDifferenceColor(gasStationSpot.services?.diesel_price, NATIONAL_AVERAGE_PRICES.diesel) }
-                  ]}>
-                    {formatPriceDifference(gasStationSpot.services?.diesel_price, NATIONAL_AVERAGE_PRICES.diesel)}
                   </Text>
                 </View>
               </View>
@@ -1906,6 +2172,49 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1A1A1A',
   },
+  editableInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    color: '#000000',
+  },
+  editFormContainer: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    gap: 16,
+  },
+  editField: {
+    gap: 8,
+  },
+  editFieldRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  editLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  editInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    color: '#000000',
+    fontSize: 14,
+  },
+  multilineInput: {
+    minHeight: 150,
+    textAlignVertical: 'top',
+  },
   rankBadge: {
     backgroundColor: '#FFB800',
     paddingHorizontal: 8,
@@ -1956,6 +2265,18 @@ const styles = StyleSheet.create({
   },
   mapActionButton: {
     backgroundColor: '#DB4437', // Google Red (ピン連想)
+  },
+  deleteActionButton: {
+    backgroundColor: '#FF3B30', // 赤（削除）
+  },
+  editActionButton: {
+    backgroundColor: '#007AFF', // 青（編集）
+  },
+  saveActionButton: {
+    backgroundColor: '#34C759', // 緑（保存）
+  },
+  cancelActionButton: {
+    backgroundColor: '#8E8E93', // グレー（キャンセル）
   },
   content: {
     flex: 1,
