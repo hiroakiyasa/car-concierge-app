@@ -1963,10 +1963,13 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
               console.log(`  ✅ [${index}] マーカー作成: ${spot.id} - ${spot.name} (${spot.lat}, ${spot.lng})`);
             }
 
+            // 駐車場の場合はrankを渡す
+            const parking = spot.category === 'コインパーキング' ? spot as CoinParking : null;
             const marker = (
               <CustomMarker
                 key={`${category}-${spot.id}`}
                 spot={spot}
+                rank={parking?.rank}
                 onPress={() => handleMarkerPress(spot)}
                 isSelected={false}
                 isNearbyFacility={searchFilter.nearbyFilterEnabled && (category === 'コンビニ' || category === '温泉' || category === 'トイレ')}
