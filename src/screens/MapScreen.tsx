@@ -2085,76 +2085,82 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         }
       });
     
-      // 4. ランキング3位を追加
+      // 4. ランキング3位を追加（同率順位対応）
       try {
-        const rank3 = parkingSpots.find(spot =>
+        const rank3Spots = parkingSpots.filter(spot =>
           spot && spot.rank === 3 && selectedSpot?.id !== spot.id
         );
-        if (rank3 && rank3.id && rank3.lat != null && rank3.lng != null && !isNaN(rank3.lat) && !isNaN(rank3.lng)) {
-          const marker = (
-            <CustomMarker
-              key={`rank3-${rank3.id}`}
-              spot={rank3}
-              rank={3}
-              calculatedFee={(rank3 as any).calculatedFee}
-              onPress={() => handleMarkerPress(rank3)}
-              isSelected={false}
-            />
-          );
-          if (marker && React.isValidElement(marker)) {
-            markers.push(marker);
+        rank3Spots.forEach(rank3 => {
+          if (rank3 && rank3.id && rank3.lat != null && rank3.lng != null && !isNaN(rank3.lat) && !isNaN(rank3.lng)) {
+            const marker = (
+              <CustomMarker
+                key={`rank3-${rank3.id}`}
+                spot={rank3}
+                rank={3}
+                calculatedFee={(rank3 as any).calculatedFee}
+                onPress={() => handleMarkerPress(rank3)}
+                isSelected={false}
+              />
+            );
+            if (marker && React.isValidElement(marker)) {
+              markers.push(marker);
+            }
           }
-        }
+        });
       } catch (rank3Error) {
-        console.error('⚠️ Error processing rank 3 marker:', rank3Error);
+        console.error('⚠️ Error processing rank 3 markers:', rank3Error);
       }
       
-      // 5. ランキング2位を追加
+      // 5. ランキング2位を追加（同率順位対応）
       try {
-        const rank2 = parkingSpots.find(spot =>
+        const rank2Spots = parkingSpots.filter(spot =>
           spot && spot.rank === 2 && selectedSpot?.id !== spot.id
         );
-        if (rank2 && rank2.id && rank2.lat != null && rank2.lng != null && !isNaN(rank2.lat) && !isNaN(rank2.lng)) {
-          const marker = (
-            <CustomMarker
-              key={`rank2-${rank2.id}`}
-              spot={rank2}
-              rank={2}
-              calculatedFee={(rank2 as any).calculatedFee}
-              onPress={() => handleMarkerPress(rank2)}
-              isSelected={false}
-            />
-          );
-          if (marker && React.isValidElement(marker)) {
-            markers.push(marker);
+        rank2Spots.forEach(rank2 => {
+          if (rank2 && rank2.id && rank2.lat != null && rank2.lng != null && !isNaN(rank2.lat) && !isNaN(rank2.lng)) {
+            const marker = (
+              <CustomMarker
+                key={`rank2-${rank2.id}`}
+                spot={rank2}
+                rank={2}
+                calculatedFee={(rank2 as any).calculatedFee}
+                onPress={() => handleMarkerPress(rank2)}
+                isSelected={false}
+              />
+            );
+            if (marker && React.isValidElement(marker)) {
+              markers.push(marker);
+            }
           }
-        }
+        });
       } catch (rank2Error) {
-        console.error('⚠️ Error processing rank 2 marker:', rank2Error);
+        console.error('⚠️ Error processing rank 2 markers:', rank2Error);
       }
       
-      // 6. ランキング1位を追加（最前面）
+      // 6. ランキング1位を追加（最前面、同率順位対応）
       try {
-        const rank1 = parkingSpots.find(spot =>
+        const rank1Spots = parkingSpots.filter(spot =>
           spot && spot.rank === 1 && selectedSpot?.id !== spot.id
         );
-        if (rank1 && rank1.id && rank1.lat != null && rank1.lng != null && !isNaN(rank1.lat) && !isNaN(rank1.lng)) {
-          const marker = (
-            <CustomMarker
-              key={`rank1-${rank1.id}`}
-              spot={rank1}
-              rank={1}
-              calculatedFee={(rank1 as any).calculatedFee}
-              onPress={() => handleMarkerPress(rank1)}
-              isSelected={false}
-            />
-          );
-          if (marker && React.isValidElement(marker)) {
-            markers.push(marker);
+        rank1Spots.forEach(rank1 => {
+          if (rank1 && rank1.id && rank1.lat != null && rank1.lng != null && !isNaN(rank1.lat) && !isNaN(rank1.lng)) {
+            const marker = (
+              <CustomMarker
+                key={`rank1-${rank1.id}`}
+                spot={rank1}
+                rank={1}
+                calculatedFee={(rank1 as any).calculatedFee}
+                onPress={() => handleMarkerPress(rank1)}
+                isSelected={false}
+              />
+            );
+            if (marker && React.isValidElement(marker)) {
+              markers.push(marker);
+            }
           }
-        }
+        });
       } catch (rank1Error) {
-        console.error('⚠️ Error processing rank 1 marker:', rank1Error);
+        console.error('⚠️ Error processing rank 1 markers:', rank1Error);
       }
       
       // 7. 最後に選択された駐車場を追加（最前面に表示）
