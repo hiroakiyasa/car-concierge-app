@@ -34,6 +34,32 @@ import { TopSearchBar } from '@/components/Map/TopSearchBar';
 import { TopCategoryTabs } from '@/components/Map/TopCategoryTabs';
 import { PlaceSearchResult } from '@/services/places-search.service';
 
+// 同率順位を計算するヘルパー関数
+const calculateParkingRanks = (parkingSpots: CoinParking[]): CoinParking[] => {
+  const rankedSpots: CoinParking[] = [];
+  let currentRank = 1;
+
+  for (let i = 0; i < parkingSpots.length; i++) {
+    if (i === 0) {
+      rankedSpots.push({ ...parkingSpots[i], rank: currentRank });
+    } else {
+      const currentFee = parkingSpots[i].calculatedFee ?? -1;
+      const prevFee = parkingSpots[i - 1].calculatedFee ?? -1;
+
+      if (currentFee === prevFee) {
+        // 同じ料金なら同じ順位
+        rankedSpots.push({ ...parkingSpots[i], rank: rankedSpots[i - 1].rank });
+      } else {
+        // 料金が異なる場合は実際のインデックス+1
+        currentRank = i + 1;
+        rankedSpots.push({ ...parkingSpots[i], rank: currentRank });
+      }
+    }
+  }
+
+  return rankedSpots;
+};
+
 interface MapScreenProps {
   navigation: any;
   route?: any;
@@ -1149,12 +1175,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             
             console.log(`🧩 重複除外結果: ${sortedParkingSpots.length}件から${uniqueParkingSpots.length}件に絞り込み`);
             
-            // 上位20件にランキングを付与
+            // 上位20件にランキングを付与（同率順位対応）
             const maxDisplayCount = 20;
-            const top20ParkingSpots = uniqueParkingSpots.slice(0, maxDisplayCount).map((spot, index) => ({
-              ...spot,
-              rank: index + 1
-            }));
+            const top20ParkingSpots = calculateParkingRanks(uniqueParkingSpots.slice(0, maxDisplayCount));
             
             displaySpots.push(...top20ParkingSpots);
           }
@@ -1173,9 +1196,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
 
           console.log(`🎯 周辺検索モード: ${displayedParkingSpots.length}件の駐車場に紐付く施設を表示`);
 
-          // 各駐車場にランキング番号を付与
-          displayedParkingSpots.forEach((spot, index) => {
-            spot.rank = index + 1;
+          // 各駐車場にランキング番号を付与（同率順位対応）
+          const rankedParkingSpots = calculateParkingRanks(displayedParkingSpots);
+          rankedParkingSpots.forEach((rankedSpot, index) => {
+            displayedParkingSpots[index].rank = rankedSpot.rank;
           });
 
           // 施設IDを収集するためのMapを使用（重複防止）

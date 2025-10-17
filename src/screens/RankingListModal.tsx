@@ -47,6 +47,34 @@ export const RankingListModal: React.FC<RankingListModalProps> = ({
   const parkingSpots = searchResults
     .filter(spot => spot.category === 'コインパーキング')
     .slice(0, 20) as CoinParking[];
+
+  // 同率順位を計算する関数
+  const calculateRanks = (spots: CoinParking[]): number[] => {
+    const ranks: number[] = [];
+    let currentRank = 1;
+
+    for (let i = 0; i < spots.length; i++) {
+      if (i === 0) {
+        ranks.push(currentRank);
+      } else {
+        const currentFee = spots[i].calculatedFee ?? -1;
+        const prevFee = spots[i - 1].calculatedFee ?? -1;
+
+        if (currentFee === prevFee) {
+          // 同じ料金なら同じ順位
+          ranks.push(ranks[i - 1]);
+        } else {
+          // 料金が異なる場合は実際のインデックス+1
+          currentRank = i + 1;
+          ranks.push(currentRank);
+        }
+      }
+    }
+
+    return ranks;
+  };
+
+  const ranks = calculateRanks(parkingSpots);
   
   // スワイプダウンで閉じるジェスチャー
   const panResponder = React.useRef(
@@ -107,7 +135,7 @@ export const RankingListModal: React.FC<RankingListModalProps> = ({
   };
 
   const renderItem = ({ item, index }: { item: CoinParking; index: number }) => {
-    const rank = index + 1;
+    const rank = ranks[index];
     
     return (
       <TouchableOpacity 
