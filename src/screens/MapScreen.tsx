@@ -462,7 +462,18 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         setErrorMessage('この地域には該当する施設が見つかりませんでした');
       }
 
-      setSearchResults(results);
+      // 駐車場に同率順位を計算して設定
+      const parkingSpots = results.filter(s => s.category === 'コインパーキング') as CoinParking[];
+      const rankedParkingSpots = calculateParkingRanks(parkingSpots);
+      const finalResults = results.map(spot => {
+        if (spot.category === 'コインパーキング') {
+          const rankedSpot = rankedParkingSpots.find(p => p.id === spot.id);
+          return rankedSpot || spot;
+        }
+        return spot;
+      });
+
+      setSearchResults(finalResults);
       setStableResults(results.filter(r => r != null));
     } catch (error) {
       console.error('❌ 検索エラー:', error);
@@ -748,7 +759,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         // 重複排除（施設含む）
         const output = Array.from(new Map(resultSpots.map(s => [s.id, s])).values());
         console.log(`✅ 新アルゴ(OR/統合ランク): 駐車場${combined.length}件 + 施設, 合計ユニーク${output.length}件`);
-        setSearchResults(output);
+
+        // 駐車場に同率順位を計算して設定
+        const parkingSpots = output.filter(s => s.category === 'コインパーキング') as CoinParking[];
+        const rankedParkingSpots = calculateParkingRanks(parkingSpots);
+        const finalOutput = output.map(spot => {
+          if (spot.category === 'コインパーキング') {
+            const rankedSpot = rankedParkingSpots.find(p => p.id === spot.id);
+            return rankedSpot || spot;
+          }
+          return spot;
+        });
+
+        setSearchResults(finalOutput);
         setSearchStatus('complete');
         setTimeout(() => setSearchStatus('idle'), 3000);
         return;
@@ -996,8 +1019,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                 console.log(`🅿️ 最終料金フィルター結果: ${parkingSpots.length}件 (総数: ${retryResult.totalCount}件)`);
                 displaySpots.push(...parkingSpots);
 
+                // 駐車場に同率順位を計算して設定
+                const allParkingSpots = displaySpots.filter(s => s.category === 'コインパーキング') as CoinParking[];
+                const rankedParkingSpots = calculateParkingRanks(allParkingSpots);
+                const finalDisplaySpots = displaySpots.map(spot => {
+                  if (spot.category === 'コインパーキング') {
+                    const rankedSpot = rankedParkingSpots.find(p => p.id === spot.id);
+                    return rankedSpot || spot;
+                  }
+                  return spot;
+                });
+
                 // 結果を更新
-                setSearchResults(displaySpots);
+                setSearchResults(finalDisplaySpots);
                 setSearchStatus('complete');
                 setTimeout(() => setSearchStatus('idle'), 3000);
               } else {
@@ -1057,8 +1091,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                 console.log(`🅿️ 最終料金フィルター結果: ${parkingSpots.length}件 (総数: ${retryResult.totalCount}件)`);
                 displaySpots.push(...parkingSpots);
 
+                // 駐車場に同率順位を計算して設定
+                const allParkingSpots = displaySpots.filter(s => s.category === 'コインパーキング') as CoinParking[];
+                const rankedParkingSpots = calculateParkingRanks(allParkingSpots);
+                const finalDisplaySpots = displaySpots.map(spot => {
+                  if (spot.category === 'コインパーキング') {
+                    const rankedSpot = rankedParkingSpots.find(p => p.id === spot.id);
+                    return rankedSpot || spot;
+                  }
+                  return spot;
+                });
+
                 // 結果を更新
-                setSearchResults(displaySpots);
+                setSearchResults(finalDisplaySpots);
                 setSearchStatus('complete');
                 setTimeout(() => setSearchStatus('idle'), 3000);
               } else if (retryResult.totalCount > 2000) {
@@ -1086,7 +1131,18 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                 console.log(`🅿️ 最終料金フィルター結果: ${parkingSpots.length}件 (総数: ${finalResult.totalCount}件)`);
                 displaySpots.push(...parkingSpots);
 
-                setSearchResults(displaySpots);
+                // 駐車場に同率順位を計算して設定
+                const allParkingSpots = displaySpots.filter(s => s.category === 'コインパーキング') as CoinParking[];
+                const rankedParkingSpots = calculateParkingRanks(allParkingSpots);
+                const finalDisplaySpots = displaySpots.map(spot => {
+                  if (spot.category === 'コインパーキング') {
+                    const rankedSpot = rankedParkingSpots.find(p => p.id === spot.id);
+                    return rankedSpot || spot;
+                  }
+                  return spot;
+                });
+
+                setSearchResults(finalDisplaySpots);
                 setSearchStatus('complete');
                 setTimeout(() => setSearchStatus('idle'), 3000);
               } else {
@@ -1379,7 +1435,18 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       // 2) 周辺検索はサービス側ですでに適用済み（fetchParkingSpotsByNearbyFilter）
       // 3) 駐車料金はサービス側の計算結果を利用（ソート/上位抽出はサービスで実施）
 
-      const finalResults = uniqueDisplaySpots;
+      // 駐車場に同率順位を計算して設定
+      const parkingSpots = uniqueDisplaySpots.filter(s => s.category === 'コインパーキング') as CoinParking[];
+      const rankedParkingSpots = calculateParkingRanks(parkingSpots);
+
+      // 駐車場を更新した順位で置き換え
+      const finalResults = uniqueDisplaySpots.map(spot => {
+        if (spot.category === 'コインパーキング') {
+          const rankedSpot = rankedParkingSpots.find(p => p.id === spot.id);
+          return rankedSpot || spot;
+        }
+        return spot;
+      });
 
       setSearchResults(finalResults);
 
