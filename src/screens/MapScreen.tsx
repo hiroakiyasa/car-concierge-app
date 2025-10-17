@@ -329,7 +329,20 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       setToastMessage('📍 現在地を取得中...');
       console.log('📍 位置情報の初期化を開始...');
 
-      // 1) 現在地を最優先で取得し、取得できたら地図を現在地に移動
+      // 1) まず保存済みの地図範囲を復元（即座に表示）
+      const savedRegion = await AsyncStorage.getItem('lastMapRegion');
+      if (savedRegion) {
+        const initialRegion = JSON.parse(savedRegion);
+        console.log('📍 前回の地図範囲を即座に復元:', initialRegion);
+        setMapRegion(initialRegion);
+
+        // 保存された地図範囲に移動
+        if (mapRef.current && isMapReady) {
+          mapRef.current.animateToRegion(initialRegion, 500);
+        }
+      }
+
+      // 2) 並行して現在地を取得し、成功したら更新
       const location = await LocationService.getCurrentLocation();
       if (location) {
         console.log('✅ 現在地を取得成功:', location);
@@ -343,7 +356,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         };
-        console.log('📍 起動時 - 現在地を中心に設定:', currentRegion);
+        console.log('📍 現在地を中心に更新:', currentRegion);
         setMapRegion(currentRegion);
         await saveMapRegion(currentRegion);
 
@@ -353,19 +366,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         return;
       }
 
-      // 2) 現在地が取得できなければ、保存済みの地図範囲を復元
-      console.log('⚠️ 現在地の取得に失敗 - 代替手段を使用');
-      const savedRegion = await AsyncStorage.getItem('lastMapRegion');
+      // 3) 現在地取得失敗、保存済み地図範囲も使用済み
       if (savedRegion) {
-        const initialRegion = JSON.parse(savedRegion);
-        console.log('📍 前回の地図範囲を復元:', initialRegion);
-        setMapRegion(initialRegion);
+        console.log('⚠️ 現在地の取得に失敗 - 前回の位置を継続使用');
         setLocationStatus('error');
         setToastMessage('⚠️ 現在地を取得できませんでした');
         return;
       }
 
-      // 3) それもなければ、デフォルト位置（東京駅）
+      // 4) 保存済み地図範囲もなく、現在地も取得できない → デフォルト位置（東京駅）
       const defaultRegion = {
         latitude: 35.6812,
         longitude: 139.7671,
@@ -377,6 +386,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       await saveMapRegion(defaultRegion);
       setLocationStatus('denied');
       setToastMessage('⚠️ 現在地を取得できませんでした');
+
+      if (mapRef.current && isMapReady) {
+        mapRef.current.animateToRegion(defaultRegion, 500);
+      }
     } catch (error) {
       console.error('❌ 初期位置の設定エラー:', error);
       setLocationStatus('error');
@@ -1553,7 +1566,37 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
 
   // 予測検索で選択された場所へ移動
   const handlePlaceSelect = async (place: PlaceSearchResult) => {
-    console.log('📍 場所選択:', place.displayName, place.latitude, place.longitude);
+    console.log('📍 場所選択:', place.displayName);
+    console.log('   座標:', `緯度 ${place.latitude}, 経度 ${place.longitude}`);
+    console.log('   タイプ:', place.type);
+
+    // 日本の範囲チェック
+    const JAPAN_BOUNDS = {
+      minLat: 20.0,
+      maxLat: 46.5,
+      minLng: 122.0,
+      maxLng: 154.0,
+    };
+
+    const isInJapan =
+      place.latitude >= JAPAN_BOUNDS.minLat &&
+      place.latitude <= JAPAN_BOUNDS.maxLat &&
+      place.longitude >= JAPAN_BOUNDS.minLng &&
+      place.longitude <= JAPAN_BOUNDS.maxLng;
+
+    if (!isInJapan) {
+      console.warn('⚠️ 警告: 選択された場所が日本国外です！', {
+        緯度: place.latitude,
+        経度: place.longitude,
+        場所: place.displayName,
+      });
+      Alert.alert(
+        '場所が見つかりません',
+        `選択された場所（${place.displayName}）が日本国外の可能性があります。別の検索語句をお試しください。`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
 
     // 統一されたズームレベル（0.02）を使用
     const delta = 0.02;
@@ -1565,6 +1608,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       latitudeDelta: delta,
       longitudeDelta: delta,
     };
+
+    console.log('🗺️ 地図を移動:', newRegion);
 
     // 状態を更新
     setMapRegion(newRegion);
