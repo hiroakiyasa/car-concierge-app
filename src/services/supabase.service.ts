@@ -1362,4 +1362,75 @@ export class SupabaseService {
 
     return withDist;
   }
+
+  // Update parking spot (admin only)
+  static async updateParkingSpot(
+    id: string,
+    updates: Partial<CoinParking>
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log(`🔧 駐車場更新: ID=${id}`, updates);
+
+      // Convert front-end format to database format
+      const dbUpdates: any = {};
+
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.address !== undefined) dbUpdates.address = updates.address;
+      if (updates.capacity !== undefined) dbUpdates.capacity = updates.capacity;
+      if (updates.parkingType !== undefined) dbUpdates.type = updates.parkingType;
+      if (updates.lat !== undefined) dbUpdates.lat = updates.lat;
+      if (updates.lng !== undefined) dbUpdates.lng = updates.lng;
+
+      // rates を JSON 文字列に変換
+      if (updates.rates !== undefined) {
+        dbUpdates.rates = updates.rates;
+      }
+
+      // hours を JSON 文字列に変換
+      if (updates.hours !== undefined) {
+        dbUpdates.hours = typeof updates.hours === 'string'
+          ? updates.hours
+          : JSON.stringify(updates.hours);
+      }
+
+      const { error } = await supabase
+        .from('parking_spots')
+        .update(dbUpdates)
+        .eq('id', id);
+
+      if (error) {
+        console.error('❌ 駐車場更新エラー:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ 駐車場更新成功');
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ 駐車場更新エラー:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Delete parking spot (admin only)
+  static async deleteParkingSpot(id: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log(`🗑️ 駐車場削除: ID=${id}`);
+
+      const { error } = await supabase
+        .from('parking_spots')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('❌ 駐車場削除エラー:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ 駐車場削除成功');
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ 駐車場削除エラー:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
