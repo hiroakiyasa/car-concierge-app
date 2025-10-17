@@ -36,10 +36,10 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   };
   
   const [activeTab, setActiveTab] = useState<'entry' | 'duration'>(getInitialTab());
-  
+
   // 駐車時間の選択
   const [selectedDurationIndex, setSelectedDurationIndex] = useState(7); // デフォルト2時間
-  
+
   // 入庫日時の選択（現在時刻をデフォルト）
   const now = new Date();
   const [selectedDateIndex, setSelectedDateIndex] = useState(0);
@@ -52,6 +52,14 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
     return Math.floor(roundedMinute / 10);
   };
   const [selectedMinuteIndex, setSelectedMinuteIndex] = useState(getInitialMinuteIndex());
+
+  // 入庫時間を保持（駐車時間変更時に自動変更されないように）
+  const [persistentEntryTime, setPersistentEntryTime] = useState<Date>(() => {
+    const initialTime = new Date();
+    initialTime.setSeconds(0);
+    initialTime.setMilliseconds(0);
+    return initialTime;
+  });
 
   const durationScrollRef = useRef<ScrollView>(null);
   const dateScrollRef = useRef<ScrollView>(null);
@@ -144,16 +152,16 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
 
   // 終了時刻の計算
   const calculateEndTime = (durationMinutes: number) => {
-    const startTime = new Date();
+    const startTime = persistentEntryTime;
     const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
-    
+
     const month = endTime.getMonth() + 1;
     const day = endTime.getDate();
     const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
     const weekday = weekdays[endTime.getDay()];
     const hour = endTime.getHours();
     const minute = endTime.getMinutes();
-    
+
     return `〜${month}月${day}日 ${weekday} ${hour}:${minute.toString().padStart(2, '0')}`;
   };
 
@@ -163,7 +171,7 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
       const now = new Date();
       setSelectedDateIndex(0);
       setSelectedHourIndex(now.getHours());
-      
+
       // Find the closest minute value
       const currentMinute = now.getMinutes();
       const roundedMinute = Math.round(currentMinute / 10) * 10;
@@ -171,9 +179,15 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
       const clampedMinute = Math.min(50, Math.max(0, roundedMinute));
       // Convert to index: 0->0, 10->1, 20->2, 30->3, 40->4, 50->5
       const adjustedIndex = clampedMinute / 10;
-      
+
       setSelectedMinuteIndex(adjustedIndex);
-      
+
+      // 入庫時間も更新
+      const updatedEntryTime = new Date();
+      updatedEntryTime.setSeconds(0);
+      updatedEntryTime.setMilliseconds(0);
+      setPersistentEntryTime(updatedEntryTime);
+
       // スクロール位置を更新
       setTimeout(() => {
         scrollToIndex(dateScrollRef, 0);
@@ -212,8 +226,9 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
   const handleConfirm = () => {
     try {
       let startTime: Date;
-      
+
       if (activeTab === 'entry') {
+        // User is setting entry time explicitly
         const selectedDate = dates[selectedDateIndex].date;
         startTime = new Date(selectedDate);
         startTime.setHours(hours[selectedHourIndex]);
@@ -221,16 +236,17 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
         startTime.setMinutes(minutes[selectedMinuteIndex]);
         startTime.setSeconds(0);
         startTime.setMilliseconds(0);
+
+        // 入庫時間を更新（次回の駐車時間変更時に使用）
+        setPersistentEntryTime(startTime);
       } else {
-        // For duration mode, use current time
-        startTime = new Date();
-        startTime.setSeconds(0);
-        startTime.setMilliseconds(0);
+        // For duration mode, use persistent entry time (入庫時間を保持)
+        startTime = new Date(persistentEntryTime);
       }
-      
+
       const selectedDuration = durations[selectedDurationIndex].minutes;
       const endTime = new Date(startTime.getTime() + selectedDuration * 60000);
-      
+
       // Validate times
       if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
         console.error('Invalid date calculation:', {
@@ -243,13 +259,13 @@ export const ParkingTimeModal: React.FC<ParkingTimeModalProps> = ({
         });
         return;
       }
-      
+
       console.log('Time confirmed:', {
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
         duration: selectedDuration
       })
-      
+
       onConfirm(startTime, endTime);
       onClose();
     } catch (error) {
