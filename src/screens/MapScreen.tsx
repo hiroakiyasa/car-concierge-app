@@ -225,7 +225,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             }
           }
         } catch (error) {
-          console.error('地図更新フラグのチェックエラー:', error);
+          console.log('地図更新フラグのチェックエラー:', error);
         }
       };
 
@@ -289,7 +289,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         locationSubscription.current = subscription;
         console.log('✅ リアルタイム位置追跡を開始しました');
       } catch (error) {
-        console.error('❌ リアルタイム位置追跡の開始に失敗:', error);
+        console.log('❌ リアルタイム位置追跡の開始に失敗:', error);
         setIsLocationTracking(false);
       }
     };
@@ -452,7 +452,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         mapRef.current.animateToRegion(defaultRegion, 500);
       }
     } catch (error) {
-      console.error('❌ 初期位置の設定エラー:', error);
+      console.log('❌ 初期位置の設定エラー:', error);
       setLocationStatus('error');
       setToastMessage('⚠️ 現在地を取得できませんでした');
 
@@ -471,7 +471,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     try {
       await AsyncStorage.setItem('lastMapRegion', JSON.stringify(region));
     } catch (error) {
-      console.error('❌ 地図範囲の保存エラー:', error);
+      console.log('❌ 地図範囲の保存エラー:', error);
     }
   };
 
