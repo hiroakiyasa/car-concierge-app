@@ -510,9 +510,12 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
             {
               text: 'キャンセル',
               style: 'cancel',
+              onPress: () => {
+                console.log('❌ 承認をキャンセルしました');
+              },
             },
             {
-              text: '既存データを更新',
+              text: 'OK',
               onPress: async () => {
                 console.log('🔄 既存駐車場を更新:', duplicate.id);
                 await continueApprovalProcess(duplicate.id);
@@ -537,25 +540,27 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
         setIsProcessing(false);
         Alert.alert(
           '重複投稿（同じ名前）',
-          `この投稿は既存の駐車場と同じ名前です。\n\n既存駐車場: ${duplicate.name}\n緯度: ${duplicate.lat}\n経度: ${duplicate.lng}`,
+          `この投稿は既存の駐車場と同じ名前です。\n\n既存駐車場: ${duplicate.name}\n緯度: ${duplicate.lat}\n経度: ${duplicate.lng}\n\n既存データを更新しますか？\n（別の場所の場合は「新規登録」を選択してください）`,
           [
             {
               text: 'キャンセル',
               style: 'cancel',
-            },
-            {
-              text: '既存データを更新',
-              onPress: async () => {
-                console.log('🔄 既存駐車場を更新:', duplicate.id);
-                await continueApprovalProcess(duplicate.id);
+              onPress: () => {
+                console.log('❌ 承認をキャンセルしました');
               },
             },
             {
               text: '新規登録',
-              style: 'destructive',
               onPress: async () => {
                 console.log('➕ 名前重複を無視して新規登録');
                 await continueApprovalProcess();
+              },
+            },
+            {
+              text: 'OK',
+              onPress: async () => {
+                console.log('🔄 既存駐車場を更新:', duplicate.id);
+                await continueApprovalProcess(duplicate.id);
               },
             },
           ]
