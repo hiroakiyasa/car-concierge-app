@@ -78,6 +78,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   const [hasInitialized, setHasInitialized] = useState(false);
   const [nearbyFacilities, setNearbyFacilities] = useState<Spot[]>([]);
 
+  // 地図の初期化状態（AsyncStorageから前回の位置を読み込むまでtrue）
+  const [isInitializingMap, setIsInitializingMap] = useState(true);
+
   // リアルタイム位置追跡の状態
   const [isLocationTracking, setIsLocationTracking] = useState(false);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
@@ -389,11 +392,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         const initialRegion = JSON.parse(savedRegion);
         console.log('📍 前回の地図範囲を即座に復元:', initialRegion);
         setMapRegion(initialRegion);
+        setIsInitializingMap(false); // 地図を表示
 
         // 保存された地図範囲に移動
         if (mapRef.current && isMapReady) {
           mapRef.current.animateToRegion(initialRegion, 500);
         }
+      } else {
+        // 前回の位置がない場合も初期化完了
+        setIsInitializingMap(false);
       }
 
       // 2) 並行して現在地を取得し、成功したら更新
@@ -2332,6 +2339,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <StatusBar style="light" translucent backgroundColor="transparent" />
+
+      {/* 地図初期化中のローディング表示 */}
+      {isInitializingMap && (
+        <View style={styles.initializingOverlay}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+          <Text style={styles.initializingText}>地図を読み込み中...</Text>
+        </View>
+      )}
+
       <View style={styles.mapWrapper}>
         <CrossPlatformMap
           mapRef={mapRef}
@@ -2701,5 +2717,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
     textAlign: 'center',
+  },
+  initializingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  initializingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: Colors.textSecondary,
+    fontWeight: '500',
   },
 });
