@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '@/utils/constants';
 import { supabase } from '@/config/supabase';
 import { useAuthStore } from '@/stores/useAuthStore';
@@ -485,32 +486,155 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
       // 編集されたデータまたは元のデータを使用
       const dataToUse = editableData || selectedSubmission.extracted_data;
 
+      // 重複チェック（経度・緯度または名前が完全一致）
+      console.log('🔍 重複チェック開始...');
+      const parkingName = dataToUse?.name || '駐車場';
+
+      // 1. 座標での重複チェック
+      const { data: locationDuplicates } = await supabase
+        .from('parking_spots')
+        .select('id, name, lat, lng')
+        .eq('lat', selectedSubmission.latitude)
+        .eq('lng', selectedSubmission.longitude)
+        .limit(1);
+
+      if (locationDuplicates && locationDuplicates.length > 0) {
+        const duplicate = locationDuplicates[0];
+        console.log('⚠️ 座標重複発見:', duplicate);
+
+        setIsProcessing(false);
+        Alert.alert(
+          '重複投稿（同じ位置）',
+          `この投稿は既存の駐車場と同じ位置にあります。\n\n既存駐車場: ${duplicate.name}\n緯度: ${duplicate.lat}\n経度: ${duplicate.lng}\n\n既存データを更新しますか？`,
+          [
+            {
+              text: 'キャンセル',
+              style: 'cancel',
+            },
+            {
+              text: '既存データを更新',
+              onPress: async () => {
+                console.log('🔄 既存駐車場を更新:', duplicate.id);
+                await continueApprovalProcess(duplicate.id);
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      // 2. 名前での重複チェック
+      const { data: nameDuplicates } = await supabase
+        .from('parking_spots')
+        .select('id, name, lat, lng')
+        .eq('name', parkingName)
+        .limit(1);
+
+      if (nameDuplicates && nameDuplicates.length > 0) {
+        const duplicate = nameDuplicates[0];
+        console.log('⚠️ 名前重複発見:', duplicate);
+
+        setIsProcessing(false);
+        Alert.alert(
+          '重複投稿（同じ名前）',
+          `この投稿は既存の駐車場と同じ名前です。\n\n既存駐車場: ${duplicate.name}\n緯度: ${duplicate.lat}\n経度: ${duplicate.lng}`,
+          [
+            {
+              text: 'キャンセル',
+              style: 'cancel',
+            },
+            {
+              text: '既存データを更新',
+              onPress: async () => {
+                console.log('🔄 既存駐車場を更新:', duplicate.id);
+                await continueApprovalProcess(duplicate.id);
+              },
+            },
+            {
+              text: '新規登録',
+              style: 'destructive',
+              onPress: async () => {
+                console.log('➕ 名前重複を無視して新規登録');
+                await continueApprovalProcess();
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      console.log('✅ 重複なし、承認処理を続行');
+      await continueApprovalProcess();
+    } catch (error: any) {
+      console.error('承認エラー:', error);
+
+      // 詳細なエラーメッセージを表示
+      let errorMessage = '承認処理に失敗しました';
+      if (error?.message) {
+        errorMessage += `\n\nエラー詳細: ${error.message}`;
+      }
+      if (error?.details) {
+        errorMessage += `\n${error.details}`;
+      }
+
+      Alert.alert('エラー', errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // 承認処理の本体（重複チェック後に実行）
+  const continueApprovalProcess = async (existingParkingId?: number) => {
+    if (!selectedSubmission || !user) return;
+
+    try {
+      const dataToUse = editableData || selectedSubmission.extracted_data;
+      const isUpdate = existingParkingId !== undefined;
+
       let imageUrl: string | null = null;
 
-      // 画像をparking-imagesバケットにコピー
+      // 画像をparking-imagesバケットにコピー（download/upload方式）
       try {
-        console.log('📸 画像をコピー中:', selectedSubmission.image_path);
+        console.log('📸 画像を転送中:', selectedSubmission.image_path);
 
-        // 1. parking-submissionsバケットから画像をダウンロード
-        const { data: imageData, error: downloadError } = await supabase.storage
-          .from('parking-submissions')
-          .download(selectedSubmission.image_path);
-
-        if (downloadError) {
-          console.error('画像ダウンロードエラー:', downloadError);
-          throw downloadError;
-        }
-
-        // 2. ファイル名を生成（タイムスタンプ + ランダム文字列）
+        // ファイル名を生成（タイムスタンプ + ランダム文字列）
         const timestamp = Date.now();
         const randomStr = Math.random().toString(36).substring(7);
         const fileExt = selectedSubmission.image_path.split('.').pop() || 'jpg';
         const newFileName = `parking_${timestamp}_${randomStr}.${fileExt}`;
 
-        // 3. parking-imagesバケットにアップロード
+        // 1. parking-submissionsバケットから画像をダウンロード
+        const { data: downloadData, error: downloadError } = await supabase.storage
+          .from('parking-submissions')
+          .download(selectedSubmission.image_path);
+
+        if (downloadError || !downloadData) {
+          console.error('画像ダウンロードエラー:', downloadError);
+          throw downloadError || new Error('画像のダウンロードに失敗');
+        }
+
+        console.log('✅ 画像ダウンロード成功:', downloadData.size, 'bytes');
+
+        // 2. BlobをArrayBufferに変換（React Native対応）
+        const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            if (reader.result instanceof ArrayBuffer) {
+              resolve(reader.result);
+            } else {
+              reject(new Error('ArrayBufferへの変換に失敗'));
+            }
+          };
+          reader.onerror = () => reject(reader.error);
+          reader.readAsArrayBuffer(downloadData);
+        });
+
+        console.log('✅ ArrayBuffer変換成功:', arrayBuffer.byteLength, 'bytes');
+
+        // 3. spot-photosバケットにアップロード
         const { error: uploadError } = await supabase.storage
-          .from('parking-images')
-          .upload(newFileName, imageData, {
+          .from('spot-photos')
+          .upload(newFileName, arrayBuffer, {
             contentType: 'image/jpeg',
             upsert: false,
           });
@@ -522,14 +646,14 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
 
         // 4. 公開URLを取得
         const { data: urlData } = supabase.storage
-          .from('parking-images')
+          .from('spot-photos')
           .getPublicUrl(newFileName);
 
         imageUrl = urlData.publicUrl;
-        console.log('✅ 画像コピー成功:', imageUrl);
+        console.log('✅ 画像転送成功:', imageUrl);
       } catch (imageError) {
         console.error('画像処理エラー:', imageError);
-        // 画像コピーに失敗しても処理は続行（警告のみ）
+        // 画像転送に失敗しても処理は続行（警告のみ）
         Alert.alert(
           '警告',
           '画像のコピーに失敗しましたが、駐車場情報は登録されます。',
@@ -537,28 +661,103 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
         );
       }
 
-      // 1. parking_spotsテーブルに新規レコードを作成
+      // 1. parking_spotsテーブルに新規レコード作成 または 既存レコード更新
       if (selectedSubmission.submission_type === 'new_parking') {
-        const { error: insertError } = await supabase
-          .from('parking_spots')
-          .insert({
-            name: dataToUse?.name || '駐車場',
-            lat: selectedSubmission.latitude,
-            lng: selectedSubmission.longitude,
-            rates: dataToUse?.rates || [],
-            capacity: dataToUse?.capacity,
-            hours: dataToUse?.hours || null,
-            address: dataToUse?.address,
-            phone_number: dataToUse?.phone_number,
-            images: imageUrl ? [imageUrl] : [],
-            elevation: (dataToUse as any)?.elevation,
-            nearest_toilet: (dataToUse as any)?.nearest_toilet
-              ? JSON.stringify((dataToUse as any).nearest_toilet)
-              : null,
-            is_user_submitted: true, // ユーザー投稿由来のフラグ
-          });
+        const updateData: any = {
+          name: dataToUse?.name || '駐車場',
+          lat: selectedSubmission.latitude,
+          lng: selectedSubmission.longitude,
+          rates: dataToUse?.rates || [],
+          capacity: dataToUse?.capacity,
+          hours: dataToUse?.hours || null,
+          address: dataToUse?.address,
+          phone_number: dataToUse?.phone_number,
+          is_user_submitted: true, // ユーザー投稿由来のフラグ
+        };
 
-        if (insertError) throw insertError;
+        // 画像の処理（更新時は既存画像に追加）
+        if (isUpdate && existingParkingId) {
+          // 既存データから現在の画像配列を取得
+          const { data: existingData } = await supabase
+            .from('parking_spots')
+            .select('images')
+            .eq('id', existingParkingId)
+            .single();
+
+          const existingImages = existingData?.images || [];
+          updateData.images = imageUrl ? [...existingImages, imageUrl] : existingImages;
+          console.log('🔄 画像更新:', { 既存: existingImages.length, 新規追加: imageUrl ? 1 : 0, 合計: updateData.images.length });
+        } else {
+          // 新規登録時
+          updateData.images = imageUrl ? [imageUrl] : [];
+        }
+
+        // オプションフィールドを追加（値がある場合のみ）
+        if ((dataToUse as any)?.elevation !== undefined) {
+          updateData.elevation = (dataToUse as any).elevation;
+        }
+
+        // nearest_toiletはjsonb型なのでオブジェクトとして送る
+        if ((dataToUse as any)?.nearest_toilet) {
+          updateData.nearest_toilet = (dataToUse as any).nearest_toilet;
+        }
+
+        // nearest_convenience_storeはtext型なので文字列として送る
+        const convenienceData = (dataToUse as any)?.nearest_convenience_store;
+        console.log('🏪 コンビニデータ確認:', convenienceData);
+        if (convenienceData) {
+          updateData.nearest_convenience_store = typeof convenienceData === 'string'
+            ? convenienceData
+            : JSON.stringify(convenienceData);
+          console.log('✅ コンビニデータ保存:', updateData.nearest_convenience_store);
+        } else {
+          console.log('⚠️ コンビニデータなし');
+        }
+
+        // nearest_hotspringはtext型なので文字列として送る
+        // OCRデータはnearest_hot_spring（アンダースコア2つ）の場合もある
+        const hotspringData = (dataToUse as any)?.nearest_hotspring || (dataToUse as any)?.nearest_hot_spring;
+        console.log('♨️ 温泉データ確認:', {
+          nearest_hotspring: (dataToUse as any)?.nearest_hotspring,
+          nearest_hot_spring: (dataToUse as any)?.nearest_hot_spring,
+          使用するデータ: hotspringData
+        });
+        if (hotspringData) {
+          updateData.nearest_hotspring = typeof hotspringData === 'string'
+            ? hotspringData
+            : JSON.stringify(hotspringData);
+          console.log('✅ 温泉データ保存:', updateData.nearest_hotspring);
+        } else {
+          console.log('⚠️ 温泉データなし');
+        }
+
+        // INSERTまたはUPDATE
+        if (isUpdate && existingParkingId) {
+          console.log('🔄 parking_spotsを更新:', existingParkingId, JSON.stringify(updateData, null, 2));
+          const { error: updateError } = await supabase
+            .from('parking_spots')
+            .update(updateData)
+            .eq('id', existingParkingId);
+
+          if (updateError) {
+            console.error('❌ UPDATE エラー詳細:', updateError);
+            throw updateError;
+          }
+
+          console.log('✅ parking_spotsの更新成功');
+        } else {
+          console.log('📝 parking_spotsに挿入するデータ:', JSON.stringify(updateData, null, 2));
+          const { error: insertError } = await supabase
+            .from('parking_spots')
+            .insert(updateData);
+
+          if (insertError) {
+            console.error('❌ INSERT エラー詳細:', insertError);
+            throw insertError;
+          }
+
+          console.log('✅ parking_spotsへの挿入成功');
+        }
       }
 
       // 2. parking_submissionsのステータスを更新
@@ -576,14 +775,19 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
 
       if (updateError) throw updateError;
 
-      Alert.alert('承認完了', '投稿をデータベースに反映しました');
+      // 地図画面に更新フラグを設定
+      await AsyncStorage.setItem('needsMapRefresh', 'true');
+
+      const message = isUpdate
+        ? '既存の駐車場情報を更新しました。\n\n地図画面に戻ると更新された情報が表示されます。'
+        : '投稿をデータベースに反映しました。\n\n地図画面に戻ると新しい駐車場が表示されます。';
+
+      Alert.alert('承認完了', message, [{ text: 'OK' }]);
       closeDetailModal();
       await loadSubmissions();
-    } catch (error) {
-      console.error('承認エラー:', error);
-      Alert.alert('エラー', '承認処理に失敗しました');
-    } finally {
-      setIsProcessing(false);
+    } catch (error: any) {
+      // エラーを上位のprocessApprovalに投げる
+      throw error;
     }
   };
 
@@ -592,17 +796,13 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
 
     Alert.alert(
       '投稿を却下',
-      '却下理由を入力してください',
+      'この投稿を却下しますか？',
       [
         { text: 'キャンセル', style: 'cancel' },
         {
           text: '却下',
           style: 'destructive',
           onPress: async () => {
-            if (!reviewNotes.trim()) {
-              Alert.alert('エラー', '却下理由を入力してください');
-              return;
-            }
             await processRejection();
           },
         },
@@ -622,7 +822,7 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
           status: 'rejected',
           reviewed_by: user.id,
           reviewed_at: new Date().toISOString(),
-          review_notes: reviewNotes,
+          review_notes: reviewNotes.trim() || null,
         })
         .eq('id', selectedSubmission.id);
 
@@ -816,7 +1016,7 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
           setEditableData(null);
         }}
       >
-        <SafeAreaView style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalContainer} edges={['left', 'right', 'bottom']}>
           <View style={styles.modalHeader}>
             <TouchableOpacity
               onPress={() => {
@@ -976,7 +1176,7 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
         animationType="slide"
         onRequestClose={closeDetailModal}
       >
-        <SafeAreaView style={styles.modalContainer}>
+        <SafeAreaView style={styles.modalContainer} edges={['left', 'right', 'bottom']}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={closeDetailModal} style={styles.modalHeaderButton}>
               <Ionicons name="arrow-back" size={24} color={Colors.text} />
@@ -1335,7 +1535,7 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
                   style={styles.reviewNotesInput}
                   multiline
                   numberOfLines={4}
-                  placeholder="承認・却下理由を入力（却下の場合は必須）"
+                  placeholder="承認・却下理由を入力（任意）"
                   value={reviewNotes}
                   onChangeText={setReviewNotes}
                 />
@@ -1383,7 +1583,7 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={Colors.text} />
@@ -1503,7 +1703,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 60 : 16,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
@@ -1628,7 +1830,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 60 : 16,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },

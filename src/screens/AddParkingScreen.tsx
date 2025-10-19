@@ -18,6 +18,8 @@ import {
   Linking,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/utils/constants';
@@ -184,6 +186,122 @@ export const AddParkingScreen: React.FC = () => {
     }
   };
 
+  /**
+   * 画像を品質を維持しながら1MB以下に圧縮
+   */
+  const compressImageTo1MB = async (uri: string): Promise<string> => {
+    try {
+      console.log('🗜️  画像圧縮を開始...');
+
+      // ファイルサイズを確認
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      if (!fileInfo.exists || !fileInfo.size) {
+        console.log('⚠️ ファイル情報が取得できません');
+        return uri;
+      }
+
+      const originalSizeKB = fileInfo.size / 1024;
+      const originalSizeMB = originalSizeKB / 1024;
+      console.log(`📊 元の画像サイズ: ${originalSizeMB.toFixed(2)} MB (${originalSizeKB.toFixed(0)} KB)`);
+
+      // 1MB以下の場合はそのまま返す
+      const TARGET_SIZE_MB = 1;
+      if (originalSizeMB <= TARGET_SIZE_MB) {
+        console.log('✅ 画像サイズが1MB以下のためそのまま使用');
+        return uri;
+      }
+
+      console.log(`🗜️  画像を${TARGET_SIZE_MB}MB以下に圧縮中...`);
+
+      // 段階的に圧縮品質を下げて試行
+      const qualityLevels = [0.8, 0.7, 0.6, 0.5, 0.4, 0.3];
+
+      for (const quality of qualityLevels) {
+        console.log(`🔄 品質 ${quality} で圧縮を試行中...`);
+
+        const manipResult = await ImageManipulator.manipulateAsync(
+          uri,
+          [], // リサイズなし（アスペクト比を維持）
+          {
+            compress: quality,
+            format: ImageManipulator.SaveFormat.JPEG,
+          }
+        );
+
+        // 圧縮後のサイズを確認
+        const compressedFileInfo = await FileSystem.getInfoAsync(manipResult.uri);
+        if (compressedFileInfo.exists && compressedFileInfo.size) {
+          const compressedSizeMB = compressedFileInfo.size / 1024 / 1024;
+          console.log(`📊 圧縮後のサイズ: ${compressedSizeMB.toFixed(2)} MB (品質: ${quality})`);
+
+          if (compressedSizeMB <= TARGET_SIZE_MB) {
+            console.log(`✅ 圧縮成功: ${originalSizeMB.toFixed(2)} MB → ${compressedSizeMB.toFixed(2)} MB`);
+            return manipResult.uri;
+          }
+        }
+      }
+
+      // すべての品質レベルで1MBを超える場合、リサイズを試行
+      console.log('🔄 品質調整だけでは1MB以下にならないため、リサイズを試行...');
+
+      const resizeLevels = [
+        { width: 2048, quality: 0.8 },
+        { width: 1920, quality: 0.7 },
+        { width: 1600, quality: 0.6 },
+        { width: 1280, quality: 0.5 },
+        { width: 1024, quality: 0.4 },
+      ];
+
+      for (const { width, quality } of resizeLevels) {
+        console.log(`🔄 幅 ${width}px, 品質 ${quality} でリサイズ＋圧縮を試行中...`);
+
+        const manipResult = await ImageManipulator.manipulateAsync(
+          uri,
+          [{ resize: { width } }], // 幅を指定（高さは自動計算）
+          {
+            compress: quality,
+            format: ImageManipulator.SaveFormat.JPEG,
+          }
+        );
+
+        const resizedFileInfo = await FileSystem.getInfoAsync(manipResult.uri);
+        if (resizedFileInfo.exists && resizedFileInfo.size) {
+          const resizedSizeMB = resizedFileInfo.size / 1024 / 1024;
+          console.log(`📊 リサイズ後のサイズ: ${resizedSizeMB.toFixed(2)} MB`);
+
+          if (resizedSizeMB <= TARGET_SIZE_MB) {
+            console.log(`✅ リサイズ＋圧縮成功: ${originalSizeMB.toFixed(2)} MB → ${resizedSizeMB.toFixed(2)} MB`);
+            return manipResult.uri;
+          }
+        }
+      }
+
+      // 最終的に1MB以下にならない場合は、最小サイズで妥協
+      console.log('⚠️ 最終手段: 最小サイズ（1024px）で圧縮');
+      const finalResult = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 1024 } }],
+        {
+          compress: 0.3,
+          format: ImageManipulator.SaveFormat.JPEG,
+        }
+      );
+
+      const finalFileInfo = await FileSystem.getInfoAsync(finalResult.uri);
+      if (finalFileInfo.exists && finalFileInfo.size) {
+        const finalSizeMB = finalFileInfo.size / 1024 / 1024;
+        console.log(`📊 最終サイズ: ${finalSizeMB.toFixed(2)} MB`);
+      }
+
+      return finalResult.uri;
+
+    } catch (error) {
+      console.error('🗜️  画像圧縮エラー:', error);
+      // エラーの場合は元の画像を返す
+      return uri;
+    }
+  };
+
   const takePhoto = async () => {
     console.log('📷 カメラ撮影を開始...');
     console.log('📷 カメラ権限状態:', cameraPermission);
@@ -224,7 +342,10 @@ export const AddParkingScreen: React.FC = () => {
         const asset = result.assets[0];
         console.log('📷 画像が選択されました:', asset.uri);
         console.log('📷 EXIF情報:', asset.exif);
-        setImageUri(asset.uri);
+
+        // 画像を1MB以下に圧縮
+        const compressedUri = await compressImageTo1MB(asset.uri);
+        setImageUri(compressedUri);
 
         // 写真のEXIF位置情報を優先的に使用
         const photoLocation = extractLocationFromPhoto(asset.exif);
@@ -294,7 +415,10 @@ export const AddParkingScreen: React.FC = () => {
         const asset = result.assets[0];
         console.log('🖼️  画像が選択されました:', asset.uri);
         console.log('🖼️  EXIF情報:', asset.exif);
-        setImageUri(asset.uri);
+
+        // 画像を1MB以下に圧縮
+        const compressedUri = await compressImageTo1MB(asset.uri);
+        setImageUri(compressedUri);
 
         // 写真のEXIF位置情報を優先的に使用
         const photoLocation = extractLocationFromPhoto(asset.exif);

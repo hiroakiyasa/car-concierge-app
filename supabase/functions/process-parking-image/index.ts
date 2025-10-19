@@ -179,9 +179,8 @@ serve(async (req) => {
 });
 
 /**
- * Gemini Flash で画像から直接駐車場データを抽出
- * Gemini 2.0 Flash Experimental はマルチモーダルモデルで画像入力に対応
- * より高精度なOCRと理解能力を提供
+ * Gemini 2.5 Flash で画像から直接駐車場データを抽出
+ * JSON Schema による構造化出力を使用（公式推奨方法）
  */
 async function extractParkingDataWithGemini(
   base64Image: string,
@@ -200,66 +199,161 @@ async function extractParkingDataWithGemini(
     };
   }
 
-  const extractionPrompt = `あなたは駐車場看板の画像から情報を抽出する専門AIです。
+  // JSON Schema による構造定義（Gemini公式の推奨方法）
+  const responseSchema = {
+    type: 'object',
+    properties: {
+      name: {
+        type: 'string',
+        description: '駐車場名（看板の最も大きく目立つ文字、ブランド名）',
+        nullable: true,
+      },
+      rates: {
+        type: 'array',
+        description: '料金情報の配列',
+        items: {
+          type: 'object',
+          properties: {
+            minutes: {
+              type: 'integer',
+              description: '時間（分単位）',
+            },
+            price: {
+              type: 'integer',
+              description: '料金（円）',
+            },
+            type: {
+              type: 'string',
+              description: '料金タイプ: base（基本料金）, progressive（段階料金）, max（最大料金）',
+              enum: ['base', 'progressive', 'max'],
+            },
+            time_range: {
+              type: 'string',
+              description: '時間帯（例: 18:00〜10:00）',
+              nullable: true,
+            },
+            day_type: {
+              type: 'string',
+              description: '曜日タイプ（例: 平日、土日祝）',
+              nullable: true,
+            },
+            apply_after: {
+              type: 'integer',
+              description: 'progressive料金の場合、何分後から適用されるか',
+              nullable: true,
+            },
+          },
+          required: ['minutes', 'price', 'type'],
+        },
+      },
+      capacity: {
+        type: 'integer',
+        description: '収容台数',
+        nullable: true,
+      },
+      hours: {
+        type: 'object',
+        description: '営業時間情報',
+        properties: {
+          original_hours: {
+            type: 'string',
+            description: '元のテキスト',
+          },
+          is_24h: {
+            type: 'boolean',
+            description: '24時間営業かどうか',
+          },
+          hours: {
+            type: 'string',
+            description: '営業時間（例: 24:00, 8:00〜22:00）',
+          },
+          schedules: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                days: {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+                time: { type: 'string' },
+              },
+            },
+          },
+          operating_days: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          restrictions: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          holidays: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          closed_days: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          access_24h: {
+            type: 'boolean',
+          },
+        },
+        required: ['original_hours', 'is_24h', 'hours'],
+      },
+      address: {
+        type: 'string',
+        description: '住所',
+        nullable: true,
+      },
+      phone_number: {
+        type: 'string',
+        description: '電話番号',
+        nullable: true,
+      },
+    },
+    required: ['rates', 'hours'],
+  };
 
-# 重要指示
+  // 駐車場料金正規化プロンプト（完全版）
+  const extractionPrompt = `この駐車場看板の画像から以下の情報を抽出してください：
 
-画像内の文字を **すべて** 読み取り、以下の情報を抽出してJSON形式で出力してください。
-**確信度が低くても、推測で構いません。空欄で返さないでください。**
+## 基本情報の抽出：
+1. **駐車場名** - 看板に大きく表示されているブランド名や施設名
+2. **料金情報** - すべての料金パターン（必ず正規化ルールに従う）
+3. **収容台数** - 「○台」と書かれている数字
+4. **営業時間** - 24時間営業かどうか、営業時間帯
+5. **住所** - 表示されている場合
+6. **電話番号** - 表示されている場合
 
-## 必須取得項目
+## 料金タイプ（type）の判定ルール【重要】
 
-### 1. 駐車場名（name）★絶対に抽出★
-**抽出方法：**
-- 看板の **最も大きく目立つ文字** がブランド名です
-- 例：「名鉄協商パーキング」「タイムズ」「リパーク」「三井のリパーク」
-- 地名も含める場合：「名鉄協商パーキング 三好が丘」
-- **重要**：ブランド名だけでも必ず抽出してください
-
-### 2. 料金情報（rates配列）★最重要★
-画像内の**すべての料金情報**を以下のJSON構造で正規化してください：
-
-**【重要】フィールド順序を必ず守ってください：minutes → price → type → その他**
-
-\`\`\`json
-{
-  "minutes": 時間（分）,      // 必ず分単位で記録（最初のフィールド）
-  "price": 料金（円）,        // 数値のみ（¥記号不要・2番目のフィールド）
-  "type": "料金タイプ",      // base, progressive, max のいずれか（3番目のフィールド）
-  "time_range": "時間帯",     // オプション（4番目）
-  "day_type": "曜日タイプ",   // オプション（5番目）
-  "apply_after": 適用開始時間  // progressiveタイプのみ必須（最後）
-}
-\`\`\`
-
-## 料金タイプ（type）の判定ルール
-
-### タイプ1: base（基本料金）
+### 1. base（基本料金）
 **定義：** 通常の時間単位料金
 **キーワード：** 「○分¥○」「○時間¥○」（「以降」「最初」がない場合）
-**変換例（フィールド順序を守る）：**
-- 「30分¥200」→ {"minutes": 30, "price": 200, "type": "base"}
-- 「60分¥300」→ {"minutes": 60, "price": 300, "type": "base"}
-- 「12分¥200」→ {"minutes": 12, "price": 200, "type": "base"}
-- 「月～金 8:00～20:00 30分¥200」→ {"minutes": 30, "price": 200, "type": "base", "time_range": "8:00～20:00", "day_type": "月～金"}
+**例：**
+- 「30分¥200」→ type: base, price: 200, minutes: 30
+- 「60分¥300」→ type: base, price: 300, minutes: 60
+- 「12分¥200」→ type: base, price: 200, minutes: 12
 
-### タイプ2: progressive（段階料金）
+### 2. progressive（段階料金）
 **定義：** 初回料金と以降料金が異なる場合
-**キーワード：** 「最初の」「初回」「以降」「以後」
+**キーワード：** 「最初の」「初回」「以降」「以後」「毎」
 **必須フィールド：** apply_after（初回料金が適用される時間後）
-**変換例（フィールド順序を守る）：**
-- 「最初の1時間¥360以降20分毎¥120」→
-  [
-    {"minutes": 60, "price": 360, "type": "base"},
-    {"minutes": 20, "price": 120, "type": "progressive", "apply_after": 60}
-  ]
-- 「入庫後30分迄¥100以降30分¥200」→
-  [
-    {"minutes": 30, "price": 100, "type": "base"},
-    {"minutes": 30, "price": 200, "type": "progressive", "apply_after": 30}
-  ]
+**例：**
+- 「最初の1時間¥360以降20分毎¥120」
+  → [
+      {type: "base", price: 360, minutes: 60},
+      {type: "progressive", price: 120, minutes: 20, apply_after: 60}
+    ]
+- 「入庫後30分迄¥100以降30分¥200」
+  → [
+      {type: "base", price: 100, minutes: 30},
+      {type: "progressive", price: 200, minutes: 30, apply_after: 30}
+    ]
 
-### タイプ3: max（最大料金）
+### 3. max（最大料金）
 **定義：** 料金の上限設定
 **キーワード：** 「最大料金」「上限」「打止」「打切」「宿泊料金」「○時間以内」「○時間迄」
 **minutes計算ルール：**
@@ -271,145 +365,132 @@ async function extractParkingDataWithGemini(
   - 「20:00～8:00」→ 720分（12時間）
   - 「22:00～8:00」→ 600分（10時間）
   - 「23:00～7:30」→ 510分（8時間30分）
+**例：**
+- 「最大料金 全日 入庫後24時間¥1000」→ type: max, price: 1000, minutes: 1440
+- 「最大料金 20:00～8:00 ¥300」→ type: max, price: 300, minutes: 720, time_range: "20:00～8:00"
 
-**変換例（フィールド順序を守る）：**
-- 「最大料金 全日 入庫後24時間¥1000」→ {"minutes": 1440, "price": 1000, "type": "max", "day_type": "全日"}
-- 「最大料金 20:00～8:00 ¥300」→ {"minutes": 720, "price": 300, "type": "max", "time_range": "20:00～8:00"}
-- 「宿泊料金(23:00～7:30)¥500」→ {"minutes": 510, "price": 500, "type": "max", "time_range": "23:00～7:30"}
-- 「入庫から24時間まで ¥900」→ {"minutes": 1440, "price": 900, "type": "max"}
+## 曜日タイプ（day_type）の判定ルール
 
-## その他の情報
+| 元の表記 | day_typeの値 |
+|---------|-------------|
+| 月～金、平日 | "月～金" |
+| 土日祝 | "土日祝" |
+| 土のみ | "土" |
+| 日祝 | "日祝" |
+| 全日 | **省略**（他の曜日設定がない場合） |
 
-### 3. 営業時間（hours）★既存データ構造に完全に合わせる★
-以下の構造で出力してください：
+**重要：** 「全日」は基本的に省略。他の曜日別料金と併用される場合のみ明示的に記載。
 
-\`\`\`json
-{
-  "original_hours": "元の営業時間データ",
-  "is_24h": true または false,
-  "schedules": [
-    {"days": ["毎日"], "time": "24:00"}
-  ],
-  "hours": "24:00" または "8:00～22:00",
-  "operating_days": ["毎日"],
-  "restrictions": [],
-  "holidays": ["無休"],
-  "closed_days": [],
-  "access_24h": true または false
-}
-\`\`\`
+## 時間帯（time_range）の記録ルール
 
-**判定ルール：**
-- 24時間営業の場合:
-  - is_24h: true
-  - schedules: [{"days": ["毎日"], "time": "24:00"}]
-  - hours: "24:00"
-  - operating_days: ["毎日"]
-  - holidays: ["無休"]
-  - access_24h: true
+- 時間指定がある場合のみ追加（例：「8:00～22:00」）
+- 日またぎも含めてそのまま記録（例：「22:00～8:00」）
+- 「0:00～24:00」は全日の意味なので**省略可能**
+- 「8:00～8:00」は24時間の意味なので**省略推奨**
 
-- 時間指定がある場合（例：8:00〜22:00）:
-  - is_24h: false
-  - schedules: [{"days": ["毎日"], "time": "8:00〜22:00"}]
-  - hours: "8:00〜22:00"
-  - operating_days: ["毎日"]
-  - holidays: [] (記載がない場合)
-  - access_24h: false
+## 特殊ケースの処理
 
-### 4. 収容台数（capacity）
-- 「20台」→ 20（数値のみ）
+### 無料駐車場
+type: max, price: 0, minutes: 1440
 
-### 5. 住所（address）
-- 都道府県名を含む住所
+### 条件付き無料
+「入庫後20分迄無料」などの条件付き無料がある場合：
+- 無料時間も base タイプとして記録（price: 0）
+- その後の料金は progressive タイプで記録
+**例：** 「入庫後20分迄無料以降20分¥100」
+  → [
+      {type: "base", price: 0, minutes: 20},
+      {type: "progressive", price: 100, minutes: 20, apply_after: 20}
+    ]
 
-### 6. 電話番号（phone_number）
-- TEL表記も含む
+### 除外すべき情報
+- 括弧内の車室番号別料金：「(1･4･5番車室¥1000)」→ 無視
+- 繰り返し適用の注記：「※最大料金は繰り返し適用となります」→ 無視
+- 曜日による変動の注記：「※最大料金は入庫時の曜日により異なります」→ 無視
+- 「(1回限り)」「(繰返し有)」などの説明文 → 無視
 
-## 出力形式（必ずJSON形式のみ）
+## チェックリスト【必ず確認】
 
-**【重要】rates配列のフィールド順序：minutes → price → type → その他**
+✅ 料金タイプは正しく判定されているか
+- baseは通常料金
+- progressiveは「以降」がある場合のみ（apply_after必須）
+- maxは最大料金・上限料金・宿泊料金
 
-{
-  "name": "ブランド名 地名",
-  "rates": [
-    {"minutes": 60, "price": 200, "type": "base", "time_range": "8:00～18:00"},
-    {"minutes": 60, "price": 100, "type": "base", "time_range": "18:00～8:00"},
-    {"minutes": 1440, "price": 600, "type": "max"},
-    {"minutes": 840, "price": 400, "type": "max", "time_range": "18:00～8:00"}
-  ],
-  "capacity": 20,
-  "hours": {
-    "original_hours": "24時間営業, 定休日: 無休",
-    "is_24h": true,
-    "schedules": [{"days": ["毎日"], "time": "24:00"}],
-    "hours": "24:00",
-    "operating_days": ["毎日"],
-    "restrictions": [],
-    "holidays": ["無休"],
-    "closed_days": [],
-    "access_24h": true
-  },
-  "address": "愛知県○○市...",
-  "phone_number": "0120-XXX-XXX"
-}
+✅ minutesは分単位で正しく計算されているか
+- 1時間 = 60分
+- 24時間 = 1440分
+- 12時間 = 720分
+- 6時間 = 360分
 
-## 最重要チェックリスト
+✅ day_typeは適切に設定されているか
+- 「全日」は基本的に省略
+- 「月～金」「土日祝」など明確に指定
 
-✅ **name（駐車場名）は「ブランド名 + 地名」形式で抽出**
-✅ **rates配列のフィールド順序：minutes → price → type → その他（必須）**
-✅ **「最大料金」という文字があれば必ずmaxタイプを含める**
-✅ **progressiveタイプには必ずapply_afterを付ける**
-✅ **minutesは必ず分単位の数値で記録**
-✅ **priceは¥記号を付けずに数値のみ**
-✅ **hours オブジェクトは complete な構造で出力（original_hours, is_24h, schedules, hours, operating_days, restrictions, holidays, closed_days, access_24h）**
-✅ **必ずJSON形式のみ出力** - 説明文・コードブロック（\`\`\`）は不要
-✅ **rates配列は必ず含める** - 画像内のすべての料金を見落とさない
+✅ 不要な情報は除外されているか
+- 車室番号別料金は無視
+- 繰り返し適用の注記は無視
 
----
+## 最重要ポイント
 
-# 重要な最終指示
+1. **「最大料金」という文字があれば必ずmaxタイプを含める**
+2. **progressiveタイプには必ずapply_afterを付ける**
+3. **minutesは必ず分単位の数値で記録**
+4. **priceは¥記号を付けずに数値のみ**
+5. **「全日」のday_typeは基本的に省略**
+6. **括弧内の特殊料金は無視**
 
-1. **駐車場名（name）と料金情報（rates）は絶対に抽出してください**
-2. **rates配列の各要素は必ず minutes → price → type の順序で記述**
-3. **hoursオブジェクトは既存データ構造と完全一致させる**
-4. 確信度が低くても、画像に文字が見えれば必ず抽出してください
-5. 「読み取れない」「不明」などの返答は禁止です
-6. **純粋なJSON形式のみ出力**してください（説明文や\`\`\`は不要）
+## 正規化の例
 
-上記のルールに従って、駐車場情報をJSON形式で出力してください。`;
+例：「入庫後1時間¥200 夜間 18:00～8:00 ¥100/時間 最大料金 24時間¥600 夜間最大 18:00～8:00 ¥400」
+→ [
+    {type: "base", price: 200, minutes: 60},
+    {type: "base", price: 100, minutes: 60, time_range: "18:00～8:00"},
+    {type: "max", price: 600, minutes: 1440},
+    {type: "max", price: 400, minutes: 840, time_range: "18:00～8:00"}
+  ]
+
+このルールに従えば、100%正確に駐車場料金を正規化できます。`;
 
   try {
-    console.log('🤖 Gemini 2.0 Flash Experimental を呼び出し中...');
+    console.log('🤖 Gemini 2.5 Flash (JSON Schema) を呼び出し中...');
 
-    // Gemini 2.0 Flash Experimental を使用（最新の高性能モデル）
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${geminiApiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+    // タイムアウト設定（30秒）
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      // Gemini 2.5 Flash を使用（v1beta API + JSON Schema）
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
           contents: [
             {
               parts: [
-                {
-                  text: extractionPrompt,
-                },
                 {
                   inline_data: {
                     mime_type: 'image/jpeg',
                     data: base64Image,
                   },
                 },
+                {
+                  text: extractionPrompt,
+                },
               ],
             },
           ],
           generationConfig: {
-            temperature: 0.4,
+            temperature: 0.2,
             maxOutputTokens: 8192,
             topP: 0.95,
             topK: 40,
+            responseMimeType: 'application/json', // JSON出力を強制
+            responseSchema: responseSchema, // スキーマで構造を定義
           },
         }),
       }
@@ -418,43 +499,33 @@ async function extractParkingDataWithGemini(
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`❌ Gemini API error: ${response.status}`, errorText);
+
+      // レート制限エラーの場合は特別なメッセージ
+      if (response.status === 429) {
+        throw new Error('Gemini API レート制限に達しました。1分後に再度お試しください。');
+      }
+
       throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
 
-    const result = await response.json();
-    const geminiText = result.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      clearTimeout(timeoutId);
 
-    console.log('🤖 Gemini API 生レスポンス:');
+      const result = await response.json();
+      const geminiText = result.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+
+      console.log('🤖 Gemini 2.5 Flash API 生レスポンス (JSON Schema):');
     console.log('='.repeat(80));
     console.log(geminiText);
     console.log('='.repeat(80));
 
-    // JSONを抽出（マークダウンのコードブロックを除去）
-    let jsonText = geminiText.trim();
-
-    // コードブロックの除去（複数パターンに対応）
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/^```\n?/, '').replace(/\n?```$/, '');
-    }
-
-    // 前後の空白を除去
-    jsonText = jsonText.trim();
-
-    console.log('📋 抽出されたJSON文字列:');
-    console.log('='.repeat(80));
-    console.log(jsonText);
-    console.log('='.repeat(80));
-
-    // JSONをパース
+    // JSON Schemaを使用しているため、直接パース可能
     let parsedData;
     try {
-      parsedData = JSON.parse(jsonText);
-      console.log('✅ JSON パース成功');
+      parsedData = JSON.parse(geminiText);
+      console.log('✅ JSON パース成功（Schema駆動）');
     } catch (parseError) {
       console.error('❌ JSON パースエラー:', parseError);
-      console.error('パースしようとした文字列:', jsonText.substring(0, 500));
+      console.error('パースしようとした文字列:', geminiText.substring(0, 500));
       throw new Error(`JSON parse failed: ${parseError.message}`);
     }
 
@@ -517,8 +588,20 @@ async function extractParkingDataWithGemini(
       phone_number: parsedData.phone_number || undefined,
     };
 
-    console.log('✅ Gemini でデータ抽出成功（正規化後）:', extractedData);
-    return extractedData;
+      console.log('✅ Gemini でデータ抽出成功（正規化後）:', extractedData);
+      return extractedData;
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+
+      // タイムアウトエラーの処理
+      if (fetchError.name === 'AbortError') {
+        console.error('⏱️ Gemini API タイムアウト (30秒)');
+        throw new Error('Gemini API タイムアウト: 30秒以内に応答がありませんでした。画像サイズを小さくするか、後でもう一度お試しください。');
+      }
+
+      // その他のfetchエラー
+      throw fetchError;
+    }
   } catch (error) {
     console.error('❌ Gemini API エラー:', error);
     // エラー時はデフォルト値を返す

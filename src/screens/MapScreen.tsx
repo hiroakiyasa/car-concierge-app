@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { CrossPlatformMap } from '@/components/Map/CrossPlatformMap';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -80,6 +81,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   // リアルタイム位置追跡の状態
   const [isLocationTracking, setIsLocationTracking] = useState(false);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+
+  // マーカータップ処理の再入防止用
+  const isProcessingMarkerPress = useRef(false);
 
   // 位置情報取得の状態管理
   const [locationStatus, setLocationStatus] = useState<'loading' | 'success' | 'error' | 'denied'>('loading');
@@ -201,6 +205,30 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   useEffect(() => {
     initializeLocation();
   }, []);
+
+  // 管理画面から戻った時に地図データを更新
+  useFocusEffect(
+    useCallback(() => {
+      const checkMapRefresh = async () => {
+        try {
+          const needsRefresh = await AsyncStorage.getItem('needsMapRefresh');
+          if (needsRefresh === 'true') {
+            console.log('🔄 管理画面での承認により地図データを更新します');
+            await AsyncStorage.removeItem('needsMapRefresh');
+
+            // 地図データを再取得（現在のフィルター設定を維持）
+            if (mapRegion && isMapReady) {
+              await handleSearch(false);
+            }
+          }
+        } catch (error) {
+          console.error('地図更新フラグのチェックエラー:', error);
+        }
+      };
+
+      checkMapRefresh();
+    }, [mapRegion, isMapReady])
+  );
 
   // リアルタイム位置追跡を開始（初期化完了後のみ）
   useEffect(() => {
@@ -1602,7 +1630,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         latitudeDelta: targetLatDelta,
         longitudeDelta: targetLngDelta,
       },
-      500
+      200
     );
   };
   
@@ -1742,202 +1770,219 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     });
   };
 
+  // 最寄り施設を非同期バックグラウンドで取得する関数
+  const fetchNearbyFacilitiesAsync = async (parkingSpot: CoinParking) => {
+    const facilities: Spot[] = [];
+
+    console.log('🅿️ 駐車場タップ:', parkingSpot.name);
+    console.log('📍 最寄りコンビニ:', parkingSpot.nearestConvenienceStore);
+    console.log('♨️ 最寄り温泉:', parkingSpot.nearestHotspring);
+
+    // 最寄りのコンビニを取得して地図に追加
+    if (parkingSpot.nearestConvenienceStore) {
+      const nearestStore = parkingSpot.nearestConvenienceStore;
+      console.log('🏪 コンビニデータ構造:', nearestStore);
+
+      // データ構造に応じて処理
+      if (typeof nearestStore === 'object' && nearestStore !== null) {
+        const storeData = nearestStore as any;
+
+        // 座標情報がある場合
+        if (storeData.lat && storeData.lng) {
+          console.log('✅ コンビニデータ使用（座標あり）:', storeData.name);
+          facilities.push({
+            id: storeData.id || storeData.store_id || `conv-${Date.now()}`,
+            name: storeData.name || storeData.store_name || 'コンビニ',
+            category: 'コンビニ' as const,
+            lat: storeData.lat,
+            lng: storeData.lng,
+            address: storeData.address || '',
+            brand: storeData.brand || '',
+            distance: storeData.distance || storeData.distance_m || storeData.distance_meters
+          } as any);
+        }
+        // IDがある場合は詳細を取得
+        else if (storeData.id || storeData.store_id || storeData.facility_id) {
+          const convenienceId = storeData.id || storeData.store_id || storeData.facility_id;
+          console.log('🏪 コンビニID:', convenienceId);
+
+          try {
+            const store = await SupabaseService.fetchConvenienceStoreById(String(convenienceId));
+            if (store) {
+              console.log('✅ コンビニ取得成功:', store.name);
+              facilities.push({
+                ...store,
+                distance: storeData.distance || storeData.distance_m || storeData.distance_meters
+              } as any);
+            } else {
+              console.log('❌ コンビニ情報なし');
+            }
+          } catch (error) {
+            console.error('コンビニ情報取得エラー:', error);
+          }
+        }
+        // 名前と距離のみの場合（RPC関数からのデータ）
+        else if (storeData.name && (storeData.distance || storeData.distance_m)) {
+          console.log('🔍 コンビニを名前で検索:', storeData.name);
+          // 地図範囲内でコンビニを名前検索
+          try {
+            const stores = await SupabaseService.fetchConvenienceStores(mapRegion || {
+              latitude: parkingSpot.lat,
+              longitude: parkingSpot.lng,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01
+            });
+            const matchedStore = stores.find(s => s.name === storeData.name);
+            if (matchedStore) {
+              console.log('✅ 名前でコンビニ発見:', matchedStore.name);
+              facilities.push({
+                ...matchedStore,
+                distance: storeData.distance || storeData.distance_m
+              } as any);
+            }
+          } catch (error) {
+            console.error('コンビニ検索エラー:', error);
+          }
+        }
+      }
+    }
+
+    // 最寄りの温泉を取得して地図に追加
+    if (parkingSpot.nearestHotspring) {
+      const nearestSpring = parkingSpot.nearestHotspring;
+      console.log('♨️ 温泉データ構造:', nearestSpring);
+
+      // データ構造に応じて処理
+      if (typeof nearestSpring === 'object' && nearestSpring !== null) {
+        const springData = nearestSpring as any;
+
+        // 座標情報がある場合
+        if (springData.lat && springData.lng) {
+          console.log('✅ 温泉データ使用（座標あり）:', springData.name);
+          facilities.push({
+            id: springData.id || springData.spring_id || `hot-${Date.now()}`,
+            name: springData.name || springData.spring_name || '温泉',
+            category: '温泉' as const,
+            lat: springData.lat,
+            lng: springData.lng,
+            address: springData.address || '',
+            distance: springData.distance || springData.distance_m || springData.distance_meters
+          } as any);
+        }
+        // IDがある場合は詳細を取得
+        else if (springData.id || springData.spring_id || springData.facility_id) {
+          const hotspringId = springData.id || springData.spring_id || springData.facility_id;
+          console.log('♨️ 温泉ID:', hotspringId);
+
+          try {
+            const spring = await SupabaseService.fetchHotSpringById(String(hotspringId));
+            if (spring) {
+              console.log('✅ 温泉取得成功:', spring.name);
+              facilities.push({
+                ...spring,
+                distance: springData.distance || springData.distance_m || springData.distance_meters
+              } as any);
+            } else {
+              console.log('❌ 温泉情報なし');
+            }
+          } catch (error) {
+            console.error('温泉情報取得エラー:', error);
+          }
+        }
+        // 名前と距離のみの場合（RPC関数からのデータ）
+        else if (springData.name && (springData.distance || springData.distance_m)) {
+          console.log('🔍 温泉を名前で検索:', springData.name);
+          // 地図範囲内で温泉を名前検索
+          try {
+            const springs = await SupabaseService.fetchHotSprings(mapRegion || {
+              latitude: parkingSpot.lat,
+              longitude: parkingSpot.lng,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01
+            });
+            const matchedSpring = springs.find(s => s.name === springData.name);
+            if (matchedSpring) {
+              console.log('✅ 名前で温泉発見:', matchedSpring.name);
+              facilities.push({
+                ...matchedSpring,
+                distance: springData.distance || springData.distance_m
+              } as any);
+            }
+          } catch (error) {
+            console.error('温泉検索エラー:', error);
+          }
+        }
+      }
+    }
+
+    console.log('🗺️ 地図に追加する施設数:', facilities.length);
+    setNearbyFacilities(facilities);
+
+    // 施設が見つかった場合のみ地図範囲を調整（バックグラウンドで実行）
+    if (mapRef.current && facilities.length > 0) {
+      const allSpots = [parkingSpot, ...facilities];
+
+      // 全施設の緯度・経度の最小値と最大値を取得
+      const lats = allSpots.map(s => s.lat);
+      const lngs = allSpots.map(s => s.lng);
+
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      const minLng = Math.min(...lngs);
+      const maxLng = Math.max(...lngs);
+
+      // 表示範囲を計算（パディングを追加）
+      let latDelta = Math.max((maxLat - minLat) * 2.5, 0.01);
+      let lngDelta = Math.max((maxLng - minLng) * 2.5, 0.01);
+
+      // 可視上部50%の上下中央(=全体の25%位置)にスポットを配置
+      const desired = 0.5 / 2; // 0.25
+      const offsetCenterLat = parkingSpot.lat - (0.5 - desired) * latDelta;
+
+      console.log('🗺️ 地図範囲調整:', {
+        施設数: allSpots.length,
+        駐車場位置: { lat: parkingSpot.lat, lng: parkingSpot.lng },
+        地図中心: { lat: offsetCenterLat, lng: parkingSpot.lng },
+        範囲: { latDelta, lngDelta }
+      });
+      mapRef.current.animateToRegion({
+        latitude: offsetCenterLat,
+        longitude: parkingSpot.lng,
+        latitudeDelta: latDelta,
+        longitudeDelta: lngDelta,
+      }, 200);
+    }
+  };
+
   const handleMarkerPress = async (spot: Spot) => {
-    selectSpot(spot);
-    setShowDetailSheet(true);
+    // 既に処理中の場合は何もしない（連打防止）
+    if (isProcessingMarkerPress.current) {
+      console.log('⚠️ マーカー処理中のため、タップを無視します');
+      return;
+    }
 
-    // マーカーを画面上から25%の位置に強制移動
-    if (spot) animateMarkerToTopFractionCenter(spot, 0.5);
+    try {
+      isProcessingMarkerPress.current = true;
 
-    // コインパーキングの場合、最寄りの施設を地図に表示
-    if (spot.category === 'コインパーキング') {
-      const parkingSpot = spot as CoinParking;
-      const facilities: Spot[] = [];
-      
-      console.log('🅿️ 駐車場タップ:', parkingSpot.name);
-      console.log('📍 最寄りコンビニ:', parkingSpot.nearestConvenienceStore);
-      console.log('♨️ 最寄り温泉:', parkingSpot.nearestHotspring);
-      
-      // 最寄りのコンビニを取得して地図に追加
-      if (parkingSpot.nearestConvenienceStore) {
-        const nearestStore = parkingSpot.nearestConvenienceStore;
-        console.log('🏪 コンビニデータ構造:', nearestStore);
+      selectSpot(spot);
+      setShowDetailSheet(true);
 
-        // データ構造に応じて処理
-        if (typeof nearestStore === 'object' && nearestStore !== null) {
-          const storeData = nearestStore as any;
+      // マーカーを画面上から25%の位置に素早く移動（200ms）
+      if (spot) animateMarkerToTopFractionCenter(spot, 0.5);
 
-          // 座標情報がある場合
-          if (storeData.lat && storeData.lng) {
-            console.log('✅ コンビニデータ使用（座標あり）:', storeData.name);
-            facilities.push({
-              id: storeData.id || storeData.store_id || `conv-${Date.now()}`,
-              name: storeData.name || storeData.store_name || 'コンビニ',
-              category: 'コンビニ' as const,
-              lat: storeData.lat,
-              lng: storeData.lng,
-              address: storeData.address || '',
-              brand: storeData.brand || '',
-              distance: storeData.distance || storeData.distance_m || storeData.distance_meters
-            } as any);
-          }
-          // IDがある場合は詳細を取得
-          else if (storeData.id || storeData.store_id || storeData.facility_id) {
-            const convenienceId = storeData.id || storeData.store_id || storeData.facility_id;
-            console.log('🏪 コンビニID:', convenienceId);
-
-            try {
-              const store = await SupabaseService.fetchConvenienceStoreById(String(convenienceId));
-              if (store) {
-                console.log('✅ コンビニ取得成功:', store.name);
-                facilities.push({
-                  ...store,
-                  distance: storeData.distance || storeData.distance_m || storeData.distance_meters
-                } as any);
-              } else {
-                console.log('❌ コンビニ情報なし');
-              }
-            } catch (error) {
-              console.error('コンビニ情報取得エラー:', error);
-            }
-          }
-          // 名前と距離のみの場合（RPC関数からのデータ）
-          else if (storeData.name && (storeData.distance || storeData.distance_m)) {
-            console.log('🔍 コンビニを名前で検索:', storeData.name);
-            // 地図範囲内でコンビニを名前検索
-            try {
-              const stores = await SupabaseService.fetchConvenienceStores(mapRegion || {
-                latitude: parkingSpot.lat,
-                longitude: parkingSpot.lng,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01
-              });
-              const matchedStore = stores.find(s => s.name === storeData.name);
-              if (matchedStore) {
-                console.log('✅ 名前でコンビニ発見:', matchedStore.name);
-                facilities.push({
-                  ...matchedStore,
-                  distance: storeData.distance || storeData.distance_m
-                } as any);
-              }
-            } catch (error) {
-              console.error('コンビニ検索エラー:', error);
-            }
-          }
-        }
+      // 最寄り施設の取得は非同期バックグラウンドで実行（awaitしない）
+      if (spot.category === 'コインパーキング') {
+        fetchNearbyFacilitiesAsync(spot as CoinParking);
+      } else {
+        setNearbyFacilities([]);
       }
-      
-      // 最寄りの温泉を取得して地図に追加
-      if (parkingSpot.nearestHotspring) {
-        const nearestSpring = parkingSpot.nearestHotspring;
-        console.log('♨️ 温泉データ構造:', nearestSpring);
-
-        // データ構造に応じて処理
-        if (typeof nearestSpring === 'object' && nearestSpring !== null) {
-          const springData = nearestSpring as any;
-
-          // 座標情報がある場合
-          if (springData.lat && springData.lng) {
-            console.log('✅ 温泉データ使用（座標あり）:', springData.name);
-            facilities.push({
-              id: springData.id || springData.spring_id || `hot-${Date.now()}`,
-              name: springData.name || springData.spring_name || '温泉',
-              category: '温泉' as const,
-              lat: springData.lat,
-              lng: springData.lng,
-              address: springData.address || '',
-              distance: springData.distance || springData.distance_m || springData.distance_meters
-            } as any);
-          }
-          // IDがある場合は詳細を取得
-          else if (springData.id || springData.spring_id || springData.facility_id) {
-            const hotspringId = springData.id || springData.spring_id || springData.facility_id;
-            console.log('♨️ 温泉ID:', hotspringId);
-
-            try {
-              const spring = await SupabaseService.fetchHotSpringById(String(hotspringId));
-              if (spring) {
-                console.log('✅ 温泉取得成功:', spring.name);
-                facilities.push({
-                  ...spring,
-                  distance: springData.distance || springData.distance_m || springData.distance_meters
-                } as any);
-              } else {
-                console.log('❌ 温泉情報なし');
-              }
-            } catch (error) {
-              console.error('温泉情報取得エラー:', error);
-            }
-          }
-          // 名前と距離のみの場合（RPC関数からのデータ）
-          else if (springData.name && (springData.distance || springData.distance_m)) {
-            console.log('🔍 温泉を名前で検索:', springData.name);
-            // 地図範囲内で温泉を名前検索
-            try {
-              const springs = await SupabaseService.fetchHotSprings(mapRegion || {
-                latitude: parkingSpot.lat,
-                longitude: parkingSpot.lng,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01
-              });
-              const matchedSpring = springs.find(s => s.name === springData.name);
-              if (matchedSpring) {
-                console.log('✅ 名前で温泉発見:', matchedSpring.name);
-                facilities.push({
-                  ...matchedSpring,
-                  distance: springData.distance || springData.distance_m
-                } as any);
-              }
-            } catch (error) {
-              console.error('温泉検索エラー:', error);
-            }
-          }
-        }
-      }
-      
-      console.log('🗺️ 地図に追加する施設数:', facilities.length);
-      setNearbyFacilities(facilities);
-      
-      // 3つの施設全てが表示される地図範囲を計算
-      if (mapRef.current && facilities.length > 0) {
-        const allSpots = [spot, ...facilities];
-        
-        // 全施設の緯度・経度の最小値と最大値を取得
-        const lats = allSpots.map(s => s.lat);
-        const lngs = allSpots.map(s => s.lng);
-        
-        const minLat = Math.min(...lats);
-        const maxLat = Math.max(...lats);
-        const minLng = Math.min(...lngs);
-        const maxLng = Math.max(...lngs);
-        
-        // 表示範囲を計算（パディングを追加）
-        let latDelta = Math.max((maxLat - minLat) * 2.5, 0.01);
-        let lngDelta = Math.max((maxLng - minLng) * 2.5, 0.01);
-        
-        // 可視上部50%の上下中央(=全体の25%位置)にスポットを配置
-        const desired = 0.5 / 2; // 0.25
-        const offsetCenterLat = spot.lat - (0.5 - desired) * latDelta; // = spot.lat - 0.25*latDelta
-        
-        console.log('🗺️ 地図範囲調整:', {
-          施設数: allSpots.length,
-          駐車場位置: { lat: spot.lat, lng: spot.lng },
-          地図中心: { lat: offsetCenterLat, lng: spot.lng },
-          範囲: { latDelta, lngDelta }
-        });
-        mapRef.current.animateToRegion({
-          latitude: offsetCenterLat,
-          longitude: spot.lng,
-          latitudeDelta: latDelta,
-          longitudeDelta: lngDelta,
-        }, 300);
-      }
-    } else {
-      // コインパーキング以外の場合は最寄り施設をクリア
-      setNearbyFacilities([]);
-      
-      // 通常の施設選択時の表示（上部50%の中央に配置）
-      // センタリングは既にhandleMarkerPressで実行済み
+    } catch (error) {
+      console.error('❌ handleMarkerPress エラー:', error);
+    } finally {
+      // 処理完了後、フラグをリセット（アニメーション完了を待つ）
+      setTimeout(() => {
+        isProcessingMarkerPress.current = false;
+      }, 300);
     }
   };
   

@@ -135,8 +135,23 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
     try {
       let tableName = '';
       let columnName = '';
+      let userSubmittedPhotos: any[] = [];
 
+      // 1. ユーザー投稿写真（parking_spots.images配列から）を取得
       if (selectedSpot.category === 'コインパーキング') {
+        const parkingSpot = selectedSpot as CoinParking;
+        if (parkingSpot.images && Array.isArray(parkingSpot.images) && parkingSpot.images.length > 0) {
+          userSubmittedPhotos = parkingSpot.images.map((imageUrl, index) => ({
+            id: `user-submitted-${index}`,
+            url: imageUrl,
+            thumbnail_url: imageUrl,
+            user_name: 'ユーザー投稿',
+            created_at: parkingSpot.created_at || new Date().toISOString(),
+            is_user_submitted: true,
+          }));
+          console.log(`Found ${userSubmittedPhotos.length} user-submitted photos in parking_spots.images`);
+        }
+
         tableName = 'parking_photos';
         columnName = 'parking_spot_id';
       } else if (selectedSpot.category === '温泉') {
@@ -150,6 +165,7 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
         return;
       }
 
+      // 2. コミュニティ投稿写真（parking_photosテーブルから）を取得
       const { data, error } = await supabase
         .from(tableName)
         .select(`
@@ -167,12 +183,17 @@ export const SpotDetailBottomSheet: React.FC<SpotDetailBottomSheetProps> = ({
       console.log(`Fetched ${data?.length || 0} photos from ${tableName} for ${columnName}=${selectedSpot.id}`);
 
       // ユーザー情報を省略してシンプルに表示
-      const formattedPhotos = data?.map(photo => ({
+      const communityPhotos = data?.map(photo => ({
         ...photo,
         user_name: '投稿者',
+        is_user_submitted: false,
       })) || [];
 
-      setPhotos(formattedPhotos);
+      // 3. ユーザー投稿写真を先頭に、コミュニティ投稿写真を後に結合
+      const allPhotos = [...userSubmittedPhotos, ...communityPhotos];
+      console.log(`Total photos: ${allPhotos.length} (${userSubmittedPhotos.length} user-submitted + ${communityPhotos.length} community)`);
+
+      setPhotos(allPhotos);
     } catch (error) {
       console.error('Error fetching photos:', error);
     } finally {
