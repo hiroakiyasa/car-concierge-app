@@ -1083,113 +1083,105 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             return; // 早期リターン
           }
 
-          // 10件未満の場合、10件以上見つかるまで自動でズームアウト
+          // 10件未満の場合、駐車場密度から適切な範囲を一発で算出してズームアウト
           if (result.totalCount < 10) {
-            console.log(`⚠️ 駐車場が${result.totalCount}件しかありません。10件以上見つかるまで自動でズームアウトします`);
+            console.log(`⚠️ 駐車場が${result.totalCount}件しかありません。密度から適切な範囲を算出して一発でズームアウトします`);
 
-            let zoomOutRegion = { ...searchRegion };
-            let zoomOutFactor = 1.5; // 初回は150%ズームアウト
-            let maxZoomOutAttempts = 5; // 最大5回まで試行
-            let currentZoomOutAttempt = 0;
+            // 目標：20-100件の駐車場を表示（10件だとギリギリすぎるため余裕を持たせる）
+            const targetCount = 50;
+            const currentCount = Math.max(result.totalCount, 1); // 0件の場合は1として扱う
 
-            const performAutoZoomOut = async () => {
-              currentZoomOutAttempt++;
+            // 駐車場密度を推定：現在の件数 / 現在の範囲面積
+            // 面積は latitudeDelta * longitudeDelta で近似
+            const currentArea = searchRegion.latitudeDelta * searchRegion.longitudeDelta;
+            const estimatedDensity = currentCount / currentArea;
 
-              // 地図をズームアウト
-              zoomOutRegion = {
+            // 目標範囲を算出：目標件数 / 推定密度
+            const targetArea = targetCount / estimatedDensity;
+
+            // 拡大率を算出：sqrt(目標面積 / 現在の面積)
+            const zoomOutFactor = Math.sqrt(targetArea / currentArea);
+
+            // 安全のため拡大率に制限を設ける
+            const minZoomFactor = 2.5; // 最小でも2.5倍
+            const maxZoomFactor = 8.0; // 最大8倍まで
+            const clampedZoomFactor = Math.max(minZoomFactor, Math.min(maxZoomFactor, zoomOutFactor));
+
+            console.log(`📊 駐車場密度分析:`, {
+              現在の件数: currentCount,
+              目標件数: targetCount,
+              現在の範囲面積: currentArea.toFixed(6),
+              推定密度: estimatedDensity.toFixed(3),
+              算出された拡大率: zoomOutFactor.toFixed(2),
+              適用する拡大率: clampedZoomFactor.toFixed(2)
+            });
+
+            // 一発で適切な範囲にズームアウト
+            const zoomOutRegion = {
+              ...searchRegion,
+              latitudeDelta: searchRegion.latitudeDelta * clampedZoomFactor,
+              longitudeDelta: searchRegion.longitudeDelta * clampedZoomFactor,
+            };
+
+            // アニメーション付きでズーム
+            if (mapRef.current) {
+              mapRef.current.animateToRegion(zoomOutRegion, 600);
+            }
+
+            // ズームアウト後の範囲で再検索
+            const retryResult = await SupabaseService.fetchParkingSpotsSortedByFee(
+              zoomOutRegion,
+              currentFilter.parkingDuration.durationInMinutes,
+              minElevation,
+              currentFilter.parkingDuration.startDate
+            );
+
+            console.log(`✅ 一発ズームアウト結果: 駐車場${retryResult.totalCount}件`);
+
+            // 2000件を超えた場合は調整
+            let finalResult = retryResult;
+            if (retryResult.totalCount > 2000) {
+              console.log(`⚠️ 2000件を超えました。範囲を80%に縮小して再検索`);
+              const adjustedRegion = {
                 ...zoomOutRegion,
-                latitudeDelta: zoomOutRegion.latitudeDelta * zoomOutFactor,
-                longitudeDelta: zoomOutRegion.longitudeDelta * zoomOutFactor,
+                latitudeDelta: zoomOutRegion.latitudeDelta * 0.8,
+                longitudeDelta: zoomOutRegion.longitudeDelta * 0.8,
               };
 
-              // mapRefが存在する場合はアニメーション付きでズーム
               if (mapRef.current) {
-                mapRef.current.animateToRegion(zoomOutRegion, 500);
+                mapRef.current.animateToRegion(adjustedRegion, 500);
               }
 
-              // ズームアウト後の範囲で再検索
-              const retryResult = await SupabaseService.fetchParkingSpotsSortedByFee(
-                zoomOutRegion,
+              finalResult = await SupabaseService.fetchParkingSpotsSortedByFee(
+                adjustedRegion,
                 currentFilter.parkingDuration.durationInMinutes,
                 minElevation,
                 currentFilter.parkingDuration.startDate
               );
+              console.log(`✅ 調整後の結果: 駐車場${finalResult.totalCount}件`);
+            }
 
-              console.log(`🔍 ズームアウト試行${currentZoomOutAttempt}: 駐車場${retryResult.totalCount}件`);
+            // 結果を表示
+            parkingSpots = finalResult.spots.filter(p =>
+              ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
+            );
+            console.log(`🅿️ 最終料金フィルター結果: ${parkingSpots.length}件 (総数: ${finalResult.totalCount}件)`);
+            displaySpots.push(...parkingSpots);
 
-              // 10件以上見つかった、または最大試行回数に達した場合は結果を表示
-              // ただし2000件を超えない範囲で
-              if ((retryResult.totalCount >= 10 && retryResult.totalCount <= 2000) || currentZoomOutAttempt >= maxZoomOutAttempts) {
-                parkingSpots = retryResult.spots.filter(p =>
-                  ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
-                );
-                console.log(`🅿️ 最終料金フィルター結果: ${parkingSpots.length}件 (総数: ${retryResult.totalCount}件)`);
-                displaySpots.push(...parkingSpots);
-
-                // 駐車場に同率順位を計算して設定
-                const allParkingSpots = displaySpots.filter(s => s.category === 'コインパーキング') as CoinParking[];
-                const rankedParkingSpots = calculateParkingRanks(allParkingSpots);
-                const finalDisplaySpots = displaySpots.map(spot => {
-                  if (spot.category === 'コインパーキング') {
-                    const rankedSpot = rankedParkingSpots.find(p => p.id === spot.id);
-                    return rankedSpot || spot;
-                  }
-                  return spot;
-                });
-
-                // 結果を更新
-                setSearchResults(finalDisplaySpots);
-                setSearchStatus('complete');
-                setTimeout(() => setSearchStatus('idle'), 3000);
-              } else if (retryResult.totalCount > 2000) {
-                // 2000件を超えてしまった場合は少し縮小
-                zoomOutRegion = {
-                  ...zoomOutRegion,
-                  latitudeDelta: zoomOutRegion.latitudeDelta * 0.8,
-                  longitudeDelta: zoomOutRegion.longitudeDelta * 0.8,
-                };
-                if (mapRef.current) {
-                  mapRef.current.animateToRegion(zoomOutRegion, 500);
-                }
-
-                // 再度検索して結果を表示
-                const finalResult = await SupabaseService.fetchParkingSpotsSortedByFee(
-                  zoomOutRegion,
-                  currentFilter.parkingDuration.durationInMinutes,
-                  minElevation,
-                  currentFilter.parkingDuration.startDate
-                );
-
-                parkingSpots = finalResult.spots.filter(p =>
-                  ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
-                );
-                console.log(`🅿️ 最終料金フィルター結果: ${parkingSpots.length}件 (総数: ${finalResult.totalCount}件)`);
-                displaySpots.push(...parkingSpots);
-
-                // 駐車場に同率順位を計算して設定
-                const allParkingSpots = displaySpots.filter(s => s.category === 'コインパーキング') as CoinParking[];
-                const rankedParkingSpots = calculateParkingRanks(allParkingSpots);
-                const finalDisplaySpots = displaySpots.map(spot => {
-                  if (spot.category === 'コインパーキング') {
-                    const rankedSpot = rankedParkingSpots.find(p => p.id === spot.id);
-                    return rankedSpot || spot;
-                  }
-                  return spot;
-                });
-
-                setSearchResults(finalDisplaySpots);
-                setSearchStatus('complete');
-                setTimeout(() => setSearchStatus('idle'), 3000);
-              } else {
-                // まだ10件未満の場合は、さらにズームアウト
-                // 次回は40%ズームアウト（徐々に細かく調整）
-                zoomOutFactor = 1.4;
-                setTimeout(() => performAutoZoomOut(), 600);
+            // 駐車場に同率順位を計算して設定
+            const allParkingSpots = displaySpots.filter(s => s.category === 'コインパーキング') as CoinParking[];
+            const rankedParkingSpots = calculateParkingRanks(allParkingSpots);
+            const finalDisplaySpots = displaySpots.map(spot => {
+              if (spot.category === 'コインパーキング') {
+                const rankedSpot = rankedParkingSpots.find(p => p.id === spot.id);
+                return rankedSpot || spot;
               }
-            };
+              return spot;
+            });
 
-            // 初回のズームアウト実行（即座にシームレスに実行）
-            performAutoZoomOut();
+            setSearchResults(finalDisplaySpots);
+            setSearchStatus('complete');
+            setTimeout(() => setSearchStatus('idle'), 3000);
 
             return; // 早期リターン
           }
