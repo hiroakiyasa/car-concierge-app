@@ -212,16 +212,28 @@ export class AuthService {
   static async signIn(email: string, password: string): Promise<{ user: User | null, error: string | null }> {
     try {
       console.log('🔐 SignIn: ログイン処理開始', { email });
-      
+
+      // Supabaseクライアントの初期化確認
+      if (!supabase) {
+        console.error('💥 SignIn: Supabaseクライアントが初期化されていません');
+        return { user: null, error: 'システムエラー: データベース接続に失敗しました' };
+      }
+
+      console.log('🔐 SignIn: Supabaseクライアント確認OK');
+
       // 入力値バリデーション
       if (!email || !password) {
+        console.log('🔐 SignIn: バリデーションエラー - 入力不足');
         return { user: null, error: 'メールアドレスとパスワードを入力してください' };
       }
-      
+
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
+        console.log('🔐 SignIn: バリデーションエラー - メール形式不正');
         return { user: null, error: '有効なメールアドレスを入力してください' };
       }
+
+      console.log('🔐 SignIn: バリデーション完了');
       
       // 現在のセッションを確認（不要なsignOutを避ける）
       const { data: currentSession } = await supabase.auth.getSession();
@@ -467,6 +479,13 @@ export class AuthService {
 
       // Expo Go では proxy を使い、Dev Client/本番は独自スキームで戻す
       const isExpoGo = Constants.appOwnership === 'expo';
+
+      console.log('🔐 環境情報:', {
+        appOwnership: Constants.appOwnership,
+        isExpoGo,
+        platform: require('react-native').Platform.OS
+      });
+
       const redirectTo = AuthSession.makeRedirectUri({
         useProxy: isExpoGo,
         scheme: isExpoGo ? undefined : 'car-concierge-app',
@@ -474,6 +493,11 @@ export class AuthService {
       });
 
       console.log('🔐 生成されたリダイレクトURI:', redirectTo);
+      console.log('🔐 リダイレクトURI詳細:', {
+        useProxy: isExpoGo,
+        scheme: isExpoGo ? 'Expoプロキシ' : 'car-concierge-app',
+        path: 'auth/callback'
+      });
 
       // Supabaseに設定されているURLを確認
       const supabaseRedirectUrl = `${redirectTo}`;
@@ -513,10 +537,11 @@ export class AuthService {
 
         console.log('🔐 WebBrowser結果:', {
           type: result.type,
-          hasUrl: !!result.url,
+          hasUrl: !!(result as any).url,
+          url: (result as any).url ? (result as any).url.substring(0, 100) + '...' : 'なし'
         });
 
-        if (result.type === 'success' && result.url) {
+        if (result.type === 'success' && (result as any).url) {
           console.log('🔐 成功時のURL:', result.url);
           
           // URLからパラメータを抽出（fragment形式とquery形式の両方に対応）
@@ -625,9 +650,19 @@ export class AuthService {
           }
         } else if (result.type === 'cancel') {
           console.log('🔐 ユーザーが認証をキャンセルしました');
+          console.log('🔐 キャンセル詳細:', JSON.stringify(result, null, 2));
           return { user: null, error: 'Google認証がキャンセルされました' };
+        } else if (result.type === 'dismiss') {
+          console.log('🔐 認証ウィンドウが閉じられました（dismiss）');
+          console.log('🔐 Dismiss詳細:', JSON.stringify(result, null, 2));
+          return { user: null, error: 'Google認証ウィンドウが閉じられました' };
+        } else if (result.type === 'locked') {
+          console.error('🔐 認証がロックされました（locked）');
+          console.error('🔐 Locked詳細:', JSON.stringify(result, null, 2));
+          return { user: null, error: 'Google認証がロックされています。しばらく待ってから再試行してください' };
         } else {
-          console.error('🔐 認証が失敗しました:', result);
+          console.error('🔐 認証が失敗しました（不明なタイプ）:', result.type);
+          console.error('🔐 失敗詳細:', JSON.stringify(result, null, 2));
           return { user: null, error: `Google認証に失敗しました: ${result.type}` };
         }
       } else {

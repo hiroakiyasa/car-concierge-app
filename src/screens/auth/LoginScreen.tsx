@@ -30,19 +30,41 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
   const { signIn, signInWithGoogle } = useAuthStore();
 
   const handleLogin = async () => {
+    console.log('🔵 LoginScreen: ログインボタンが押されました');
+    console.log('🔵 LoginScreen: email =', email);
+    console.log('🔵 LoginScreen: password =', password ? '***設定済み***' : '未設定');
+
     if (!email || !password) {
+      console.log('❌ LoginScreen: バリデーションエラー');
       Alert.alert('エラー', 'メールアドレスとパスワードを入力してください');
       return;
     }
 
-    setIsLoading(true);
-    const { error } = await signIn(email, password);
-    setIsLoading(false);
+    try {
+      console.log('🔵 LoginScreen: setIsLoading(true)');
+      setIsLoading(true);
 
-    if (error) {
-      Alert.alert('ログインエラー', error);
-    } else {
-      navigation.navigate('Map');
+      console.log('🔵 LoginScreen: signIn関数を呼び出します');
+      const { error } = await signIn(email, password);
+
+      console.log('🔵 LoginScreen: signIn完了', { hasError: !!error, error });
+      console.log('🔵 LoginScreen: setIsLoading(false)');
+      setIsLoading(false);
+
+      if (error) {
+        console.error('❌ LoginScreen: ログインエラー:', error);
+        Alert.alert('ログインエラー', error);
+      } else {
+        console.log('✅ LoginScreen: ログイン成功、Map画面へ遷移');
+        navigation.navigate('Map');
+      }
+    } catch (err) {
+      console.error('💥 LoginScreen: 予期しないエラー:', err);
+      setIsLoading(false);
+      Alert.alert(
+        'システムエラー',
+        `ログイン処理中にエラーが発生しました: ${err instanceof Error ? err.message : '不明なエラー'}`
+      );
     }
   };
 
@@ -56,6 +78,39 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     } else {
       navigation.navigate('Map');
     }
+  };
+
+  // 緊急用：ストレージをクリアして再起動
+  const handleClearStorage = async () => {
+    Alert.alert(
+      'ストレージクリア',
+      '古いセッション情報をクリアして再起動しますか？\nログイン問題が解決する可能性があります。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: 'クリア',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🧹 手動でストレージクリア実行');
+              const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+              const { supabase } = require('@/config/supabase');
+
+              await supabase.auth.signOut();
+              await AsyncStorage.removeItem('user');
+              await AsyncStorage.removeItem('supabase.auth.token');
+              await AsyncStorage.clear();
+
+              console.log('✅ ストレージクリア完了');
+              Alert.alert('完了', 'ストレージをクリアしました。アプリを再起動してください。');
+            } catch (error) {
+              console.error('❌ ストレージクリアエラー:', error);
+              Alert.alert('エラー', 'クリアに失敗しました');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -116,12 +171,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
               </View>
             </View>
 
-            <TouchableOpacity
-              style={styles.forgotPassword}
-              onPress={() => navigation.navigate('ForgotPassword')}
-            >
-              <Text style={styles.forgotPasswordText}>パスワードを忘れた場合</Text>
-            </TouchableOpacity>
+            <View style={styles.linkContainer}>
+              <TouchableOpacity
+                style={styles.forgotPassword}
+                onPress={() => navigation.navigate('ForgotPassword')}
+              >
+                <Text style={styles.forgotPasswordText}>パスワードを忘れた場合</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.clearStorageButton}
+                onPress={handleClearStorage}
+              >
+                <Text style={styles.clearStorageText}>ログインできない場合</Text>
+              </TouchableOpacity>
+            </View>
 
             <TouchableOpacity
               style={[styles.loginButton, isLoading && styles.disabledButton]}
@@ -237,13 +300,26 @@ const styles = StyleSheet.create({
   eyeButton: {
     padding: 12,
   },
-  forgotPassword: {
-    alignSelf: 'flex-end',
+  linkContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 24,
+  },
+  forgotPassword: {
+    // alignSelf removed - now in container
   },
   forgotPasswordText: {
     fontSize: 14,
     color: Colors.primary,
+  },
+  clearStorageButton: {
+    // Left side link
+  },
+  clearStorageText: {
+    fontSize: 12,
+    color: '#999',
+    textDecorationLine: 'underline',
   },
   loginButton: {
     backgroundColor: Colors.primary,

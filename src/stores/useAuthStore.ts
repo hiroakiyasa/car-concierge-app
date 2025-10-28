@@ -57,30 +57,46 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   signIn: async (email: string, password: string) => {
+    console.log('🔐 AuthStore: signIn開始', { email });
     set({ isLoading: true });
-    
-    console.log('🔐 AuthStore: signIn開始');
-    const { user, error } = await AuthService.signIn(email, password);
-    
-    if (user) {
-      console.log('🔐 AuthStore: ユーザー情報取得成功', { userId: user.id, email: user.email });
-      
-      // AuthStoreの状態を更新
-      set({ user, isAuthenticated: true, isLoading: false });
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-      
-      // Supabaseセッションの確認
-      const { data: sessionData } = await supabase.auth.getSession();
-      console.log('🔐 AuthStore: signIn後のセッション状態', {
-        hasSession: !!sessionData.session,
-        sessionUserId: sessionData.session?.user?.id
+
+    try {
+      console.log('🔐 AuthStore: AuthService.signInを呼び出し');
+      const { user, error } = await AuthService.signIn(email, password);
+
+      console.log('🔐 AuthStore: AuthService.signIn完了', {
+        hasUser: !!user,
+        hasError: !!error,
+        error
       });
-    } else {
-      console.log('🔐 AuthStore: signIn失敗', { error });
+
+      if (user) {
+        console.log('🔐 AuthStore: ユーザー情報取得成功', { userId: user.id, email: user.email });
+
+        // AuthStoreの状態を更新
+        set({ user, isAuthenticated: true, isLoading: false });
+        await AsyncStorage.setItem('user', JSON.stringify(user));
+
+        // Supabaseセッションの確認
+        const { data: sessionData } = await supabase.auth.getSession();
+        console.log('🔐 AuthStore: signIn後のセッション状態', {
+          hasSession: !!sessionData.session,
+          sessionUserId: sessionData.session?.user?.id
+        });
+
+        return { error: null };
+      } else {
+        console.log('🔐 AuthStore: signIn失敗', { error });
+        set({ isLoading: false });
+        return { error: error || 'ログインに失敗しました' };
+      }
+    } catch (err) {
+      console.error('💥 AuthStore: signInで予期しないエラー:', err);
       set({ isLoading: false });
+
+      const errorMessage = err instanceof Error ? err.message : 'ログイン処理中にエラーが発生しました';
+      return { error: errorMessage };
     }
-    
-    return { error };
   },
 
   signOut: async () => {
@@ -217,27 +233,54 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   initializeAuth: async () => {
     console.log('🔐 AuthStore: initializeAuth - 認証状態初期化開始');
-    
+
     if (get().isInitialized) {
       console.log('🔐 AuthStore: 既に初期化済み');
       return;
     }
-    
+
     set({ isLoading: true });
-    
+
     try {
       // 1. まずSupabaseセッションを確認（Zennの記事のパターン）
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
+
       console.log('🔐 AuthStore: 初期セッション確認:', {
         hasSession: !!session,
         userId: session?.user?.id,
         email: session?.user?.email,
-        error: sessionError?.message
+        error: sessionError?.message,
+        errorName: sessionError?.name
       });
-      
+
+      // Refresh Tokenエラーの場合は古いセッションをクリア
       if (sessionError) {
         console.error('🔐 AuthStore: セッション取得エラー:', sessionError);
+
+        if (sessionError.message?.includes('Refresh Token') ||
+            sessionError.message?.includes('Invalid') ||
+            sessionError.name === 'AuthApiError') {
+          console.log('🔐 AuthStore: 古いセッション情報を検出、クリーンアップ実行');
+
+          // Supabaseのセッションをクリア
+          await supabase.auth.signOut();
+
+          // AsyncStorageをクリア
+          await AsyncStorage.removeItem('user');
+          await AsyncStorage.removeItem('supabase.auth.token');
+
+          console.log('✅ AuthStore: セッションクリーンアップ完了、未認証状態で継続');
+
+          // エラーを無視して未認証状態で継続
+          set({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            isInitialized: true
+          });
+          return;
+        }
+
         throw sessionError;
       }
       
@@ -312,14 +355,32 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       }
     } catch (error) {
       console.error('🔐 AuthStore: 初期化エラー:', error);
-      
+
+      // Refresh Tokenエラーの場合は詳細ログ
+      if (error && typeof error === 'object' && 'message' in error) {
+        const err = error as { message: string; name?: string };
+        if (err.message?.includes('Refresh Token') ||
+            err.message?.includes('Invalid') ||
+            err.name === 'AuthApiError') {
+          console.log('🔐 AuthStore: Refresh Tokenエラーを検出、セッションをクリア');
+        }
+      }
+
       // エラー時はクリーンアップ
+      try {
+        await supabase.auth.signOut();
+      } catch (signOutError) {
+        console.error('🔐 AuthStore: signOutエラー（無視）:', signOutError);
+      }
+
       await AsyncStorage.removeItem('user');
-      set({ 
-        user: null, 
-        isAuthenticated: false, 
-        isLoading: false, 
-        isInitialized: true 
+      await AsyncStorage.removeItem('supabase.auth.token');
+
+      set({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        isInitialized: true
       });
     }
     
@@ -329,7 +390,16 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('🔐 AuthStore: 認証イベント発生:', event, session?.user?.email);
-        
+
+        // TOKEN_REFRESHEDイベントでエラーがある場合
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          console.log('🔐 AuthStore: トークン更新失敗、セッションをクリア');
+          await AsyncStorage.removeItem('user');
+          await AsyncStorage.removeItem('supabase.auth.token');
+          set({ user: null, isAuthenticated: false, isLoading: false });
+          return;
+        }
+
         switch (event) {
           case 'SIGNED_IN':
             if (session?.user) {

@@ -19,6 +19,21 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       resizeMode: 'contain',
       backgroundColor: '#0B1220',
     },
+    // Deep linking configuration for OAuth and password reset
+    intentFilters: [
+      {
+        action: 'VIEW',
+        autoVerify: true,
+        data: [
+          {
+            scheme: 'https',
+            host: 'jhqnypyxrkwdrgutzttf.supabase.co',
+            pathPrefix: '/auth/v1/callback'
+          }
+        ],
+        category: ['BROWSABLE', 'DEFAULT']
+      }
+    ],
   },
   ios: {
     bundleIdentifier: 'com.carconciege.app',
@@ -27,6 +42,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       resizeMode: 'contain',
       backgroundColor: '#0B1220',
     },
+    // Deep linking configuration for OAuth and password reset
+    associatedDomains: [
+      'applinks:jhqnypyxrkwdrgutzttf.supabase.co'
+    ],
   },
   extra: {
     eas: {
@@ -38,5 +57,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpocW55cHl4cmt3ZHJndXR6dHRmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNTk5MjIsImV4cCI6MjA3MDczNTkyMn0.VdbVtE_sIlCFjQd1OAgmyYVoi-uoGVbjKQvdMIgJ5qY'
   },
-  owner: 'hiroakiyasa'
+  owner: 'hiroakiyasa',
+  plugins: [
+    'expo-secure-store'
+  ]
 });

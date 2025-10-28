@@ -34,37 +34,66 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
   const { signUp, signInWithGoogle } = useAuthStore();
 
   const handleSignUp = async () => {
+    console.log('🔐 SignUp: 登録ボタンが押されました');
+    console.log('🔐 SignUp: 入力状態', {
+      hasName: !!name,
+      hasEmail: !!email,
+      hasPassword: !!password,
+      hasConfirmPassword: !!confirmPassword,
+      passwordLength: password.length,
+      confirmPasswordLength: confirmPassword.length,
+      agreedToTerms
+    });
+
     if (!name || !email || !password || !confirmPassword) {
+      console.log('❌ SignUp: バリデーションエラー - 入力不足');
       Alert.alert('エラー', '全ての項目を入力してください');
       return;
     }
 
     if (password !== confirmPassword) {
+      console.log('❌ SignUp: バリデーションエラー - パスワード不一致');
       Alert.alert('エラー', 'パスワードが一致しません');
       return;
     }
 
     if (password.length < 6) {
+      console.log('❌ SignUp: バリデーションエラー - パスワード短すぎ');
       Alert.alert('エラー', 'パスワードは6文字以上にしてください');
       return;
     }
 
     if (!agreedToTerms) {
+      console.log('❌ SignUp: バリデーションエラー - 利用規約未同意');
       Alert.alert('エラー', '利用規約に同意してください');
       return;
     }
 
-    setIsLoading(true);
-    const { error } = await signUp(email, password, name);
-    setIsLoading(false);
+    try {
+      console.log('🔐 SignUp: signUp関数を呼び出します');
+      setIsLoading(true);
+      const { error } = await signUp(email, password, name);
+      setIsLoading(false);
 
-    if (error) {
-      Alert.alert('登録エラー', error);
-    } else {
+      console.log('🔐 SignUp: signUp完了', { hasError: !!error, error });
+
+      if (error) {
+        console.error('❌ SignUp: 登録エラー:', error);
+        Alert.alert('登録エラー', error);
+      } else {
+        console.log('✅ SignUp: 登録成功');
+        Alert.alert(
+          '登録完了',
+          'アカウントの登録が完了しました',
+          [{ text: 'OK', onPress: () => navigation.navigate('Map') }]
+        );
+      }
+    } catch (err) {
+      console.error('💥 SignUp: 予期しないエラー:', err);
+      setIsLoading(false);
       Alert.alert(
-        '登録完了',
-        'アカウントの登録が完了しました',
-        [{ text: 'OK', onPress: () => navigation.navigate('Map') }]
+        'システムエラー',
+        `登録処理中にエラーが発生しました: ${err instanceof Error ? err.message : '不明なエラー'}`
       );
     }
   };
@@ -137,19 +166,25 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
                 <TextInput
                   style={styles.passwordInput}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(text) => {
+                    console.log('🔐 SignUp: パスワード入力変更', { length: text.length });
+                    setPassword(text);
+                  }}
                   placeholder="6文字以上"
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="none"
+                  autoComplete="off"
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   style={styles.eyeButton}
                 >
-                  <Ionicons 
-                    name={showPassword ? 'eye-off' : 'eye'} 
-                    size={20} 
-                    color="#666" 
+                  <Ionicons
+                    name={showPassword ? 'eye-off' : 'eye'}
+                    size={20}
+                    color="#666"
                   />
                 </TouchableOpacity>
               </View>
@@ -161,19 +196,25 @@ export const SignUpScreen: React.FC<SignUpScreenProps> = ({ navigation }) => {
                 <TextInput
                   style={styles.passwordInput}
                   value={confirmPassword}
-                  onChangeText={setConfirmPassword}
+                  onChangeText={(text) => {
+                    console.log('🔐 SignUp: パスワード確認入力変更', { length: text.length });
+                    setConfirmPassword(text);
+                  }}
                   placeholder="パスワードを再入力"
                   secureTextEntry={!showConfirmPassword}
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="none"
+                  autoComplete="off"
                 />
                 <TouchableOpacity
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                   style={styles.eyeButton}
                 >
-                  <Ionicons 
-                    name={showConfirmPassword ? 'eye-off' : 'eye'} 
-                    size={20} 
-                    color="#666" 
+                  <Ionicons
+                    name={showConfirmPassword ? 'eye-off' : 'eye'}
+                    size={20}
+                    color="#666"
                   />
                 </TouchableOpacity>
               </View>
