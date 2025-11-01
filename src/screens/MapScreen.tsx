@@ -34,6 +34,7 @@ import { Region, Spot, CoinParking } from '@/types';
 import { TopSearchBar } from '@/components/Map/TopSearchBar';
 import { TopCategoryTabs } from '@/components/Map/TopCategoryTabs';
 import { PlaceSearchResult } from '@/services/places-search.service';
+import { locationTrackingService } from '@/services/location-tracking.service';
 
 // 同率順位を計算するヘルパー関数
 const calculateParkingRanks = (parkingSpots: CoinParking[]): CoinParking[] => {
@@ -80,6 +81,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
 
   // 地図の初期化状態（AsyncStorageから前回の位置を読み込むまでtrue）
   const [isInitializingMap, setIsInitializingMap] = useState(true);
+
+  // リアルタイム位置追跡の状態
+  const [isLocationTracking, setIsLocationTracking] = useState(false);
+  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
   // マーカータップ処理の再入防止用
   const isProcessingMarkerPress = useRef(false);
@@ -966,14 +971,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         // 料金時間フィルターのみ有効な場合
         else if (hasParkingTimeFilter) {
           console.log('💰 料金時間フィルターのみ有効 - バックエンドで料金計算・ソート実行');
-          console.log('🔍 画面内の地図範囲の駐車場を全てバックエンドで洗い出し中...');
           let result = await SupabaseService.fetchParkingSpotsSortedByFee(
             searchRegion,
             currentFilter.parkingDuration.durationInMinutes,
             minElevation,
             currentFilter.parkingDuration.startDate // 入庫日時を渡す
           );
-          console.log(`✅ バックエンド検索完了: ${result.totalCount}件の駐車場を取得`);
 
           // タイムアウトなどで結果が返らない場合、自動的にズームインして再試行
           if ((result as any).error || result.totalCount === -1) {
@@ -1009,11 +1012,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             }
           }
 
-          // 2000件を超えた場合、自動でズームイン（2000件以下になるまで段階的にズーム）
-          if (result.totalCount > 2000) {
-            console.log(`⚠️ 駐車場が${result.totalCount}件あります。2000件以下になるまで自動でズームインします`);
+          // 1000件を超えた場合、自動でズームイン（1000件以下になるまで段階的にズーム）
+          if (result.totalCount > 1000) {
+            console.log(`⚠️ 駐車場が${result.totalCount}件あります。1000件以下になるまで自動でズームインします`);
 
-            // 2000件以下になるまで段階的にズームイン（アラートなしでシームレスに実行）
+            // 1000件以下になるまで段階的にズームイン（アラートなしでシームレスに実行）
             let zoomRegion = { ...searchRegion };
             let zoomFactor = 0.5; // 初回は50%ズーム
             let maxZoomAttempts = 5; // 最大5回まで試行
@@ -1044,8 +1047,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
 
               console.log(`🔍 ズーム試行${currentAttempt}: 駐車場${retryResult.totalCount}件`);
 
-              // 2000件以下になった、または最大試行回数に達した場合は結果を表示
-              if (retryResult.totalCount <= 2000 || currentAttempt >= maxZoomAttempts) {
+              // 1000件以下になった、または最大試行回数に達した場合は結果を表示
+              if (retryResult.totalCount <= 1000 || currentAttempt >= maxZoomAttempts) {
                 parkingSpots = retryResult.spots.filter(p =>
                   ParkingFeeCalculator.isParkingOpenForEntireDuration(p, currentFilter.parkingDuration)
                 );
@@ -1068,7 +1071,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
                 setSearchStatus('complete');
                 setTimeout(() => setSearchStatus('idle'), 3000);
               } else {
-                // まだ2000件を超えている場合は、さらにズームイン
+                // まだ1000件を超えている場合は、さらにズームイン
                 // 次回は60%ズーム（徐々に細かくズーム）
                 zoomFactor = 0.6;
                 setTimeout(() => performAutoZoom(), 600);
@@ -1081,9 +1084,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             return; // 早期リターン
           }
 
-          // 10件以下の場合、駐車場密度から適切な範囲を一発で算出してズームアウト
-          if (result.totalCount <= 10) {
-            console.log(`⚠️ 駐車場が${result.totalCount}件以下です。画面内の地図範囲を全て確認した結果、密度から適切な範囲を算出して一発でズームアウトします`);
+          // 10件未満の場合、駐車場密度から適切な範囲を一発で算出してズームアウト
+          if (result.totalCount < 10) {
+            console.log(`⚠️ 駐車場が${result.totalCount}件しかありません。密度から適切な範囲を算出して一発でズームアウトします`);
 
             // 目標：20-100件の駐車場を表示（10件だとギリギリすぎるため余裕を持たせる）
             const targetCount = 50;
@@ -1102,7 +1105,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
 
             // 安全のため拡大率に制限を設ける
             const minZoomFactor = 2.5; // 最小でも2.5倍
-            const maxZoomFactor = 8.0; // 最大8倍まで
+            const maxZoomFactor = 4.0; // 最大4倍まで
             const clampedZoomFactor = Math.max(minZoomFactor, Math.min(maxZoomFactor, zoomOutFactor));
 
             console.log(`📊 駐車場密度分析:`, {
@@ -1136,10 +1139,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
 
             console.log(`✅ 一発ズームアウト結果: 駐車場${retryResult.totalCount}件`);
 
-            // 2000件を超えた場合は調整
+            // 1000件を超えた場合は調整
             let finalResult = retryResult;
-            if (retryResult.totalCount > 2000) {
-              console.log(`⚠️ 2000件を超えました。範囲を80%に縮小して再検索`);
+            if (retryResult.totalCount > 1000) {
+              console.log(`⚠️ 1000件を超えました。範囲を80%に縮小して再検索`);
               const adjustedRegion = {
                 ...zoomOutRegion,
                 latitudeDelta: zoomOutRegion.latitudeDelta * 0.8,
@@ -2008,23 +2011,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       // カテゴリー別にマーカーを追加
       categoryOrder.forEach((category) => {
         const spotsInCategory = searchResults.filter(spot => spot.category === category);
-
-        // IDでソートして順序を安定化（マーカーインデックスの不整合を防ぐ）
-        const sortedSpots = spotsInCategory.sort((a, b) => {
-          const aId = String(a.id);
-          const bId = String(b.id);
-          return aId.localeCompare(bId);
-        });
-
         let validMarkersInCategory = 0;
         let skippedInCategory = 0;
 
         // コンビニの場合は詳細ログ
         if (category === 'コンビニ') {
-          console.log(`🏪 コンビニマーカー処理開始: ${sortedSpots.length}件`);
+          console.log(`🏪 コンビニマーカー処理開始: ${spotsInCategory.length}件`);
         }
 
-        sortedSpots.forEach((spot, index) => {
+        spotsInCategory.forEach((spot, index) => {
           try {
             // スポットのデータ検証を強化
             if (!spot || !spot.id) {
@@ -2120,12 +2115,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     
       // 2. 最寄り施設を追加（駐車場選択時のみ表示される個別施設）
       if (nearbyFacilities && nearbyFacilities.length > 0) {
-        // IDでソートして順序を安定化
-        const sortedFacilities = nearbyFacilities
-          .slice(0, 10)
-          .sort((a, b) => String(a.id).localeCompare(String(b.id)));
-
-        sortedFacilities.forEach((facility) => {
+        nearbyFacilities.slice(0, 10).forEach((facility) => { // 最大10件に制限
           try {
             // 施設のデータ検証
             if (!facility ||
@@ -2166,10 +2156,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       // 3. コインパーキングをランキング順に追加（順位の低い方から高い方へ）
       // まず、ランキング外（4位以下）の駐車場を追加
       const parkingSpots = searchResults.filter(spot => spot.category === 'コインパーキング');
-      const unrankedParkingSpots = parkingSpots
-        .filter(spot => !spot.rank || spot.rank > 3)
-        .sort((a, b) => String(a.id).localeCompare(String(b.id))); // IDでソート
-
+      const unrankedParkingSpots = parkingSpots.filter(spot => !spot.rank || spot.rank > 3);
+      
       unrankedParkingSpots.forEach((spot) => {
         try {
           // スポットのデータ検証を強化
@@ -2211,9 +2199,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     
       // 4. ランキング3位を追加（同率順位対応）
       try {
-        const rank3Spots = parkingSpots
-          .filter(spot => spot && spot.rank === 3 && selectedSpot?.id !== spot.id)
-          .sort((a, b) => String(a.id).localeCompare(String(b.id))); // IDでソート
+        const rank3Spots = parkingSpots.filter(spot =>
+          spot && spot.rank === 3 && selectedSpot?.id !== spot.id
+        );
         rank3Spots.forEach(rank3 => {
           if (rank3 && rank3.id && rank3.lat != null && rank3.lng != null && !isNaN(rank3.lat) && !isNaN(rank3.lng)) {
             const marker = (
@@ -2237,9 +2225,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       // 5. ランキング2位を追加（同率順位対応）
       try {
-        const rank2Spots = parkingSpots
-          .filter(spot => spot && spot.rank === 2 && selectedSpot?.id !== spot.id)
-          .sort((a, b) => String(a.id).localeCompare(String(b.id))); // IDでソート
+        const rank2Spots = parkingSpots.filter(spot =>
+          spot && spot.rank === 2 && selectedSpot?.id !== spot.id
+        );
         rank2Spots.forEach(rank2 => {
           if (rank2 && rank2.id && rank2.lat != null && rank2.lng != null && !isNaN(rank2.lat) && !isNaN(rank2.lng)) {
             const marker = (
@@ -2263,9 +2251,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       // 6. ランキング1位を追加（最前面、同率順位対応）
       try {
-        const rank1Spots = parkingSpots
-          .filter(spot => spot && spot.rank === 1 && selectedSpot?.id !== spot.id)
-          .sort((a, b) => String(a.id).localeCompare(String(b.id))); // IDでソート
+        const rank1Spots = parkingSpots.filter(spot =>
+          spot && spot.rank === 1 && selectedSpot?.id !== spot.id
+        );
         rank1Spots.forEach(rank1 => {
           if (rank1 && rank1.id && rank1.lat != null && rank1.lng != null && !isNaN(rank1.lat) && !isNaN(rank1.lng)) {
             const marker = (

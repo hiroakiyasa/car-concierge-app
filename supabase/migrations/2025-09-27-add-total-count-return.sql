@@ -11,7 +11,7 @@ CREATE OR REPLACE FUNCTION public.get_parking_spots_sorted_by_fee(
     duration_minutes integer,
     parking_start timestamptz DEFAULT now(),
     min_elevation double precision DEFAULT NULL,
-    limit_candidates integer DEFAULT 600
+    limit_candidates integer DEFAULT 1000
 )
 RETURNS TABLE(
     id bigint,
