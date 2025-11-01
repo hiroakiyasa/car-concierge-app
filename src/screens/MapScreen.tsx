@@ -34,6 +34,13 @@ import { Region, Spot, CoinParking } from '@/types';
 import { TopSearchBar } from '@/components/Map/TopSearchBar';
 import { TopCategoryTabs } from '@/components/Map/TopCategoryTabs';
 import { PlaceSearchResult } from '@/services/places-search.service';
+import { ParkingStatusBanner } from '@/components/ParkingStatusBanner';
+import { CheckoutModal } from '@/components/CheckoutModal';
+import { useParkingSessionStore } from '@/stores/useParkingSessionStore';
+import { locationTrackingService } from '@/services/location-tracking.service';
+import { autoParkingDetectionService, PendingDetection } from '@/services/auto-parking-detection.service';
+import { AutoDetectionDialog } from '@/components/AutoDetectionDialog';
+import { FeatureFlags } from '@/constants/featureFlags';
 
 // 同率順位を計算するヘルパー関数
 const calculateParkingRanks = (parkingSpots: CoinParking[]): CoinParking[] => {
@@ -77,9 +84,19 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   const [shouldReopenRanking, setShouldReopenRanking] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [nearbyFacilities, setNearbyFacilities] = useState<Spot[]>([]);
+  const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
+
+  // Auto-detection state
+  const [showAutoDetectionDialog, setShowAutoDetectionDialog] = useState(false);
+  const [currentDetection, setCurrentDetection] = useState<PendingDetection | null>(null);
+  const [isSubmittingDetection, setIsSubmittingDetection] = useState(false);
+  const autoDetectionInterval = useRef<NodeJS.Timeout | null>(null);
 
   // 地図の初期化状態（AsyncStorageから前回の位置を読み込むまでtrue）
   const [isInitializingMap, setIsInitializingMap] = useState(true);
+
+  // Parking session state
+  const { isParked } = useParkingSessionStore();
 
   // リアルタイム位置追跡の状態
   const [isLocationTracking, setIsLocationTracking] = useState(false);
@@ -308,6 +325,71 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     };
   }, [locationStatus, setUserLocation]);
 
+  // Initialize auto-detection service
+  useEffect(() => {
+    if (!FeatureFlags.ENABLE_AUTO_PARKING_DETECTION) return;
+    if (Platform.OS === 'web') return; // Web doesn't support location tracking
+    if (locationStatus !== 'success') return; // Wait until location is initialized
+
+    let mounted = true;
+
+    const initializeAutoDetection = async () => {
+      try {
+        console.log('🅿️ 自動駐車検出サービスを初期化中...');
+
+        // Request location permissions
+        const hasPermissions = await locationTrackingService.requestPermissions();
+        if (!hasPermissions || !mounted) {
+          console.log('⚠️ 位置情報の権限が許可されていません（自動検出スキップ）');
+          return;
+        }
+
+        // Start location tracking
+        const trackingStarted = await locationTrackingService.startTracking();
+        if (!trackingStarted || !mounted) {
+          console.log('⚠️ 位置追跡の開始に失敗（自動検出スキップ）');
+          return;
+        }
+
+        console.log('✅ 自動駐車検出用の位置追跡を開始しました');
+
+        // Check for pending detections immediately
+        await checkPendingDetections();
+
+        // Set up periodic auto-detection checks (every 30 minutes)
+        const interval = setInterval(async () => {
+          if (!mounted) return;
+
+          console.log('🅿️ 定期的な駐車検出分析を実行中...');
+          await autoParkingDetectionService.runAutoDetection();
+          await checkPendingDetections();
+        }, 30 * 60 * 1000); // 30 minutes
+
+        autoDetectionInterval.current = interval;
+        console.log('✅ 自動駐車検出サービスを初期化しました');
+      } catch (error) {
+        console.error('自動駐車検出の初期化エラー:', error);
+      }
+    };
+
+    initializeAutoDetection();
+
+    // Cleanup on unmount
+    return () => {
+      mounted = false;
+
+      if (autoDetectionInterval.current) {
+        clearInterval(autoDetectionInterval.current);
+        autoDetectionInterval.current = null;
+        console.log('🛑 自動駐車検出の定期チェックを停止しました');
+      }
+
+      locationTrackingService.stopTracking().catch((error) => {
+        console.error('位置追跡の停止エラー:', error);
+      });
+    };
+  }, [locationStatus]);
+
   // トーストメッセージを3秒後に自動で消す
   useEffect(() => {
     if (toastMessage) {
@@ -473,6 +555,74 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     } catch (error) {
       console.log('❌ 地図範囲の保存エラー:', error);
     }
+  };
+
+  // Auto-detection: Check for pending detections
+  const checkPendingDetections = async () => {
+    if (!FeatureFlags.ENABLE_AUTO_PARKING_DETECTION) return;
+    if (Platform.OS === 'web') return; // Web doesn't support location tracking
+
+    try {
+      const pending = await autoParkingDetectionService.getPendingDetections();
+      const unshown = pending.find(p => !p.shown);
+
+      if (unshown) {
+        console.log('🅿️ 未表示の駐車履歴検出:', unshown.detectedStay.parkingSpot.name);
+        setCurrentDetection(unshown);
+        setShowAutoDetectionDialog(true);
+        await autoParkingDetectionService.markDetectionAsShown(unshown.id);
+      }
+    } catch (error) {
+      console.error('駐車履歴検出のチェックエラー:', error);
+    }
+  };
+
+  // Auto-detection: User confirmed detection
+  const handleAutoDetectionConfirm = async () => {
+    if (!currentDetection) return;
+
+    setIsSubmittingDetection(true);
+    const success = await autoParkingDetectionService.confirmDetection(currentDetection);
+    setIsSubmittingDetection(false);
+
+    if (success) {
+      Alert.alert(
+        '完了',
+        '駐車履歴を保存しました',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setShowAutoDetectionDialog(false);
+              setCurrentDetection(null);
+            },
+          },
+        ]
+      );
+    } else {
+      Alert.alert(
+        'エラー',
+        '駐車履歴の保存に失敗しました',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setShowAutoDetectionDialog(false);
+              setCurrentDetection(null);
+            },
+          },
+        ]
+      );
+    }
+  };
+
+  // Auto-detection: User dismissed detection
+  const handleAutoDetectionDismiss = async () => {
+    if (!currentDetection) return;
+
+    await autoParkingDetectionService.removePendingDetection(currentDetection.id);
+    setShowAutoDetectionDialog(false);
+    setCurrentDetection(null);
   };
 
   // 指定された地域で検索を実行
@@ -970,12 +1120,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         // 料金時間フィルターのみ有効な場合
         else if (hasParkingTimeFilter) {
           console.log('💰 料金時間フィルターのみ有効 - バックエンドで料金計算・ソート実行');
+          console.log('🔍 画面内の地図範囲の駐車場を全てバックエンドで洗い出し中...');
           let result = await SupabaseService.fetchParkingSpotsSortedByFee(
             searchRegion,
             currentFilter.parkingDuration.durationInMinutes,
             minElevation,
             currentFilter.parkingDuration.startDate // 入庫日時を渡す
           );
+          console.log(`✅ バックエンド検索完了: ${result.totalCount}件の駐車場を取得`);
 
           // タイムアウトなどで結果が返らない場合、自動的にズームインして再試行
           if ((result as any).error || result.totalCount === -1) {
@@ -1083,9 +1235,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
             return; // 早期リターン
           }
 
-          // 10件未満の場合、駐車場密度から適切な範囲を一発で算出してズームアウト
-          if (result.totalCount < 10) {
-            console.log(`⚠️ 駐車場が${result.totalCount}件しかありません。密度から適切な範囲を算出して一発でズームアウトします`);
+          // 10件以下の場合、駐車場密度から適切な範囲を一発で算出してズームアウト
+          if (result.totalCount <= 10) {
+            console.log(`⚠️ 駐車場が${result.totalCount}件以下です。画面内の地図範囲を全て確認した結果、密度から適切な範囲を算出して一発でズームアウトします`);
 
             // 目標：20-100件の駐車場を表示（10件だとギリギリすぎるため余裕を持たせる）
             const targetCount = 50;
@@ -2010,15 +2162,23 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       // カテゴリー別にマーカーを追加
       categoryOrder.forEach((category) => {
         const spotsInCategory = searchResults.filter(spot => spot.category === category);
+
+        // IDでソートして順序を安定化（マーカーインデックスの不整合を防ぐ）
+        const sortedSpots = spotsInCategory.sort((a, b) => {
+          const aId = String(a.id);
+          const bId = String(b.id);
+          return aId.localeCompare(bId);
+        });
+
         let validMarkersInCategory = 0;
         let skippedInCategory = 0;
 
         // コンビニの場合は詳細ログ
         if (category === 'コンビニ') {
-          console.log(`🏪 コンビニマーカー処理開始: ${spotsInCategory.length}件`);
+          console.log(`🏪 コンビニマーカー処理開始: ${sortedSpots.length}件`);
         }
 
-        spotsInCategory.forEach((spot, index) => {
+        sortedSpots.forEach((spot, index) => {
           try {
             // スポットのデータ検証を強化
             if (!spot || !spot.id) {
@@ -2114,7 +2274,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     
       // 2. 最寄り施設を追加（駐車場選択時のみ表示される個別施設）
       if (nearbyFacilities && nearbyFacilities.length > 0) {
-        nearbyFacilities.slice(0, 10).forEach((facility) => { // 最大10件に制限
+        // IDでソートして順序を安定化
+        const sortedFacilities = nearbyFacilities
+          .slice(0, 10)
+          .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+        sortedFacilities.forEach((facility) => {
           try {
             // 施設のデータ検証
             if (!facility ||
@@ -2155,8 +2320,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       // 3. コインパーキングをランキング順に追加（順位の低い方から高い方へ）
       // まず、ランキング外（4位以下）の駐車場を追加
       const parkingSpots = searchResults.filter(spot => spot.category === 'コインパーキング');
-      const unrankedParkingSpots = parkingSpots.filter(spot => !spot.rank || spot.rank > 3);
-      
+      const unrankedParkingSpots = parkingSpots
+        .filter(spot => !spot.rank || spot.rank > 3)
+        .sort((a, b) => String(a.id).localeCompare(String(b.id))); // IDでソート
+
       unrankedParkingSpots.forEach((spot) => {
         try {
           // スポットのデータ検証を強化
@@ -2198,9 +2365,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     
       // 4. ランキング3位を追加（同率順位対応）
       try {
-        const rank3Spots = parkingSpots.filter(spot =>
-          spot && spot.rank === 3 && selectedSpot?.id !== spot.id
-        );
+        const rank3Spots = parkingSpots
+          .filter(spot => spot && spot.rank === 3 && selectedSpot?.id !== spot.id)
+          .sort((a, b) => String(a.id).localeCompare(String(b.id))); // IDでソート
         rank3Spots.forEach(rank3 => {
           if (rank3 && rank3.id && rank3.lat != null && rank3.lng != null && !isNaN(rank3.lat) && !isNaN(rank3.lng)) {
             const marker = (
@@ -2224,9 +2391,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       // 5. ランキング2位を追加（同率順位対応）
       try {
-        const rank2Spots = parkingSpots.filter(spot =>
-          spot && spot.rank === 2 && selectedSpot?.id !== spot.id
-        );
+        const rank2Spots = parkingSpots
+          .filter(spot => spot && spot.rank === 2 && selectedSpot?.id !== spot.id)
+          .sort((a, b) => String(a.id).localeCompare(String(b.id))); // IDでソート
         rank2Spots.forEach(rank2 => {
           if (rank2 && rank2.id && rank2.lat != null && rank2.lng != null && !isNaN(rank2.lat) && !isNaN(rank2.lng)) {
             const marker = (
@@ -2250,9 +2417,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
       
       // 6. ランキング1位を追加（最前面、同率順位対応）
       try {
-        const rank1Spots = parkingSpots.filter(spot =>
-          spot && spot.rank === 1 && selectedSpot?.id !== spot.id
-        );
+        const rank1Spots = parkingSpots
+          .filter(spot => spot && spot.rank === 1 && selectedSpot?.id !== spot.id)
+          .sort((a, b) => String(a.id).localeCompare(String(b.id))); // IDでソート
         rank1Spots.forEach(rank1 => {
           if (rank1 && rank1.id && rank1.lat != null && rank1.lng != null && !isNaN(rank1.lat) && !isNaN(rank1.lng)) {
             const marker = (
@@ -2443,7 +2610,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           selectedCategories={searchFilter.selectedCategories}
           onCategoryToggle={handleCategoryToggle}
         />
-        
+
+        {/* Parking status banner */}
+        {isParked && (
+          <ParkingStatusBanner onPress={() => setCheckoutModalVisible(true)} />
+        )}
+
         {/* プレミアムマップコントロール */}
         <PremiumMapControls
           onMenuPress={() => setShowMenuModal(true)}
@@ -2612,6 +2784,25 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         visible={showMenuModal}
         onClose={() => setShowMenuModal(false)}
         navigation={navigation}
+      />
+
+      {/* Checkout Modal */}
+      <CheckoutModal
+        visible={checkoutModalVisible}
+        onClose={() => setCheckoutModalVisible(false)}
+        onCheckoutComplete={() => {
+          setCheckoutModalVisible(false);
+          // Optionally refresh the map or show a success message
+        }}
+      />
+
+      {/* Auto-detection Dialog */}
+      <AutoDetectionDialog
+        visible={showAutoDetectionDialog}
+        detection={currentDetection}
+        onConfirm={handleAutoDetectionConfirm}
+        onDismiss={handleAutoDetectionDismiss}
+        isSubmitting={isSubmittingDetection}
       />
     </SafeAreaView>
   );

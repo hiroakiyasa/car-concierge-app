@@ -27,6 +27,7 @@ import { supabase } from '@/config/supabase';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { parkingSubmissionService } from '@/services/parking-submission.service';
 import { CrossPlatformMap, Marker } from '@/components/Map/CrossPlatformMap';
+import { decode } from 'base64-arraybuffer';
 
 interface Submission {
   id: string;
@@ -137,18 +138,27 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
         return;
       }
 
-      // ユーザーのメールアドレスを取得
-      const { data: { user: authUser }, error } = await supabase.auth.getUser();
+      // セッションを取得（TestFlight対応）
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-      if (error || !authUser?.email) {
+      if (sessionError || !session?.user?.email) {
         Alert.alert('エラー', 'ユーザー情報の取得に失敗しました', [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);
         return;
       }
 
-      // 管理者メールアドレスをチェック
-      if (!ADMIN_EMAILS.includes(authUser.email)) {
+      // 管理者メールアドレスをチェック（大文字小文字を区別しない）
+      const userEmail = session.user.email.toLowerCase();
+      const isAdmin = ADMIN_EMAILS.some(email => email.toLowerCase() === userEmail);
+
+      console.log('🔐 AdminSubmissions: 管理者チェック', {
+        userEmail,
+        isAdmin,
+        adminEmails: ADMIN_EMAILS,
+      });
+
+      if (!isAdmin) {
         Alert.alert(
           'アクセス拒否',
           'この画面は管理者のみアクセスできます',
@@ -598,7 +608,7 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
 
       let imageUrl: string | null = null;
 
-      // 画像をparking-imagesバケットにコピー（download/upload方式）
+      // 画像をspot-photosバケットにコピー（fetch + Base64方式、React Native対応）
       try {
         console.log('📸 画像を転送中:', selectedSubmission.image_path);
 
@@ -608,48 +618,54 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
         const fileExt = selectedSubmission.image_path.split('.').pop() || 'jpg';
         const newFileName = `parking_${timestamp}_${randomStr}.${fileExt}`;
 
-        // 1. parking-submissionsバケットから画像をダウンロード
-        const { data: downloadData, error: downloadError } = await supabase.storage
+        // 1. parking-submissionsバケットから画像の公開URLを取得
+        const { data: { publicUrl } } = supabase.storage
           .from('parking-submissions')
-          .download(selectedSubmission.image_path);
+          .getPublicUrl(selectedSubmission.image_path);
 
-        if (downloadError || !downloadData) {
-          console.error('画像ダウンロードエラー:', downloadError);
-          throw downloadError || new Error('画像のダウンロードに失敗');
+        console.log('📥 画像URL:', publicUrl);
+
+        // 2. fetchで画像をダウンロードしてBase64に変換
+        const response = await fetch(publicUrl);
+        if (!response.ok) {
+          throw new Error(`画像ダウンロード失敗: ${response.status}`);
         }
 
-        console.log('✅ 画像ダウンロード成功:', downloadData.size, 'bytes');
+        const blob = await response.blob();
+        console.log('✅ 画像ダウンロード成功:', blob.size, 'bytes');
 
-        // 2. BlobをArrayBufferに変換（React Native対応）
-        const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+        // 3. BlobをBase64に変換（React Native互換）
+        const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => {
-            if (reader.result instanceof ArrayBuffer) {
-              resolve(reader.result);
+            if (typeof reader.result === 'string') {
+              // data:image/jpeg;base64,xxxxx の形式なので、base64部分だけ抽出
+              const base64Data = reader.result.split(',')[1];
+              resolve(base64Data);
             } else {
-              reject(new Error('ArrayBufferへの変換に失敗'));
+              reject(new Error('Base64への変換に失敗'));
             }
           };
           reader.onerror = () => reject(reader.error);
-          reader.readAsArrayBuffer(downloadData);
+          reader.readAsDataURL(blob);
         });
 
-        console.log('✅ ArrayBuffer変換成功:', arrayBuffer.byteLength, 'bytes');
+        console.log('✅ Base64変換成功:', base64.length, 'chars');
 
-        // 3. spot-photosバケットにアップロード
+        // 4. spot-photosバケットにアップロード
         const { error: uploadError } = await supabase.storage
           .from('spot-photos')
-          .upload(newFileName, arrayBuffer, {
+          .upload(newFileName, decode(base64), {
             contentType: 'image/jpeg',
             upsert: false,
           });
 
         if (uploadError) {
-          console.error('画像アップロードエラー:', uploadError);
+          console.error('❌ 画像アップロードエラー:', uploadError);
           throw uploadError;
         }
 
-        // 4. 公開URLを取得
+        // 5. 公開URLを取得
         const { data: urlData } = supabase.storage
           .from('spot-photos')
           .getPublicUrl(newFileName);
@@ -657,7 +673,7 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
         imageUrl = urlData.publicUrl;
         console.log('✅ 画像転送成功:', imageUrl);
       } catch (imageError) {
-        console.error('画像処理エラー:', imageError);
+        console.error('❌ 画像処理エラー:', imageError);
         // 画像転送に失敗しても処理は続行（警告のみ）
         Alert.alert(
           '警告',
@@ -692,9 +708,21 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
           const existingImages = existingData?.images || [];
           updateData.images = imageUrl ? [...existingImages, imageUrl] : existingImages;
           console.log('🔄 画像更新:', { 既存: existingImages.length, 新規追加: imageUrl ? 1 : 0, 合計: updateData.images.length });
+          if (imageUrl) {
+            console.log('✅ 承認画像保存 (駐車場詳細で表示可能):', imageUrl);
+            console.log('📸 保存先バケット: spot-photos');
+            console.log('🔗 詳細パネルでこの画像が閲覧できます');
+          }
         } else {
           // 新規登録時
           updateData.images = imageUrl ? [imageUrl] : [];
+          if (imageUrl) {
+            console.log('✅ 新規画像保存 (駐車場詳細で表示可能):', imageUrl);
+            console.log('📸 保存先バケット: spot-photos');
+            console.log('🔗 詳細パネルでこの画像が閲覧できます');
+          } else {
+            console.log('📷 画像なし: 駐車場詳細には写真が表示されません');
+          }
         }
 
         // オプションフィールドを追加（値がある場合のみ）
@@ -1695,6 +1723,16 @@ export const AdminSubmissionsScreen: React.FC<AdminSubmissionsScreenProps> = ({
       {/* 詳細モーダル */}
       {renderDetailModal()}
       {renderParkingSpotDetailModal()}
+
+      {/* 駐車場追加ボタン（駐車場管理モードのみ） */}
+      {viewMode === 'parking' && (
+        <TouchableOpacity
+          style={styles.addParkingButton}
+          onPress={() => navigation.navigate('AdminParkingCreate')}
+        >
+          <Ionicons name="add" size={32} color={Colors.white} />
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 };
@@ -2116,5 +2154,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.white,
+  },
+  addParkingButton: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
 });

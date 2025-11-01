@@ -21,6 +21,7 @@ import { ReviewsService } from '@/services/reviews.service';
 import { Colors } from '@/utils/constants';
 import { JAPAN_IMAGES } from '@/constants/japanImages';
 import { supabase } from '@/config/supabase';
+import { FeatureFlags } from '@/constants/featureFlags';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -42,35 +43,80 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    console.log('🔵 ProfileScreen: マウント/ユーザー変更', {
+      hasUser: !!user,
+      isAuthenticated,
+      userEmail: user?.email
+    });
     if (user) {
       loadUserStats();
     }
-  }, [user]);
+  }, [user, isAuthenticated]);
 
   // 管理者権限チェック
   useEffect(() => {
     const checkAdminStatus = async () => {
+      console.log('🔐 ProfileScreen: 管理者チェック開始', {
+        hasUser: !!user,
+        userEmail: user?.email,
+        userId: user?.id
+      });
+
       if (!user) {
+        console.log('❌ ProfileScreen: userがnullのため管理者権限なし');
         setIsAdmin(false);
         return;
       }
 
       try {
-        const { data: { user: authUser }, error } = await supabase.auth.getUser();
-        if (error || !authUser?.email) {
+        // Supabaseセッションを再取得
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        console.log('🔐 ProfileScreen: セッション確認', {
+          hasSession: !!session,
+          sessionError: sessionError?.message,
+          sessionUser: session?.user?.email,
+        });
+
+        if (sessionError || !session) {
+          console.log('❌ ProfileScreen: セッションなし');
           setIsAdmin(false);
           return;
         }
 
-        setIsAdmin(ADMIN_EMAILS.includes(authUser.email));
+        // セッションから直接メールアドレスを取得
+        const userEmail = session.user.email?.toLowerCase();
+
+        console.log('🔐 ProfileScreen: メール確認', {
+          userEmail,
+          adminEmails: ADMIN_EMAILS.map(e => e.toLowerCase()),
+        });
+
+        if (!userEmail) {
+          console.log('❌ ProfileScreen: メールアドレスなし');
+          setIsAdmin(false);
+          return;
+        }
+
+        // 大文字小文字を区別せずに比較
+        const isAdminUser = ADMIN_EMAILS.some(
+          adminEmail => adminEmail.toLowerCase() === userEmail
+        );
+
+        console.log('🔐 ProfileScreen: 管理者チェック完了', {
+          email: userEmail,
+          isAdmin: isAdminUser,
+        });
+
+        setIsAdmin(isAdminUser);
       } catch (error) {
-        console.error('Failed to check admin status:', error);
+        console.error('❌ ProfileScreen: 管理者チェック例外:', error);
         setIsAdmin(false);
       }
     };
 
     checkAdminStatus();
-  }, [user]);
+  }, [user, isAuthenticated]);
 
   const loadUserStats = async () => {
     if (!user) return;
@@ -198,7 +244,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                     <Ionicons name="person" size={50} color="#fff" />
                   </LinearGradient>
                 )}
-                {user.is_premium && (
+                {FeatureFlags.ENABLE_PREMIUM_FEATURES && user.is_premium && (
                   <View style={styles.premiumBadge}>
                     <LinearGradient
                       colors={['#FFD700', '#FFA500']}
@@ -213,7 +259,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
               <Text style={styles.userName}>{user.name || 'ゲストユーザー'}</Text>
               <Text style={styles.userEmail}>{user.email}</Text>
 
-              {user.is_premium && (
+              {FeatureFlags.ENABLE_PREMIUM_FEATURES && user.is_premium && (
                 <View style={styles.premiumTag}>
                   <LinearGradient
                     colors={['#FFD700', '#FFA500']}
@@ -329,7 +375,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => navigation.navigate('AddParking')}
+            onPress={() => navigation.navigate('ParkingHistory')}
           >
             <BlurView intensity={50} style={styles.menuBlur}>
               <LinearGradient
@@ -339,21 +385,23 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                 <View style={styles.menuItemLeft}>
                   <View style={styles.menuIconContainer}>
                     <LinearGradient
-                      colors={['#10B981', '#059669']}
+                      colors={['#6366f1', '#8b5cf6']}
                       style={styles.menuIconGradient}
                     >
-                      <Ionicons name="add-circle" size={20} color="#fff" />
+                      <Ionicons name="time" size={20} color="#fff" />
                     </LinearGradient>
                   </View>
                   <View>
-                    <Text style={styles.menuItemText}>駐車場の追加</Text>
-                    <Text style={styles.menuItemSubtext}>新しい駐車場を投稿</Text>
+                    <Text style={styles.menuItemText}>駐車履歴</Text>
+                    <Text style={styles.menuItemSubtext}>利用履歴と統計</Text>
                   </View>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
               </LinearGradient>
             </BlurView>
           </TouchableOpacity>
+
+          {/* 駐車場の追加 - REMOVED: Now in main menu for better discoverability */}
 
           {isAdmin && (
             <TouchableOpacity
