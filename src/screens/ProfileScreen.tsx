@@ -21,7 +21,6 @@ import { ReviewsService } from '@/services/reviews.service';
 import { Colors } from '@/utils/constants';
 import { JAPAN_IMAGES } from '@/constants/japanImages';
 import { supabase } from '@/config/supabase';
-import { FeatureFlags } from '@/constants/featureFlags';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -244,34 +243,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigation }) => {
                     <Ionicons name="person" size={50} color="#fff" />
                   </LinearGradient>
                 )}
-                {FeatureFlags.ENABLE_PREMIUM_FEATURES && user.is_premium && (
-                  <View style={styles.premiumBadge}>
-                    <LinearGradient
-                      colors={['#FFD700', '#FFA500']}
-                      style={styles.premiumBadgeGradient}
-                    >
-                      <Ionicons name="star" size={18} color="#fff" />
-                    </LinearGradient>
-                  </View>
-                )}
               </View>
 
               <Text style={styles.userName}>{user.name || 'ゲストユーザー'}</Text>
               <Text style={styles.userEmail}>{user.email}</Text>
-
-              {FeatureFlags.ENABLE_PREMIUM_FEATURES && user.is_premium && (
-                <View style={styles.premiumTag}>
-                  <LinearGradient
-                    colors={['#FFD700', '#FFA500']}
-                    style={styles.premiumTagGradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                  >
-                    <Ionicons name="star" size={14} color="#fff" />
-                    <Text style={styles.premiumTagText}>プレミアム会員</Text>
-                  </LinearGradient>
-                </View>
-              )}
             </View>
           </LinearGradient>
         </ImageBackground>
