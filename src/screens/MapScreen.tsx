@@ -34,13 +34,6 @@ import { Region, Spot, CoinParking } from '@/types';
 import { TopSearchBar } from '@/components/Map/TopSearchBar';
 import { TopCategoryTabs } from '@/components/Map/TopCategoryTabs';
 import { PlaceSearchResult } from '@/services/places-search.service';
-import { ParkingStatusBanner } from '@/components/ParkingStatusBanner';
-import { CheckoutModal } from '@/components/CheckoutModal';
-import { useParkingSessionStore } from '@/stores/useParkingSessionStore';
-import { locationTrackingService } from '@/services/location-tracking.service';
-import { autoParkingDetectionService, PendingDetection } from '@/services/auto-parking-detection.service';
-import { AutoDetectionDialog } from '@/components/AutoDetectionDialog';
-import { FeatureFlags } from '@/constants/featureFlags';
 
 // 同率順位を計算するヘルパー関数
 const calculateParkingRanks = (parkingSpots: CoinParking[]): CoinParking[] => {
@@ -84,23 +77,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
   const [shouldReopenRanking, setShouldReopenRanking] = useState(false);
   const [hasInitialized, setHasInitialized] = useState(false);
   const [nearbyFacilities, setNearbyFacilities] = useState<Spot[]>([]);
-  const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
-
-  // Auto-detection state
-  const [showAutoDetectionDialog, setShowAutoDetectionDialog] = useState(false);
-  const [currentDetection, setCurrentDetection] = useState<PendingDetection | null>(null);
-  const [isSubmittingDetection, setIsSubmittingDetection] = useState(false);
-  const autoDetectionInterval = useRef<NodeJS.Timeout | null>(null);
 
   // 地図の初期化状態（AsyncStorageから前回の位置を読み込むまでtrue）
   const [isInitializingMap, setIsInitializingMap] = useState(true);
-
-  // Parking session state
-  const { isParked } = useParkingSessionStore();
-
-  // リアルタイム位置追跡の状態
-  const [isLocationTracking, setIsLocationTracking] = useState(false);
-  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
   // マーカータップ処理の再入防止用
   const isProcessingMarkerPress = useRef(false);
@@ -325,71 +304,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     };
   }, [locationStatus, setUserLocation]);
 
-  // Initialize auto-detection service
-  useEffect(() => {
-    if (!FeatureFlags.ENABLE_AUTO_PARKING_DETECTION) return;
-    if (Platform.OS === 'web') return; // Web doesn't support location tracking
-    if (locationStatus !== 'success') return; // Wait until location is initialized
-
-    let mounted = true;
-
-    const initializeAutoDetection = async () => {
-      try {
-        console.log('🅿️ 自動駐車検出サービスを初期化中...');
-
-        // Request location permissions
-        const hasPermissions = await locationTrackingService.requestPermissions();
-        if (!hasPermissions || !mounted) {
-          console.log('⚠️ 位置情報の権限が許可されていません（自動検出スキップ）');
-          return;
-        }
-
-        // Start location tracking
-        const trackingStarted = await locationTrackingService.startTracking();
-        if (!trackingStarted || !mounted) {
-          console.log('⚠️ 位置追跡の開始に失敗（自動検出スキップ）');
-          return;
-        }
-
-        console.log('✅ 自動駐車検出用の位置追跡を開始しました');
-
-        // Check for pending detections immediately
-        await checkPendingDetections();
-
-        // Set up periodic auto-detection checks (every 30 minutes)
-        const interval = setInterval(async () => {
-          if (!mounted) return;
-
-          console.log('🅿️ 定期的な駐車検出分析を実行中...');
-          await autoParkingDetectionService.runAutoDetection();
-          await checkPendingDetections();
-        }, 30 * 60 * 1000); // 30 minutes
-
-        autoDetectionInterval.current = interval;
-        console.log('✅ 自動駐車検出サービスを初期化しました');
-      } catch (error) {
-        console.error('自動駐車検出の初期化エラー:', error);
-      }
-    };
-
-    initializeAutoDetection();
-
-    // Cleanup on unmount
-    return () => {
-      mounted = false;
-
-      if (autoDetectionInterval.current) {
-        clearInterval(autoDetectionInterval.current);
-        autoDetectionInterval.current = null;
-        console.log('🛑 自動駐車検出の定期チェックを停止しました');
-      }
-
-      locationTrackingService.stopTracking().catch((error) => {
-        console.error('位置追跡の停止エラー:', error);
-      });
-    };
-  }, [locationStatus]);
-
   // トーストメッセージを3秒後に自動で消す
   useEffect(() => {
     if (toastMessage) {
@@ -555,74 +469,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
     } catch (error) {
       console.log('❌ 地図範囲の保存エラー:', error);
     }
-  };
-
-  // Auto-detection: Check for pending detections
-  const checkPendingDetections = async () => {
-    if (!FeatureFlags.ENABLE_AUTO_PARKING_DETECTION) return;
-    if (Platform.OS === 'web') return; // Web doesn't support location tracking
-
-    try {
-      const pending = await autoParkingDetectionService.getPendingDetections();
-      const unshown = pending.find(p => !p.shown);
-
-      if (unshown) {
-        console.log('🅿️ 未表示の駐車履歴検出:', unshown.detectedStay.parkingSpot.name);
-        setCurrentDetection(unshown);
-        setShowAutoDetectionDialog(true);
-        await autoParkingDetectionService.markDetectionAsShown(unshown.id);
-      }
-    } catch (error) {
-      console.error('駐車履歴検出のチェックエラー:', error);
-    }
-  };
-
-  // Auto-detection: User confirmed detection
-  const handleAutoDetectionConfirm = async () => {
-    if (!currentDetection) return;
-
-    setIsSubmittingDetection(true);
-    const success = await autoParkingDetectionService.confirmDetection(currentDetection);
-    setIsSubmittingDetection(false);
-
-    if (success) {
-      Alert.alert(
-        '完了',
-        '駐車履歴を保存しました',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setShowAutoDetectionDialog(false);
-              setCurrentDetection(null);
-            },
-          },
-        ]
-      );
-    } else {
-      Alert.alert(
-        'エラー',
-        '駐車履歴の保存に失敗しました',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setShowAutoDetectionDialog(false);
-              setCurrentDetection(null);
-            },
-          },
-        ]
-      );
-    }
-  };
-
-  // Auto-detection: User dismissed detection
-  const handleAutoDetectionDismiss = async () => {
-    if (!currentDetection) return;
-
-    await autoParkingDetectionService.removePendingDetection(currentDetection.id);
-    setShowAutoDetectionDialog(false);
-    setCurrentDetection(null);
   };
 
   // 指定された地域で検索を実行
@@ -2611,11 +2457,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
           onCategoryToggle={handleCategoryToggle}
         />
 
-        {/* Parking status banner */}
-        {isParked && (
-          <ParkingStatusBanner onPress={() => setCheckoutModalVisible(true)} />
-        )}
-
         {/* プレミアムマップコントロール */}
         <PremiumMapControls
           onMenuPress={() => setShowMenuModal(true)}
@@ -2784,25 +2625,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation, route }) => {
         visible={showMenuModal}
         onClose={() => setShowMenuModal(false)}
         navigation={navigation}
-      />
-
-      {/* Checkout Modal */}
-      <CheckoutModal
-        visible={checkoutModalVisible}
-        onClose={() => setCheckoutModalVisible(false)}
-        onCheckoutComplete={() => {
-          setCheckoutModalVisible(false);
-          // Optionally refresh the map or show a success message
-        }}
-      />
-
-      {/* Auto-detection Dialog */}
-      <AutoDetectionDialog
-        visible={showAutoDetectionDialog}
-        detection={currentDetection}
-        onConfirm={handleAutoDetectionConfirm}
-        onDismiss={handleAutoDetectionDismiss}
-        isSubmitting={isSubmittingDetection}
       />
     </SafeAreaView>
   );
